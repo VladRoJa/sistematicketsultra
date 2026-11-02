@@ -9,7 +9,9 @@ import subprocess
 
 from playwright.sync_api import sync_playwright
 
-from scripts.training.recording_focus import install_focus_context, install_focus_page
+from scripts.training.recording_focus import (
+    install_focus_context, install_focus_page, guided_click, prepare_guidance,
+)
 
 OUT = Path("artifacts/capacitacion/click-focus-qa")
 HTML = """<!doctype html><html lang="es"><head><meta charset="utf-8">
@@ -68,9 +70,14 @@ def main():
         install_focus_page(page)
         assert page.evaluate("window.__capV1FocusRecorder.ready()")
         page.wait_for_timeout(450)
+        # Esta captura verifica que la flecha aparece ANTES del primer clic.
+        prepare_guidance(page, page.locator("#open"))
+        assert page.evaluate("window.__capV1FocusRecorder.cueVisible()")
+        assert page.evaluate("window.clickCount") == 0
+        page.screenshot(path=str(OUT / "flecha-antes-del-clic.png"))
         for action in ("open", "close", "receipt", "state"):
-            page.locator("#" + action).click()
-            page.wait_for_timeout(800)
+            guided_click(page, page.locator("#" + action), lead_ms=900, post_ms=700)
+            assert not page.evaluate("window.__capV1FocusRecorder.cueVisible()")
             assert page.evaluate("getComputedStyle(document.querySelector('.cap-v1-spotlight')).opacity") == "1"
             assert page.evaluate("!!document.querySelector('.cap-v1-pulse.cap-v1-animate')")
             if action == "close":
@@ -85,7 +92,11 @@ def main():
         page.wait_for_timeout(1800)
         clicks = page.evaluate("window.clickCount")
         events = page.evaluate("window.__capV1FocusRecorder.events()")
+        previews = page.evaluate("window.__capV1FocusRecorder.previewMoments()")
         assert clicks == 4 and len(events) == clicks, (clicks, events)
+        assert len(previews) == clicks + 1
+        lead_delays = [e["ms"] - p for e, p in zip(events, previews[1:])]
+        assert all(850 <= delay <= 1900 for delay in lead_delays), lead_delays
         assert all(0 <= e["x"] <= 1600 and 0 <= e["y"] <= 900 for e in events)
         context.close()
         video.save_as(str(OUT / "synthetic.webm"))
@@ -107,6 +118,8 @@ def main():
         "dataset": "SYNTHETIC_ONLY",
         "suite_requests": 0,
         "clicks": clicks,
+        "pre_click_arrows": len(previews),
+        "lead_delays_ms": lead_delays,
         "overlay_blocks_pointer": False,
         "video_seconds": round(duration, 3),
     }

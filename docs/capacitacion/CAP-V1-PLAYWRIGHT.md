@@ -122,6 +122,24 @@ un video de una pantalla completamente sintética y comprueba cuatro clics,
 resaltados visibles, funcionamiento de botones y ausencia de interceptación.
 No necesita Secrets, entorno productivo ni autorización para escribir.
 
+### CAP-V1: anticipación de clics (guía visual V2)
+
+En los recorridos de capacitación, `recording_focus.py::guided_click` hace:
+1. desplaza a la vista el elemento real de Playwright y coloca el cursor en su centro;
+2. muestra una flecha amarilla «HAZ CLIC AQUÍ», contorno y foco **900 ms antes**;
+3. ejecuta el clic verdadero mediante el locator existente; el overlay dibuja
+   el pulso y retira la flecha inmediatamente;
+4. conserva **700 ms después** para que se vea el cambio.
+
+No se transforma la escala del DOM ni se modifica la aplicación. La capa de
+captura sigue sin interceptar el puntero y no guarda texto de campos, sesiones
+o información del ticket. El login de producción no es grabado y la captura
+continúa en modo solo lectura; no se añaden operaciones de escritura.
+
+El QA sintético valida cuatro clics, la secuencia temporal (flecha antes,
+pulso después), el funcionamiento del modal y una captura `flecha-antes-del-clic.png`.
+Una nueva grabación real exige acción manual del propietario en GitHub Actions.
+
 ### Productos y regeneración
 
 - `navegacion.webm`: captura original Playwright, resolución 1920x1080.
