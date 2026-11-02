@@ -1,0 +1,49 @@
+name: CAP-V1 Full Tapizado JorgeNeural Dubbing (EXPERIMENT)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/cap-v1-full-voice-preview.yml"
+      - "scripts/training/voice_full_sync_preview.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  full-jorge-dubbing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CAP_V1_SOURCE_RUN_ID: "41544324483"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install experimental voice and video tools
+        run: |
+          python -m pip install edge-tts==7.3.1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Download approved synthetic-only full UI recording
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$CAP_V1_SOURCE_RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name CAP-V1-Tapizado-Full-Training-QA-VIDEO \
+            --dir artifacts/capacitacion/full-source
+      - name: Narrate nine scenes and verify A/V sync
+        run: python -m scripts.training.voice_full_sync_preview
+      - name: Attach experimental video, subtitles and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP-V1-Tapizado-Full-JorgeNeural-EXPERIMENT
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            artifacts/capacitacion/full-neural-preview/tapizado-completo-jorge-neural.mp4
+            artifacts/capacitacion/full-neural-preview/subtitulos.srt
+            artifacts/capacitacion/full-neural-preview/manifiesto.json
