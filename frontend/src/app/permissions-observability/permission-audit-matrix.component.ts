@@ -239,6 +239,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.module_key === 'tickets' &&
       row.role !== 'LECTOR_GLOBAL' &&
       this.result?.tickets_update_status_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.notify' &&
+      row.module_key === 'tickets' &&
+      this.result?.tickets_notify_grants_enabled === true
     );
   }
 
