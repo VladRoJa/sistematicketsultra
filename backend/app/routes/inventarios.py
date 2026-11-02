@@ -5,7 +5,7 @@ from io import BytesIO
 import io
 import os
 import tempfile
-from flask import Blueprint, request, jsonify, send_file, current_app
+from flask import Blueprint, request, jsonify, send_file, current_app, has_app_context
 from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
@@ -123,6 +123,32 @@ def _get_user_sucursales_scope_from_db(user_id):
 
 
 
+def inventory_read_grants_enabled():
+    """Veto de consultas de inventario, independiente de escritura y movimiento."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED", False
+    ) is True
+
+
+def _inventory_read_authorized_scope(user, allowed_sucursales):
+    # Sólo se llama DESPUÉS de la validación legacy de sucursal.
+    # Un ALLOW nunca amplía lista de sucursales ni convierte un rol.
+    if inventory_read_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="inventory.read"
+        )
+        if decision is False:
+            return None, (
+                jsonify({
+                    "error": "Forbidden",
+                    "detail": "No tienes habilitada la consulta de inventario.",
+                }),
+                403,
+            )
+    return allowed_sucursales, None
+
+
 def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
     user = _get_current_inventory_user()
     requested_sucursal_id = _coerce_int_or_none(requested_sucursal_id)
@@ -140,8 +166,8 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
         if requested_sucursal_id is not None:
-            return [requested_sucursal_id], None
-        return None, None
+            return _inventory_read_authorized_scope(user, [requested_sucursal_id])
+        return _inventory_read_authorized_scope(user, None)
 
     allowed_sucursales = []
 
@@ -184,9 +210,9 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
                 403,
             )
 
-        return [requested_sucursal_id], None
+        return _inventory_read_authorized_scope(user, [requested_sucursal_id])
 
-    return allowed_sucursales, None
+    return _inventory_read_authorized_scope(user, allowed_sucursales)
 
 
 def inventory_master_write_grants_enabled():
