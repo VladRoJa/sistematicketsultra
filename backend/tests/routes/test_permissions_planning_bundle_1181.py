@@ -149,6 +149,7 @@ def test_missing_user_fails_closed_with_active_flag():
     from app.routes import permissions_catalog_routes as catalog
     api, headers = client()
     with api.application.test_request_context(headers=headers), \
+         patch.object(access, "get_jwt_identity", return_value="47"), \
          patch.object(access, "get_current_planning_operator",
                       return_value=operator()), \
          patch.object(access.UserORM, "get_by_id", return_value=None), \
