@@ -137,6 +137,11 @@ class Config:
         "PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # PM programación: veto global que conserva rol, sucursal y reglas del equipo.
+    PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
