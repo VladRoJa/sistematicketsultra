@@ -29,6 +29,7 @@ from app.routes.pm_routes import (
     pm_read_grants_enabled,
     pm_execute_grants_enabled,
     pm_validate_grants_enabled,
+    pm_configure_grants_enabled,
 )
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
@@ -271,7 +272,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure"}
     }
     for grant in query.all():
         principal = (
@@ -636,6 +637,18 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_validacion_pm_preserva_scope_y_autoria"
             catalog_source = "pm_validate_grant_operativo"
             catalog_reason = "check_no_autoriza_bitacora_ni_sucursal"
+    if action.full_key == "pm.configure" and pm_configure_grants_enabled():
+        # DENY veta ambos writes. ALLOW no certifica sucursal ni equipo PM.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_configure_action+grant"
+            legacy_reason = "veto_programacion_pm_preserva_scope_y_equipo"
+            catalog_source = "pm_configure_grant_operativo"
+            catalog_reason = "check_no_autoriza_configuracion_ni_sucursal"
     comparison = (
         "coincide" if legacy == catalog_allowed else "diferencia"
     ) if legacy is not None and catalog_allowed is not None else "no_concluyente"
@@ -801,6 +814,7 @@ def visual_audit_matrix():
         "pm_read_grants_enabled": pm_read_grants_enabled(),
         "pm_execute_grants_enabled": pm_execute_grants_enabled(),
         "pm_validate_grants_enabled": pm_validate_grants_enabled(),
+        "pm_configure_grants_enabled": pm_configure_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
