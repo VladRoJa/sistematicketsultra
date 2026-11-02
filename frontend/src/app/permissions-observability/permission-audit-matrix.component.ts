@@ -286,6 +286,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.module_key === 'pm' &&
       ['ADMINISTRADOR', 'SUPER_ADMIN', 'ADMIN', 'MANTENIMIENTO', 'SR_MANTENIMIENTO'].includes(row.role.trim().toUpperCase()) &&
       this.result?.pm_configure_grants_enabled === true
+    ) || (
+      row.action_key === 'warehouse.archive' &&
+      row.module_key === 'warehouse' &&
+      this.result?.warehouse_archive_grants_enabled === true
     );
   }
 
@@ -295,7 +299,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -303,8 +307,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure'].includes(row.action_key)
-      ? (row.action_key === 'pm.configure'
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive'].includes(row.action_key)
+      ? (row.action_key === 'warehouse.archive'
+          ? 'Veto global: un ALLOW no crea operador Warehouse ni habilita can_archive'
+          : row.action_key === 'pm.configure'
           ? 'Veto global: un ALLOW no autoriza programación fuera de sucursal ni omite validaciones'
           : row.action_key === 'pm.validate'
           ? 'Veto global: un ALLOW no autoriza sucursales, autovalidación ni validación duplicada'
@@ -324,11 +330,12 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' =
+    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' | 'warehouse' =
       row.action_key === 'track.read' ? 'track' :
       row.module_key === 'tickets' ? 'tickets' :
       row.module_key === 'inventory' ? 'inventory' :
-      row.module_key === 'pm' ? 'pm' : 'openings';
+      row.module_key === 'pm' ? 'pm' :
+      row.module_key === 'warehouse' ? 'warehouse' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
