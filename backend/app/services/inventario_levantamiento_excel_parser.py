@@ -253,7 +253,10 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             if codigo:
                 codigos_base[codigo].append(identificador)
             original = text(referencia.get("codigo_interno_original"))
-            if re.match(r"^[0-9]{2}", original) and original[:2] != f"{sucursal_id:02d}":
+            # El prefijo de dos dígitos solo puede inferirse en sucursales
+            # oficiales de ID 1..99. DEMO y otros IDs extensos no siguen
+            # necesariamente esa nomenclatura: jamás proponer recodificación.
+            if 1 <= sucursal_id <= 99 and re.match(r"^[0-9]{2}", original) and original[:2] != f"{sucursal_id:02d}":
                 diagnostics.append({
                     "severidad": "AVISO", "codigo": "PREFIJO_SUCURSAL_INCONSISTENTE",
                     "hoja": "APARATOS", "inventario_id": identificador,
