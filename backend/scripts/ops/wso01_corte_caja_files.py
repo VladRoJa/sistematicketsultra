@@ -190,7 +190,7 @@ def main() -> None:
             manifest, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
         )
         with os.fdopen(fd, "w", encoding="utf-8") as output:
-            output.write(json.dumps(payload, indent=2) + "\\n")
+            output.write(json.dumps(payload, indent=2) + "\n")
         return
 
     items = _read_manifest(manifest)
