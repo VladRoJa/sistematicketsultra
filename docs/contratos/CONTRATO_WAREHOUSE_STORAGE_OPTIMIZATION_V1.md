@@ -49,3 +49,23 @@ Consulta de solo lectura sobre los 2,061 uploads Corte de Caja:
 - El campo `source_file_deleted_at IS NULL` para todos ellos no verifica presencia física. El espacio real recuperable debe medirse en el volumen de archivos.
 
 **Próxima puerta de salida:** la lista de claves foráneas entrantes quedó comprobada (23 restricciones; 2026-11-02). Ejecutar el diagnóstico de solo lectura `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql` y exigir cero referencias en las dependencias marcadas `BLOCKER`. El script incluye por separado auditoría (2,084 esperadas) y `corte_caja_snapshots` (1,037 esperadas antes de migración). No confundir el listado de FKs con recuentos de filas. Después comprobar rutas/archivos físicos, colisiones entre tipos, hash y respaldo/restore antes del borrado seguro de `corte_caja`.
+
+## Gate C1 / referencias completas — verificado 2026-11-02
+
+Resultado real de `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql`:
+- **21 relaciones BLOCKER: 0 filas en todas** (incluidos Google Ads, metas comerciales, documentos, aperturas, rutina, snapshots ajenos).
+- `corte_caja_snapshots.warehouse_upload_id`: 1,037 referencias esperadas.
+- `warehouse_audit_logs.upload_id`: 2,084 referencias esperadas.
+- Solo los 2,061 uploads del tipo `corte_caja` son candidatos de borrado; 1,100 tienen una FK **saliente** a versiones Track, lo que no elimina las versiones al borrar el upload.
+- Los conteos de dependencias se tomaron antes de la migración; la migración debe preservar restricciones existentes y abortar ante dependencias nuevas.
+
+## Procedimiento de retiro (aún no ejecutado)
+
+1. Exigir respaldo PostgreSQL verificado mediante restauración y respaldo operativo temporal de archivos. Verificar disponibilidad real de archivos, permisos y espacio en el volumen; confirmar que `--root` apunte al directorio que realmente contiene `uploads/warehouse`. **No suponer que la ruta del contenedor coincide con la del host.**
+2. Ejecutar `python -m scripts.ops.wso01_corte_caja_files inspect` desde el runtime backend con `--root`, `--manifest` y `--quarantine-dir` absolutos. El script coteja la identidad exacta del conjunto (2,061/5,961,032,253 bytes), paths exclusivos, tamaño y SHA-256; genera un manifiesto privado. Cualquier archivo ausente o distinto bloquea el procedimiento.
+3. Tras autorizar la operación, ejecutar modo `quarantine --apply` desde el mismo root: tras verificar nuevamente todo, mueve los 2,061 archivos a una zona privada separada del directorio público de uploads. `restore --apply` los devuelve si se cancela.
+4. Desplegar código de retiro y, en ventana controlada, aplicar la migración Alembic `wso01caja110226`. El `upgrade` borra en la misma transacción tablas propias, auditorías, metadatos y catálogo del reporte, sin cambiar otras fuentes; verifica nuevas referencias `ON DELETE SET NULL` y rutas compartidas. **No aplicar la migración antes de la cuarentena.**
+5. Verificar rutas API, Track, catálogos, estado Alembic y conteos residuales. Únicamente después usar `purge --apply --ack-irreversible` para eliminar los archivos ya puestos en cuarentena. Este paso comprueba que no exista metadata restante antes de borrar los ficheros.
+6. Medir tamaño liberado en PostgreSQL y disco. Si falla cualquier gate: NO avanzar y usar el mecanismo de recuperación correspondiente. El downgrade no recrea datos; requiere restaurar el respaldo.
+
+**Estado al 2026-11-02:** contrato y cambios de código versionados en rama. Sin pruebas de pytest/CI ejecutadas, sin cuarentena, migración, purge ni cambios productivos.
