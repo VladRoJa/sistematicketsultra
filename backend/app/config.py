@@ -132,6 +132,11 @@ class Config:
         "PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # PM validación: veto por acción, sin cambiar sucursales o reglas de validación.
+    PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
