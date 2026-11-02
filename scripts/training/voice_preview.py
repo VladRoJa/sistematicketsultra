@@ -17,6 +17,9 @@ TEXT = (
     "el avance de cada equipo y verificar su estado. Todo con información "
     "de prueba, sin cambiar datos reales."
 )
+# Sustitución únicamente para síntesis: el nombre oficial se conserva escrito.
+# La tilde obliga a JorgeNeural a leer la marca en español, sin cambiarla en pantalla.
+VOICE_TEXT = TEXT.replace("Suite Ultra", "Súit Ultra")
 OUTPUT = Path("artifacts/capacitacion/voz-demo")
 DURATION = 15.0
 
@@ -35,7 +38,7 @@ def main() -> None:
 
     run(
         "edge-tts", "--voice", VOICE, "--rate=-5%",
-        "--text", TEXT, "--write-media", str(original),
+        "--text", VOICE_TEXT, "--write-media", str(original),
     )
     duration = float(run(
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -65,6 +68,7 @@ def main() -> None:
         json.dumps({
             "purpose": "voice-evaluation-only",
             "voice": VOICE,
+            "pronunciation_alias": "Suite Ultra -> Súit Ultra (solo locución)",
             "duration_seconds": round(final_duration, 3),
             "provider": "edge-tts / interfaz no oficial, no producción",
             "demo_only": True,
