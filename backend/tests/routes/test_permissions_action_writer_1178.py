@@ -52,6 +52,7 @@ def client():
         PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED=True,
         PERMISSIONS_PM_READ_GRANTS_ENABLED=True,
         PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED=True,
+        PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -74,7 +75,7 @@ def admin_and_target(monkeypatch):
 
 
 @pytest.mark.parametrize("full_key", [
-    "pm.validate", "track.run_daily_pipeline",
+    "track.run_daily_pipeline",
     "internal_documents.view",
 ])
 def test_uncertified_action_fails_before_db_mutation(monkeypatch, full_key):
@@ -195,6 +196,26 @@ def test_pm_execute_writer_flag_off_rejects_without_grant_changes(monkeypatch):
     session.commit.assert_not_called()
 
 
+def test_pm_validate_writer_flag_off_rejects_without_mutation(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "pm",
+            "action_full_key": "pm.validate",
+            "override": "deny",
+        }]},
+    )
+    assert result.status_code == 409
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
 def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch):
     api, headers = client()
     admin_and_target(monkeypatch)
@@ -227,6 +248,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("inventory", "inventory.read"),
     ("pm", "pm.read"),
     ("pm", "pm.execute"),
+    ("pm", "pm.validate"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
