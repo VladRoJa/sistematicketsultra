@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from flask import jsonify
+from flask import jsonify, current_app, has_app_context
 from flask_jwt_extended import get_jwt_identity
 
-from app.models import PlanningOperatorORM
+from app.models import PlanningOperatorORM, UserORM
 
 
 def _get_current_user_id() -> int | None:
@@ -55,6 +55,39 @@ def _forbidden_response(detail: str):
     ), 403
 
 
+PLANNING_GRANT_FLAGS = {
+    "planning.read": "PERMISSIONS_PLANNING_READ_GRANTS_ENABLED",
+    "planning.edit": "PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED",
+    "planning.submit": "PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED",
+    "planning.approve": "PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED",
+    "planning.publish": "PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED",
+    "planning.configure_model": "PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED",
+}
+
+
+def planning_action_grants_enabled(action_key: str) -> bool:
+    flag = PLANNING_GRANT_FLAGS.get(action_key)
+    return bool(
+        flag and has_app_context() and current_app.config.get(flag, False) is True
+    )
+
+
+def _planning_action_veto(action_key: str, detail: str):
+    # Solo después del operador activo y capacidad legacy del guard.
+    if not planning_action_grants_enabled(action_key):
+        return None
+    user_id = _get_current_user_id()
+    user = UserORM.get_by_id(user_id) if user_id is not None else None
+    if user is None:
+        return _forbidden_response(detail)
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    if _simple_global_action_grant_override(
+        user=user, action_full_key=action_key
+    ) is False:
+        return _forbidden_response(detail)
+    return None
+
+
 def require_planning_operator():
     """
     Valida acceso base al módulo de Planeación Comercial.
@@ -69,7 +102,7 @@ def require_planning_operator():
             "No autorizado para acceder a Planeación Comercial."
         )
 
-    return None
+    return _planning_action_veto("planning.read", "No tienes habilitada la consulta de Planeación Comercial.")
 
 
 def require_planning_edit():
@@ -80,7 +113,7 @@ def require_planning_edit():
             "No autorizado para editar Planeación Comercial."
         )
 
-    return None
+    return _planning_action_veto("planning.edit", "No tienes habilitada la edición de Planeación Comercial.")
 
 
 def require_planning_submit():
@@ -91,7 +124,7 @@ def require_planning_submit():
             "No autorizado para enviar metas a revisión."
         )
 
-    return None
+    return _planning_action_veto("planning.submit", "No tienes habilitado el envío de metas a revisión.")
 
 
 def require_planning_approve():
@@ -102,7 +135,7 @@ def require_planning_approve():
             "No autorizado para aprobar o rechazar metas."
         )
 
-    return None
+    return _planning_action_veto("planning.approve", "No tienes habilitada la aprobación o rechazo de metas.")
 
 
 def require_planning_publish():
@@ -113,7 +146,7 @@ def require_planning_publish():
             "No autorizado para publicar metas hacia Track."
         )
 
-    return None
+    return _planning_action_veto("planning.publish", "No tienes habilitada la publicación de metas hacia Track.")
 
 
 def require_planning_model_config():
@@ -124,7 +157,7 @@ def require_planning_model_config():
             "No autorizado para configurar modelos de Planeación Comercial."
         )
 
-    return None
+    return _planning_action_veto("planning.configure_model", "No tienes habilitada la configuración de modelos de Planeación.")
 
 def get_current_planning_access_payload() -> dict:
     operator = get_current_planning_operator()
