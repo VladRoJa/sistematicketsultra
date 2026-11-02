@@ -18,6 +18,8 @@ TABLES = (
     "marketing_iventas_contact_tags",
     "marketing_iventas_raw_pages",
     "contact_center_contact_links",
+    "marketing_reactivation_campaigns",
+    "marketing_campaign_v2_campaigns",
     "marketing_iventas_contacts",
     "marketing_iventas_sync_runs",
 )
@@ -83,6 +85,16 @@ def pg():
                 )
             """)
             c.exec_driver_sql("""
+                CREATE TABLE public.marketing_reactivation_campaigns (
+                    id bigint PRIMARY KEY, filters_json json NOT NULL
+                )
+            """)
+            c.exec_driver_sql("""
+                CREATE TABLE public.marketing_campaign_v2_campaigns (
+                    id bigint PRIMARY KEY, audience_definition_json json NOT NULL
+                )
+            """)
+            c.exec_driver_sql("""
                 INSERT INTO public.marketing_iventas_sync_runs
                  (id, period_key, date_from, date_to, status, is_canonical, contacts_unique)
                 VALUES
@@ -90,11 +102,16 @@ def pg():
                  (2, 'IVENTAS-2026-10', '2026-10-01', '2026-10-31', 'COMPLETED', true, 1),
                  (3, 'IVENTAS-2026-10', '2026-10-01', '2026-10-30', 'COMPLETED', false, 1),
                  (4, 'IVENTAS-2026-10', '2026-10-01', '2026-10-30', 'COMPLETED', false, 1),
-                 (5, 'IVENTAS-2026-09', '2026-09-01', '2026-09-30', 'PARTIAL', false, 1)
+                 (5, 'IVENTAS-2026-09', '2026-09-01', '2026-09-30', 'PARTIAL', false, 1),
+                 (6, 'IVENTAS-2026-08', '2026-08-01', '2026-08-31', 'COMPLETED', false, 1),
+                 (7, 'IVENTAS-2026-08', '2026-08-01', '2026-08-31', 'COMPLETED', true, 1),
+                 (8, 'IVENTAS-2026-07', '2026-07-01', '2026-07-31', 'COMPLETED', false, 1),
+                 (9, 'IVENTAS-2026-07', '2026-07-01', '2026-07-31', 'COMPLETED', true, 1)
             """)
             c.exec_driver_sql("""
                 INSERT INTO public.marketing_iventas_contacts (id, sync_run_id)
-                VALUES (101,1),(102,1),(201,2),(301,3),(401,4),(501,5)
+                VALUES (101,1),(102,1),(201,2),(301,3),(401,4),(501,5),
+                       (601,6),(701,7),(801,8),(901,9)
             """)
             c.exec_driver_sql("""
                 INSERT INTO public.marketing_iventas_contact_tags
@@ -107,6 +124,14 @@ def pg():
             c.exec_driver_sql("""
                 INSERT INTO public.contact_center_contact_links
                 VALUES (1,'IVENTAS_CONTACT',301)
+            """)
+            c.exec_driver_sql("""
+                INSERT INTO public.marketing_reactivation_campaigns
+                VALUES (1, '{"sources":{"iventas_sync_run_id":6}}')
+            """)
+            c.exec_driver_sql("""
+                INSERT INTO public.marketing_campaign_v2_campaigns
+                VALUES (1, '{"source_metadata":{"iventas_sync_run_id":8}}')
             """)
         yield engine
     finally:
@@ -164,8 +189,8 @@ def test_manifest_mismatch_rolls_back_before_any_child_deletion(pg):
         """)).scalar_one() is None
 
 
-@pytest.mark.parametrize("run_id", [2, 3, 4, 5])
-def test_canonical_cc_linked_latest_and_partial_are_blocked(pg, run_id):
+@pytest.mark.parametrize("run_id", [2, 3, 4, 5, 6, 7, 8, 9])
+def test_canonical_cc_campaign_pinned_latest_and_partial_are_blocked(pg, run_id):
     with pg.connect() as conn:
         row = conn.execute(text("""
             SELECT period_key, date_from, date_to
