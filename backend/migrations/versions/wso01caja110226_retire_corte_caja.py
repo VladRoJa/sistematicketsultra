@@ -1,12 +1,11 @@
-"""WSO-01: retire Corte de Caja structured storage.
+"""WSO-01: retire obsolete Corte de Caja storage and Warehouse lineage.
 
 Revision ID: wso01caja110226
 Revises: v2e4b3103026
 
-WARNING: upgrade irrevocably removes structured Corte de Caja rows.
-Only run after the production backup and restore verification gates in
-CONTRATO_WAREHOUSE_STORAGE_OPTIMIZATION_V1.md. A downgrade recreates
-empty tables: it cannot recover deleted historical rows.
+Destructive migration. Apply ONLY after verified backup/restore, dry-run of
+wso01_corte_caja_files.py and physical-file quarantine confirmation.
+Downgrade requires restoring the database backup, not empty tables.
 """
 
 from alembic import op
@@ -18,100 +17,86 @@ down_revision = "v2e4b3103026"
 branch_labels = None
 depends_on = None
 
+_REPORT_KEY = "corte_caja"
+
+# Relations with ON DELETE SET NULL must be checked explicitly: otherwise a
+# concurrent reference could be silently unlinked rather than block the purge.
+_NULLABLE_REFERENCES_SQL = """
+SELECT EXISTS (
+    SELECT 1
+    FROM public.planning_target_batches p
+    JOIN public.warehouse_uploads u ON u.id = p.source_upload_id
+    JOIN public.warehouse_report_types rt ON rt.id = u.report_type_id
+    WHERE rt.key = :report_key
+    UNION ALL
+    SELECT 1
+    FROM public.routine_control_provider_runs p
+    JOIN public.warehouse_uploads u ON u.id = p.raw_warehouse_upload_id
+    JOIN public.warehouse_report_types rt ON rt.id = u.report_type_id
+    WHERE rt.key = :report_key
+)
+"""
+
+_SHARED_PATH_SQL = """
+SELECT EXISTS (
+    SELECT 1
+    FROM public.warehouse_uploads target
+    JOIN public.warehouse_report_types rt ON rt.id = target.report_type_id
+    JOIN public.warehouse_uploads other
+      ON other.id <> target.id
+     AND other.stored_path = target.stored_path
+     AND other.stored_filename = target.stored_filename
+    WHERE rt.key = :report_key
+)
+"""
+
 
 def upgrade():
-    # Preserve the tiny report type for historical warehouse_uploads FK lineage,
-    # but hide it from active catalogs.
-    op.execute(
-        "UPDATE public.warehouse_report_types "
-        "SET active = FALSE WHERE key = 'corte_caja'"
-    )
-
-    # A low lock timeout avoids blocking production queries indefinitely.
-    # No CASCADE: fail loudly if new external dependencies were introduced.
+    bind = op.get_bind()
     op.execute("SET LOCAL lock_timeout = '5s'")
+
+    # Preserve all data if any unexpected shared paths or SET NULL consumers
+    # appeared since the audited 2026-11-02 snapshot.
+    if bind.execute(sa.text(_NULLABLE_REFERENCES_SQL), {"report_key": _REPORT_KEY}).scalar():
+        raise RuntimeError(
+            "WSO-01 blocked: Corte de Caja uploads have live references "
+            "in planning_target_batches or routine_control_provider_runs"
+        )
+    if bind.execute(sa.text(_SHARED_PATH_SQL), {"report_key": _REPORT_KEY}).scalar():
+        raise RuntimeError(
+            "WSO-01 blocked: at least one Corte de Caja physical path "
+            "is shared by another Warehouse upload"
+        )
+
+    # Do not CASCADE outside the retired source: PostgreSQL RESTRICT/NO ACTION
+    # FKs must abort the whole transaction if any unexpected dependency exists.
     op.drop_table("corte_caja_snapshot_rows", schema="public")
     op.drop_table("corte_caja_snapshots", schema="public")
 
+    # Scoped deletion of only the retired report's own audit and upload rows.
+    # Warehouse audit events have a non-cascading FK to warehouse_uploads.
+    op.execute("""
+        DELETE FROM public.warehouse_audit_logs a
+        USING public.warehouse_uploads u, public.warehouse_report_types rt
+        WHERE a.upload_id = u.id
+          AND u.report_type_id = rt.id
+          AND rt.key = 'corte_caja'
+    """)
+    op.execute("""
+        DELETE FROM public.warehouse_uploads u
+        USING public.warehouse_report_types rt
+        WHERE u.report_type_id = rt.id
+          AND rt.key = 'corte_caja'
+    """)
+    op.execute("""
+        DELETE FROM public.warehouse_report_types
+        WHERE key = 'corte_caja'
+    """)
+
 
 def downgrade():
-    # Schema-only reversal; data cannot be reconstructed by Alembic.
-    op.create_table(
-        "corte_caja_snapshots",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("warehouse_upload_id", sa.Integer(), nullable=False),
-        sa.Column("report_type_key", sa.String(length=100), nullable=False),
-        sa.Column("business_date", sa.Date(), nullable=False),
-        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("snapshot_kind", sa.String(length=50), nullable=False),
-        sa.Column(
-            "is_canonical", sa.Boolean(), nullable=False,
-            server_default=sa.false(),
-        ),
-        sa.Column("row_count_detected", sa.Integer(), nullable=False),
-        sa.Column("row_count_valid", sa.Integer(), nullable=False),
-        sa.Column(
-            "row_count_rejected", sa.Integer(), nullable=False,
-            server_default="0",
-        ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["warehouse_upload_id"],
-            ["public.warehouse_uploads.id"],
-            name="fk_corte_caja_snapshots_warehouse_upload_id",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_corte_caja_snapshots"),
-        sa.UniqueConstraint(
-            "warehouse_upload_id",
-            name="uq_corte_caja_snapshots_warehouse_upload_id",
-        ),
-        schema="public",
-    )
-    op.create_index(
-        "ix_corte_caja_snapshots_business_date",
-        "corte_caja_snapshots", ["business_date"],
-        unique=False, schema="public",
-    )
-    op.create_index(
-        "ix_corte_caja_snapshots_is_canonical",
-        "corte_caja_snapshots", ["is_canonical"],
-        unique=False, schema="public",
-    )
-
-    op.create_table(
-        "corte_caja_snapshot_rows",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("snapshot_id", sa.Integer(), nullable=False),
-        sa.Column("row_index", sa.Integer(), nullable=False),
-        sa.Column("clave", sa.String(length=100), nullable=True),
-        sa.Column("folio", sa.String(length=100), nullable=False),
-        sa.Column("hora", sa.String(length=20), nullable=False),
-        sa.Column("nombre", sa.String(length=255), nullable=False),
-        sa.Column("importe", sa.Numeric(12, 2), nullable=False),
-        sa.Column("pago", sa.String(length=50), nullable=True),
-        sa.Column("renovacion", sa.String(length=50), nullable=True),
-        sa.Column("operacion", sa.String(length=100), nullable=True),
-        sa.Column("tipo_pago", sa.String(length=100), nullable=True),
-        sa.Column("recepcion", sa.String(length=255), nullable=True),
-        sa.Column("sucursal", sa.String(length=255), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["snapshot_id"], ["public.corte_caja_snapshots.id"],
-            name="fk_corte_caja_snapshot_rows_snapshot_id",
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name="pk_corte_caja_snapshot_rows"),
-        schema="public",
-    )
-    op.create_index(
-        "ix_corte_caja_snapshot_rows_snapshot_id",
-        "corte_caja_snapshot_rows", ["snapshot_id"],
-        unique=False, schema="public",
-    )
-
-    op.execute(
-        "UPDATE public.warehouse_report_types "
-        "SET active = TRUE WHERE key = 'corte_caja'"
+    raise RuntimeError(
+        "WSO-01 is data-destructive. Recreate the environment from the "
+        "verified pre-migration database backup; an empty-table downgrade "
+        "would falsely suggest that the historical data was recovered."
     )
