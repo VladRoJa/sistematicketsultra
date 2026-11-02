@@ -320,6 +320,14 @@ def api(monkeypatch, tmp_path):
                       request_fingerprint VARCHAR(64)
                     )
                 """)
+                con.exec_driver_sql("""
+                    CREATE TABLE inventario_correccion_decisiones (
+                        solicitud_id BIGINT PRIMARY KEY,
+                        actor_usuario_id INTEGER,
+                        decidido_en_utc TIMESTAMPTZ,
+                        motivo_decision TEXT
+                    )
+                """)
                 monkeypatch.setattr(migration, "op", Operations(MigrationContext.configure(con)))
                 migration.upgrade()
                 spec_b2 = importlib.util.spec_from_file_location("inv_e4_b2_migration", MIGRATION_B2)
