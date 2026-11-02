@@ -3,6 +3,8 @@
 -- A 16M-contact index scan may take time. Prints aggregates only, never PII.
 -- NO DELETE, no VACUUM, no changes to canonicality.
 \set ON_ERROR_STOP on
+SET statement_timeout = '120s';
+SET lock_timeout = '3s';
 
 \echo '=== WSO-02 / 7. Exact persisted rows by retention bucket (includes Contact Center logical references) ==='
 -- This is a READ ONLY count. The 16M-row contacts index may need several seconds.
