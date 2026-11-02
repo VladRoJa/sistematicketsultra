@@ -69,3 +69,19 @@ Resultado real de `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql
 6. Medir tamaño liberado en PostgreSQL y disco. Si falla cualquier gate: NO avanzar y usar el mecanismo de recuperación correspondiente. El downgrade no recrea datos; requiere restaurar el respaldo.
 
 **Estado al 2026-11-02:** contrato y cambios de código versionados en rama. Sin pruebas de pytest/CI ejecutadas, sin cuarentena, migración, purge ni cambios productivos.
+
+### Ejecución operativa de la inspección (no autorizada aún)
+
+El `Dockerfile` usa `/app`; los uploads físicos se montan en `/uploads`, según `docker-compose.yml`. Para que el chequeo y la cuarentena estén en **un mismo bind mount** (y puedan moverse archivos sin cruces de filesystem), ejecutar desde la raíz del repositorio en el host, una vez desplegada la rama, con un montaje adicional del propio repositorio a `/workspace`:
+
+```bash
+# Paso exclusivamente de inspección: nunca mueve ni elimina archivos RAW.
+docker compose run --rm --no-deps \\
+  -v "$PWD:/workspace" backend \\
+  python -m scripts.ops.wso01_corte_caja_files inspect \\
+    --root /workspace \\
+    --manifest /workspace/private/wso01/manifest.json \\
+    --quarantine-dir /workspace/private/wso01/quarantine
+```
+
+La ruta `private/wso01/` debe estar protegida del acceso público y excluida de Git. Revisar el resultado antes de usar `quarantine --apply`. Ejecutar preflight con root equivocado o archivos ausentes debe fallar; no cambiar el script para saltarse esa comprobación. La limpieza final `purge --apply --ack-irreversible` solo va **después** de la migración, las pruebas de recuperación y la aprobación explícita.
