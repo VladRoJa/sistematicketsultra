@@ -205,6 +205,10 @@ def login(page, url: str, username: str, password: str):
 def switch_account(page, url: str, username: str, password: str):
     page.context.clear_cookies()
     login(page, url, username, password)
+    # Angular conserva el objeto User/rol si se navega al mismo hash.
+    # Recargar crea una instancia de app vinculada al nuevo localStorage.
+    # El formulario de login nunca aparece con credenciales en la captura.
+    page.reload(wait_until="domcontentloaded")
 
 
 def ticket_page(page, url: str):
