@@ -127,6 +127,11 @@ class Config:
         "PERMISSIONS_PM_READ_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # PM ejecución: veto por acción; no reemplaza scope ni validaciones de bitácora.
+    PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
