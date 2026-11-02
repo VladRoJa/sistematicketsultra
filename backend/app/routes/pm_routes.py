@@ -572,7 +572,7 @@ def _crear_configuracion_pm(data, user_id):
     if user_err:
         return None, user_err
 
-    denied_action = require_pm_configure(user)
+    denied_action = _require_pm_configure_action(user)
     if denied_action:
         return None, denied_action
 
@@ -649,7 +649,7 @@ def _actualizar_configuracion_pm(config_id, data, user_id):
     if user_err:
         return None, user_err
 
-    denied_action = require_pm_configure(user)
+    denied_action = _require_pm_configure_action(user)
     if denied_action:
         return None, denied_action
 
@@ -929,6 +929,33 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+def pm_configure_grants_enabled():
+    """Flag del veto operativo PM sobre crear/actualizar programación."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_configure_grant_veto(user):
+    # Solo después del guard legacy de rol; ALLOW no habilita sucursales.
+    if pm_configure_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.configure"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la programación de preventivos.",
+            }, 403
+    return None
+
+
+def _require_pm_configure_action(user):
+    denied = require_pm_configure(user)
+    return denied if denied else _pm_configure_grant_veto(user)
+
+
 def pm_validate_grants_enabled():
     """Check de validación PM independiente de ejecutar o consultar."""
     return has_app_context() and current_app.config.get(
