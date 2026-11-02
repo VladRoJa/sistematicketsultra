@@ -308,6 +308,11 @@ def read_iventas_stored_run_counters(
         raise MarketingIventasRunCountersReadError(
             "No existe el sync_run indicado."
         )
+    if getattr(run, "payload_pruned_at", None) is not None:
+        raise MarketingIventasRunCountersReadError(
+            "Los datos detallados de esta corrida fueron depurados por WSO-02. "
+            "Los contadores originales siguen disponibles en el sync_run."
+        )
 
     statement = (
         _build_stored_run_counters_statement(
