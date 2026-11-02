@@ -571,19 +571,6 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_lectura_global_preserva_alcance_real"
             catalog_source = "inventory_read_grant_operativo"
             catalog_reason = "check_global_no_certifica_sucursal"
-    if action.full_key == "pm.read" and pm_read_grants_enabled():
-        # DENY es concluyente aun sin recurso. ALLOW no acredita sucursales
-        # ni reemplaza la excepción individual COMPRAS/COORDINADOR.
-        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
-            if candidate.effect == "deny":
-                legacy = False
-                catalog_allowed = False
-            else:
-                catalog_allowed = legacy if branch_id is None else None
-            legacy_source = "pm_routes._require_pm_read_action+grant"
-            legacy_reason = "veto_lectura_pm_no_evade_acl_ni_sucursal"
-            catalog_source = "pm_read_grant_operativo"
-            catalog_reason = "check_global_no_autoriza_bitacora_ni_sucursal"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -604,6 +591,21 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
         ):
             legacy, legacy_reason = None, "branch_guard_no_evaluable_sin_recurso"
         # Documentos mantienen sus propios controles, no heredados del filtro global.
+    # Aplicar el veto global DESPUÉS de degradar los ALLOW sin contexto de
+    # sucursal. Un DENY sí es concluyente para cualquier recurso PM.
+    if action.full_key == "pm.read" and pm_read_grants_enabled():
+        # DENY es concluyente aun sin recurso. ALLOW no acredita sucursales
+        # ni reemplaza la excepción individual COMPRAS/COORDINADOR.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_read_action+grant"
+            legacy_reason = "veto_lectura_pm_no_evade_acl_ni_sucursal"
+            catalog_source = "pm_read_grant_operativo"
+            catalog_reason = "check_global_no_autoriza_bitacora_ni_sucursal"
     comparison = (
         "coincide" if legacy == catalog_allowed else "diferencia"
     ) if legacy is not None and catalog_allowed is not None else "no_concluyente"
