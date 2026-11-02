@@ -80,6 +80,11 @@ def _casos(lev, parsed, referencias):
                 "descripcion": norm(data.get("descripcion") or data.get("observaciones")),
             })
             blocked = "IDENTIDAD_FISICA_INSUFICIENTE"
+        if "CODIGO_HALLAZGO_EN_CORTE" in row["diagnosticos"]:
+            # La etiqueta pertenece a un aparato oficial del corte.
+            # Conservar el hallazgo como discrepancia accionable sin E2,
+            # aunque otra fila del mismo Excel sí pueda crear su solicitud.
+            blocked = "CODIGO_HALLAZGO_EN_CORTE"
         if k in usados:
             # Se conserva un incidente bloqueado para todo el grupo; no
             # se fusionan supuestos aparatos bajo una identidad oficial.
@@ -242,24 +247,26 @@ def _solicitud_e2(lev, imp, caso, actor):
     return solicitud, None
 
 
-def e4_auto_demo_enabled(sucursal_id):
-    """Gate de producción: auto-E2 solo con activación explícita en sucursal DEMO.
+def e4_auto_enabled(sucursal_id):
+    """Activación independiente para DEMO y sucursales reales, OFF por defecto.
 
-    No fiarse de claims JWT ni de un ID especial. La semántica es is_demo
-    persistida en sucursales y el flag es OFF por defecto.
+    El origen de verdad del ámbito es sucursales.is_demo en PostgreSQL.
+    Activar producción no habilita E4 a gerentes ni autoriza solicitudes E3.
     """
-    enabled = os.getenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "false").strip().lower()
-    if enabled not in {"1", "true", "yes", "on"}:
-        return False
-    return db.session.execute(sql_text("""
+    es_demo = db.session.execute(sql_text("""
         SELECT COALESCE(is_demo, false) FROM sucursales
         WHERE sucursal_id=:sucursal
-    """), {"sucursal": sucursal_id}).scalar_one_or_none() is True
+    """), {"sucursal": sucursal_id}).scalar_one_or_none()
+    if es_demo is None:
+        return False
+    flag = ("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED" if es_demo
+            else "INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED")
+    return os.getenv(flag, "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def reconciliar_importacion(lev, imp, parsed, actor):
     """Idempotencia por ciclo + clave, evidencias por versión. No aplica E3."""
-    if not e4_auto_demo_enabled(lev.sucursal_id):
+    if not e4_auto_enabled(lev.sucursal_id):
         return {
             "nuevas": 0, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 0,
             "auto_revisiones_habilitadas": False,

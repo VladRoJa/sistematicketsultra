@@ -238,6 +238,10 @@ def tablero_e4(lev_id):
     bloqueos = []
     if imp.resultado == "INVALID" or (imp.resumen or {}).get("errores", 0):
         bloqueos.append("ENTREGA_INVALIDA")
+    if (imp.resumen or {}).get("revisiones_auto", {}).get("auto_revisiones_habilitadas") is False:
+        # Una entrega solo archivada nunca puede aparentar conciliación completa.
+        # Activar E4 después no reconstruye revisiones que no se generaron.
+        bloqueos.append("REVISIONES_AUTOMATICAS_NO_HABILITADAS")
     if pendientes:
         bloqueos.append("SIN_REVISAR")
     if any(not x["resuelto"] for x in casos):
@@ -322,10 +326,10 @@ def cerrar_e4(lev_id, actor, data):
     if not isinstance(motivo, str) or not 20 <= len(motivo.strip()) <= 2000:
         raise E4Error(400, "MOTIVO_INVALIDO", "El motivo requiere 20 a 2000 caracteres")
     lev = _levantar(lev_id, lock=True)
-    from app.services.inventario_levantamiento_revision_service import e4_auto_demo_enabled
-    if not e4_auto_demo_enabled(lev.sucursal_id):
-        raise E4Error(409, "PILOTO_DEMO_NO_HABILITADO",
-                      "El cierre E4 automático solo está habilitado para el piloto DEMO autorizado")
+    from app.services.inventario_levantamiento_revision_service import e4_auto_enabled
+    if not e4_auto_enabled(lev.sucursal_id):
+        raise E4Error(409, "E4_AUTO_REVIEW_NO_HABILITADO",
+                      "El cierre E4 no está habilitado para esta sucursal")
     anterior = Cierre.query.filter_by(levantamiento_id=lev.id).first()
     if anterior:
         if anterior.actor_usuario_id == actor and anterior.idempotency_key == key and anterior.motivo == motivo.strip():
