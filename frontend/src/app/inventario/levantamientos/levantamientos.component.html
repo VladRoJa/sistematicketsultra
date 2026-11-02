@@ -105,6 +105,20 @@
           </div>
           <span class="estado">{{ lev.estado }}</span>
         </div>
+        <div class="panel-header" aria-label="Documentos para sucursal">
+          <div>
+            <h3>Documentos para sucursal</h3>
+            <p class="help">Descarga cambios para reetiquetar y existencias oficiales. Las revisiones pendientes no se consideran autorizadas.</p>
+          </div>
+          <div class="e4-report-actions">
+            <button type="button" class="quiet" (click)="descargarReporte('cambios')">
+              <mat-icon>download</mat-icon> Cambios y etiquetas
+            </button>
+            <button type="button" class="quiet" (click)="descargarReporte('existencias')">
+              <mat-icon>download</mat-icon> Inventario oficial
+            </button>
+          </div>
+        </div>
         <div class="facts">
           <span>Origen: <strong>{{ lev.origen_corte }}</strong></span>
           <span>Referencias: <strong>{{ lev.baseline_resumen.referencias_esperadas }}</strong></span>
@@ -225,6 +239,11 @@
                       *ngIf="r.tipo === 'MASTER_FIELD' && r.campo === 'codigo_interno' && r.estado === 'REJECTED'"
                       [disabled]="procesando" (click)="abrirSustitucion(r)">
                       Sustituir propuesta
+                    </button>
+                    <button type="button" class="quiet"
+                      *ngIf="r.tipo === 'UNREGISTERED_FIND' && r.estado === 'BLOCKED' && r.solicitud_e2_id === null"
+                      [disabled]="procesando" (click)="abrirCorreccionHallazgo(r)">
+                      Corregir código de hallazgo
                     </button>
                   </td>
                 </tr>
