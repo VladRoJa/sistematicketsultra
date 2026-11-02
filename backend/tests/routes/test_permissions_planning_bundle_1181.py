@@ -121,6 +121,7 @@ def test_allow_and_inherit_preserve_current_operator_capability(
     from app.routes import permissions_catalog_routes as catalog
     api, headers = client()
     with api.application.test_request_context(headers=headers), \
+         patch.object(access, "get_jwt_identity", return_value="47"), \
          patch.object(access, "get_current_planning_operator",
                       return_value=operator()), \
          patch.object(access.UserORM, "get_by_id", return_value=actor()), \
