@@ -398,6 +398,120 @@ def sustituir_propuesta_maestra(levantamiento_id, revision_id, actor_id, data):
     }, False
 
 
+
+def corregir_codigo_hallazgo(levantamiento_id, revision_id, actor_id, data):
+    """Rectifica un código provisional E4 bloqueado sin cambiar el XLSX histórico.
+
+    Conserva la revisión lógica original y deja evento append-only antes de
+    crear la solicitud E2 nueva. Su aprobación E3 y la colocación de etiqueta
+    física son pasos independientes.
+    """
+    from app.models.inventario_levantamiento import (
+        InventarioLevantamientoORM as Lev,
+        InventarioLevantamientoImportacionORM as Imp,
+        InventarioLevantamientoReferenciaORM as Ref,
+    )
+    from app.services.inventario_levantamientos_service import E4Error, parse_uuid
+    if not isinstance(data, dict) or set(data) != {
+        "nuevo_codigo", "motivo", "idempotency_key"
+    }:
+        raise E4Error(400, "DATOS_INVALIDOS", "Indica código corregido, motivo y llave de idempotencia")
+    code, reason = data["nuevo_codigo"], data["motivo"]
+    key = parse_uuid(data["idempotency_key"])
+    if not isinstance(code, str) or len(code) > 50 or not re.fullmatch(r"[A-Z0-9][A-Z0-9-]*", code):
+        raise E4Error(422, "CODIGO_INVALIDO", "El nuevo código debe estar normalizado y sin espacios")
+    if not isinstance(reason, str) or not 20 <= len(reason.strip()) <= 1000:
+        raise E4Error(422, "MOTIVO_INVALIDO", "Justifica el cambio en 20 a 1000 caracteres")
+    reason = reason.strip()
+    lev = Lev.query.filter_by(id=levantamiento_id).with_for_update().first()
+    if not lev:
+        raise E4Error(404, "LEVANTAMIENTO_DESCONOCIDO", "Levantamiento inexistente")
+    if lev.estado == "CLOSED" or not e4_auto_enabled(lev.sucursal_id):
+        raise E4Error(409, "E4_NO_EDITABLE", "El levantamiento no permite nuevas revisiones")
+    imp = db.session.get(Imp, lev.ultima_importacion_id)
+    if not imp or imp.resultado == "INVALID":
+        raise E4Error(409, "ENTREGA_INVALIDA", "La entrega actual no es válida")
+    if 1 <= lev.sucursal_id <= 99 and not code.startswith(f"{lev.sucursal_id:02d}"):
+        raise E4Error(422, "PREFIJO_INVALIDO", "El código no coincide con la sucursal")
+    replay = db.session.execute(sql_text("""
+        SELECT e.revision_id, e.valor_observado
+        FROM inventario_levantamiento_revision_evidencias e
+        JOIN inventario_levantamiento_revisiones r ON r.id=e.revision_id
+        WHERE r.levantamiento_id=:lev
+          AND e.valor_observado ->> 'evento'='CORRECCION_CODIGO_HALLAZGO'
+          AND e.valor_observado ->> 'actor_usuario_id'=:actor
+          AND e.valor_observado ->> 'idempotency_key'=:key LIMIT 1
+    """), {"lev": lev.id, "actor": str(actor_id), "key": str(key)}).mappings().first()
+    if replay:
+        event = replay["valor_observado"]
+        if (replay["revision_id"] != revision_id or event["codigo_nuevo"] != code
+                or event["motivo"] != reason):
+            raise E4Error(409, "IDEMPOTENCIA_CONFLICTO", "La llave pertenece a otra operación")
+        return {"revision_id": revision_id, "codigo_nuevo": code,
+                "solicitud_e2_id": event["solicitud_e2_id"]}, True
+
+    rev = Revision.query.filter_by(id=revision_id, levantamiento_id=lev.id).first()
+    if (not rev or rev.tipo != "UNREGISTERED_FIND"
+            or rev.solicitud_e2_id is not None or rev.estado != "BLOCKED"
+            or rev.ultima_importacion_id != lev.ultima_importacion_id):
+        raise E4Error(409, "REVISION_NO_CORREGIBLE", "El hallazgo no está bloqueado sin E2 en la versión actual")
+    if code == norm(rev.codigo_observado).upper():
+        raise E4Error(422, "CODIGO_SIN_CAMBIO", "El nuevo código debe ser diferente")
+    duplicated = db.session.execute(sql_text("""
+        SELECT 1 FROM inventario_general
+        WHERE upper(btrim(codigo_interno))=:code LIMIT 1
+    """), {"code": code}).scalar_one_or_none()
+    if duplicated:
+        raise E4Error(409, "CODIGO_OCUPADO", "Ya existe un aparato oficial con el código")
+    in_cut = Ref.query.filter_by(levantamiento_id=lev.id).all()
+    if any(norm(ref.codigo_interno_original).upper() == code for ref in in_cut):
+        raise E4Error(409, "CODIGO_EN_CORTE", "El código ya pertenece a una referencia del corte")
+    sibling = db.session.execute(sql_text("""
+        SELECT 1 FROM inventario_levantamiento_revisiones
+        WHERE levantamiento_id=:lev AND id<>:rev
+          AND upper(btrim(codigo_observado))=:code AND estado<>'SUPERSEDED'
+        LIMIT 1
+    """), {"lev": lev.id, "rev": rev.id, "code": code}).scalar_one_or_none()
+    if sibling:
+        raise E4Error(409, "CODIGO_HALLAZGO_DUPLICADO", "Otra revisión tiene ese código")
+    original = rev.codigo_observado
+    datos = dict(rev.ultimo_valor)
+    datos["codigo"] = code
+    case = {
+        "clave": rev.logical_key, "tipo": "UNREGISTERED_FIND",
+        "inventario_id": None, "campo": None, "codigo": code,
+        "hoja": "HALLAZGOS", "fila": None,
+        "datos": datos, "base": None, "bloqueo": None,
+    }
+    request_key = uuid5(NAMESPACE_URL, f"suite-ultra-e4:find-correction:{rev.id}:{key}")
+    solicitud, blocked = _solicitud_e2(
+        lev, imp, case, actor_id, reemplazo_key=request_key,
+        motivo_reemplazo=reason,
+    )
+    if blocked:
+        raise E4Error(409, "CORRECCION_NO_ADMISIBLE", f"No se pudo crear E2: {blocked}")
+    event = {
+        "evento": "CORRECCION_CODIGO_HALLAZGO",
+        "actor_usuario_id": str(actor_id), "idempotency_key": str(key),
+        "codigo_anterior": original, "codigo_nuevo": code,
+        "motivo": reason, "solicitud_e2_id": solicitud.id,
+        "etiqueta_colocada": False,
+    }
+    db.session.add(Evidencia(
+        revision_id=rev.id, importacion_id=imp.id,
+        hoja=None, fila_excel=None, valor_observado=event,
+    ))
+    rev.codigo_observado = code
+    rev.ultimo_valor = datos
+    rev.solicitud_e2_id = solicitud.id
+    rev.estado = "AWAITING_E3"
+    rev.motivo_bloqueo = None
+    rev.actualizado_en_utc = datetime.now(timezone.utc)
+    db.session.commit()
+    return {"revision_id": rev.id, "codigo_nuevo": code,
+            "solicitud_e2_id": solicitud.id}, False
+
+
 def reconciliar_importacion(lev, imp, parsed, actor):
     """Idempotencia por ciclo + clave, evidencias por versión. No aplica E3."""
     if not e4_auto_enabled(lev.sucursal_id):
