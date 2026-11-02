@@ -95,3 +95,29 @@ Total físico de contactos enumerados: **17,090,892**. Diferencia frente a `pg_c
 Eliminar únicamente los **hijos de corridas completas reemplazadas**, **no sus metadatos de `sync_runs`**. Preservar contadores históricos y marcar la reducción para que diagnóstico de Automatización no confunda carga eliminada con un fallo de ingestión. Revalidar en la misma transacción: sigue COMPLETED/no canónica/no último corte, sin `source_row_id` de Contact Center. Ejecutar corrida por corrida con límite de tiempo y checkpoint, y en producción únicamente tras aceptación explícita del borrado.
 
 **Liberación del espacio:** luego de limpieza, `VACUUM (ANALYZE)` permite reuso interno pero no necesariamente libera 12 GB al sistema operativo; la compactación física necesita un plan de mantenimiento independiente con comprobación de disponibilidad, bloqueo y espacio.
+
+## Paquete funcional implementado en rama — sin activar en producción
+
+El PR DRAFT implementa:
+- `wso02ivnt110226` (padre `wso01caja110226`): columna nullable `marketing_iventas_sync_runs.payload_pruned_at`, sin borrar datos en Alembic.
+- ORM y lector de contadores: corrida depurada reconocible; el historial de ejecución y contadores originales se conserva. Si alguien intenta reconstruir contadores a partir de RAW ya eliminado, recibe diagnóstico explícito.
+- `backend/scripts/ops/wso02_iventas_payload_prune.py`: `preview` genera manifiesto privado de IDs, fechas y conteos; `apply` requiere `--apply --ack-irreversible --max-runs N` y opera por corrida en transacciones separadas con `lock_timeout`, `statement_timeout`, revalidación de conteos, ventana temporal, estado, canonicalidad y vínculos lógicos. Bloqueo de seguridad si cambia cualquier condición. Conservar `sync_runs` y sus contadores; eliminar únicamente `contact_tags`, `contacts` y `raw_pages` de las corridas elegibles.
+- Guard explícito adicional a referencias de `marketing_reactivation_campaigns.filters_json.sources.iventas_sync_run_id` y `marketing_campaign_v2_campaigns.audience_definition_json.source_metadata.iventas_sync_run_id`, incluso si no existe FK a la corrida. Durante cada transacción se bloquean brevemente escrituras en esas tablas y Contact Center para evitar enlaces concurrentes.
+- Límite de seguridad de al menos 20 GiB libres (`--min-free-gb` predeterminado 30), medido en filesystem del manifiesto en cada corrida. **El operador debe corroborar que sea el mismo dispositivo que PostgreSQL**; una comprobación de un volumen distinto no protege el WAL.
+- Pruebas focales PostgreSQL 16 con corrida canónica, último corte, vieja con vínculo Contact Center, vieja referida por campaña de reactivación o Campaign V2, corrida parcial, rollback e idempotencia.
+
+### Operación y aprobación
+
+**Eliminación real y compactación de PostgreSQL: NO AUTORIZADAS Y NO EJECUTADAS.** Primero confirmar el número de runs protegidos por las dos tablas de campaña mediante la consulta de solo lectura `backend/scripts/ops/wso02_iventas_campaign_references.sql`:
+
+```bash
+cd ~/sistematicketsultra
+git fetch origin feat/wso-02-iventas-storage-optimization
+git show FETCH_HEAD:backend/scripts/ops/wso02_iventas_campaign_references.sql \
+  | docker compose exec -T db \
+      psql -X -U postgres -d sistema_tickets -v ON_ERROR_STOP=1
+```
+
+Para WSO-02 la limpieza de 10 millones de filas puede generar WAL y dead tuples; conservar margen de disco, ventana operativa y monitoreo de backend/scheduler. `VACUUM FULL` requiere bloqueo exclusivo; no forma parte de la ejecución automática. Se escogerá compactación tras verificar si `pg_repack` está disponible y cuánto tiempo/bloqueo/espacio requiere, sin editar código en servidor.
+
+**Estado:** diagnóstico y desarrollo en rama; CI PostgreSQL focal ejecutado inicialmente con éxito, nueva protección Campaign V2/reactivación en revalidación. Sin merge, despliegue, migraciones WSO-02 ni DELETE productivo.
