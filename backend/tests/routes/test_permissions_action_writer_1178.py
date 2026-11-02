@@ -47,6 +47,7 @@ def client():
         PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED=True,
         PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED=True,
         PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED=True,
+        PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -92,6 +93,26 @@ def test_uncertified_action_fails_before_db_mutation(monkeypatch, full_key):
     session.commit.assert_not_called()
 
 
+def test_inventory_master_write_writer_rejects_flag_off_before_grants(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "inventory",
+            "action_full_key": "inventory.master_write",
+            "override": "deny",
+        }]},
+    )
+    assert response.status_code == 409
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
 def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch):
     api, headers = client()
     admin_and_target(monkeypatch)
@@ -119,6 +140,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("tickets", "tickets.notify"),
     ("tickets", "tickets.update"),
     ("tickets", "tickets.close"),
+    ("inventory", "inventory.master_write"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
