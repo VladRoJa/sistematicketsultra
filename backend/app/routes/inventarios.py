@@ -1102,8 +1102,8 @@ def editar_inventario(inventario_id):
         campos = [
             'tipo', 'nombre', 'descripcion', 'marca', 'proveedor',
             'categoria', 'unidad_medida',
-            'no_equipo', 'gasto_sem', 'gasto_mes',
-            'pedido_mes', 'semana_pedido', 'subcategoria','unidad_compra', 'factor_compra'
+            'no_equipo', 'grupo_muscular', 'gasto_sem', 'gasto_mes',
+            'pedido_mes', 'semana_pedido', 'subcategoria', 'unidad_compra', 'factor_compra'
         ]
         for campo in campos:
             if campo in data:
