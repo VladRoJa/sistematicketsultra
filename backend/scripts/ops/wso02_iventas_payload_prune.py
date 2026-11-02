@@ -45,6 +45,17 @@ WHERE r.status = 'COMPLETED'
     WHERE cc.source_type = 'IVENTAS_CONTACT'
       AND c.sync_run_id = r.id
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.marketing_reactivation_campaigns m
+    WHERE m.filters_json -> 'sources' ->> 'iventas_sync_run_id' = r.id::text
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.marketing_campaign_v2_campaigns v
+    WHERE COALESCE(
+      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id',
+      v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id'
+    ) = r.id::text
+  )
 ORDER BY r.id
 """
 
@@ -65,6 +76,17 @@ WHERE r.id = :id AND r.status = 'COMPLETED'
     JOIN public.marketing_iventas_contacts c ON c.id = cc.source_row_id
     WHERE cc.source_type = 'IVENTAS_CONTACT'
       AND c.sync_run_id = r.id
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.marketing_reactivation_campaigns m
+    WHERE m.filters_json -> 'sources' ->> 'iventas_sync_run_id' = r.id::text
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM public.marketing_campaign_v2_campaigns v
+    WHERE COALESCE(
+      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id',
+      v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id'
+    ) = r.id::text
   )
 """
 
@@ -156,10 +178,12 @@ def _prune_one(conn, item: dict) -> str:
             raise RuntimeError(f"WSO-02 blocked: run {run_id} partly pruned")
         return "already_pruned"
 
-    # SHARE conflicts with new INSERT/UPDATE on the small link table;
-    # SELECT readers are not blocked. Recheck the logical link inside the lock.
+    # SHARE locks prevent creating a new implicit reference while pruning.
+    # SELECT readers remain available. The locks are transaction scoped.
     conn.exec_driver_sql(
-        "LOCK TABLE public.contact_center_contact_links IN SHARE MODE"
+        "LOCK TABLE public.contact_center_contact_links, "
+        "public.marketing_campaign_v2_campaigns, "
+        "public.marketing_reactivation_campaigns IN SHARE MODE"
     )
     if conn.execute(text(ELIGIBLE_SQL), {"id": run_id}).scalar_one_or_none() is None:
         raise RuntimeError(f"WSO-02 blocked: run {run_id} no longer eligible")
