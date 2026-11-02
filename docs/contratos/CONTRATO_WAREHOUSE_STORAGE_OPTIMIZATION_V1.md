@@ -36,3 +36,16 @@ No modificar datos de producción sin autorización; no cambiar permisos, reglas
 
 ## Gates pendientes
 Inventario final de consumidores, estado de jobs productivos, dependencias externas, respaldo restaurable y aceptación de la migración irreversible.
+
+## Evidencia de dependencias de uploads (2026-11-02)
+
+Consulta de solo lectura sobre los 2,061 uploads Corte de Caja:
+
+- 2,061 rutas únicas `(stored_path, stored_filename)` dentro de este tipo; verificar posibles colisiones con OTROS tipos y existencia física antes de borrar.
+- 0 registros en `internal_document_versions`, 0 en `opening_task_document_links`, 0 en `routine_control_provider_runs`.
+- 1,100 uploads tienen `track_daily_version_id IS NOT NULL`: es una **FK saliente** del upload hacia `track_daily_versions.id`. Su eliminación no borra versiones Track; no hay prueba de que Corte de Caja alimente cálculos vigentes. El pipeline Track actual consume `venta_total` en el tramo de reportes individuales.
+- 2,084 registros en `warehouse_audit_logs` hacen referencia a estos IDs; **FK entrante**, deben tratarse expresamente. La decisión de retirar también auditoría histórica individual requiere una evidencia resumida de la baja, sin conservar todo el histórico obsoleto.
+- La consulta anterior sobre FKs/vistas de `corte_caja_snapshots` y `corte_caja_snapshot_rows` regresó vacía, pero NO cubre las FKs entrantes de `warehouse_uploads`.
+- El campo `source_file_deleted_at IS NULL` para todos ellos no verifica presencia física. El espacio real recuperable debe medirse en el volumen de archivos.
+
+**Próxima puerta de salida:** enumerar TODAS las FKs entrantes a `warehouse_uploads.id`, medir las referencias de los 2,061 candidatos, y comprobar si rutas/ficheros están disponibles y completos. Solo entonces se puede preparar el borrado seguro y explícitamente acotado a `corte_caja`.
