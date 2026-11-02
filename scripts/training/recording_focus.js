@@ -118,15 +118,27 @@
     targetBox.style.height = Math.min(innerHeight - Math.max(0, rect.y - pad),
       rect.height + 2 * pad) + 'px';
     targetBox.classList.add('cap-v1-visible');
-    // Situar la flecha arriba, o abajo si el control está cerca del borde.
-    const below = rect.y < 90;
+    // Preferir el lateral del botón: no tapar encabezados y etiquetas.
+    // Solo usar flecha vertical cuando el control está entre dos bordes.
     const cueWidth = 154;
-    const cueX = Math.min(innerWidth - cueWidth - 8,
-      Math.max(8, x - cueWidth / 2));
-    cue.style.left = cueX + 'px';
-    cue.style.top = Math.round(below ?
-      Math.min(innerHeight - 56, rect.y + rect.height + 20) :
-      Math.max(8, rect.y - 66)) + 'px';
+    const spaceRight = innerWidth - (rect.x + rect.width);
+    const spaceLeft = rect.x;
+    const right = spaceRight >= cueWidth + 32;
+    const left = !right && spaceLeft >= cueWidth + 32;
+    const below = !left && !right && rect.y < 90;
+    let cueX, cueY;
+    if (right || left) {
+      cueX = right ? rect.x + rect.width + 25 : rect.x - cueWidth - 25;
+      cueY = Math.min(innerHeight - 52, Math.max(8, y - 22));
+    } else {
+      cueX = Math.min(innerWidth - cueWidth - 8, Math.max(8, x - cueWidth / 2));
+      cueY = below ? Math.min(innerHeight - 56, rect.y + rect.height + 22) :
+        Math.max(8, rect.y - 66);
+    }
+    cue.style.left = Math.round(cueX) + 'px';
+    cue.style.top = Math.round(cueY) + 'px';
+    cue.classList.toggle('cap-v1-cue-side-right', right);
+    cue.classList.toggle('cap-v1-cue-side-left', left);
     cue.classList.toggle('cap-v1-cue-below', below);
     cue.classList.add('cap-v1-visible');
     previewCounter += 1;
