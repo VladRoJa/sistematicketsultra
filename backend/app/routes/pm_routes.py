@@ -411,7 +411,7 @@ def _crear_validacion_pm(data, user_id):
         )
 
     # 7) Permiso de acción: validar bitácora PM
-    denied_action = require_pm_validate(user)
+    denied_action = _require_pm_validate_action(user)
     if denied_action:
         return None, denied_action
 
@@ -929,6 +929,33 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+def pm_validate_grants_enabled():
+    """Check de validación PM independiente de ejecutar o consultar."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_validate_grant_veto(user):
+    # No sustituye roles ni alcance: solo veta una acción ya autorizada.
+    if pm_validate_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.validate"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la validación de bitácoras PM.",
+            }, 403
+    return None
+
+
+def _require_pm_validate_action(user):
+    denied = require_pm_validate(user)
+    return denied if denied else _pm_validate_grant_veto(user)
+
+
 def pm_execute_grants_enabled():
     """Veto de ejecución PM independiente del gate de lectura."""
     return has_app_context() and current_app.config.get(
