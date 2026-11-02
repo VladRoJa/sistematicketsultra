@@ -90,17 +90,17 @@ export class DialogoInventarioComponent implements OnInit {
       unidad_compra: [data?.item?.unidad_compra || ''],                // p.ej. "caja" (opcional)
       factor_compra: [
         data?.item?.factor_compra ?? 1,
-        [Validators.required, Validators.min(1), Validators.pattern(/^[1-9]\\d*$/)]
+        [Validators.required, Validators.min(1), Validators.pattern(/^[1-9]\d*$/)]
       ],
 
-       codigo_interno: [data?.item?.codigo_interno || ''],
+      codigo_interno: [data?.item?.codigo_interno || ''],
       grupo_muscular: [data?.item?.grupo_muscular || ''],
       no_equipo: [data?.item?.no_equipo || ''],
       gasto_sem: [data?.item?.gasto_sem || 0],
       gasto_mes: [data?.item?.gasto_mes || 0],
       pedido_mes: [data?.item?.pedido_mes || 0],
       semana_pedido: [data?.item?.semana_pedido || ''],
-       subcategoria: [data?.item?.subcategoria || '']
+      subcategoria: [data?.item?.subcategoria || '']
     });
   }
 
@@ -274,14 +274,14 @@ export class DialogoInventarioComponent implements OnInit {
         unidad: 'Unidad',
         unidad_compra: 'Unidad de compra',
         factor_compra: 'Factor de compra',
-         codigo_interno: 'Código Interno',
+        codigo_interno: 'Código Interno',
         grupo_muscular: 'Grupo Muscular',
         no_equipo: 'No. de Equipo',
         gasto_sem: 'Gasto Semanal',
         gasto_mes: 'Gasto Mensual',
         pedido_mes: 'Pedido Mensual',
         semana_pedido: 'Semana de Pedido',
-       };
+      };
 
       Object.keys(this.form.controls).forEach(key => {
         const control = this.form.get(key);
@@ -322,11 +322,7 @@ export class DialogoInventarioComponent implements OnInit {
 
       // Compra ↔ base
       unidad_compra: (f.unidad_compra || '').trim(),
-      factor_compra: (() => {
-        const n = this._toNumberOrNull(f.factor_compra);
-        // Si viene inválido o <1, que vaya 1 (el backend también refuerza)
-        return n && n >= 1 ? n : 1;
-      })(),
+      factor_compra: Number(f.factor_compra),
 
       // Otros campos
       subcategoria: (f.subcategoria || '').trim(),
