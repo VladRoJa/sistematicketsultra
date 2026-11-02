@@ -297,7 +297,7 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
         name = str(provisional.get("nombre") or "").strip()
         clase = normalizar_clase_inventario_e3(provisional.get("tipo"))
         if (not code or len(code) > 50 or not name or len(name) > 255
-                or clase != "APARATOS"):
+                or clase != "aparatos"):
             raise DecisionError(422, "invalid_find", "El alta exige nombre, tipo Aparatos y etiqueta verificable.")
         rol = db.session.execute(text("SELECT rol FROM users WHERE id=:id"),
                                 {"id": actor_id}).scalar_one_or_none()
