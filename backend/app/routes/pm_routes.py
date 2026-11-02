@@ -255,7 +255,7 @@ def _crear_bitacora(data, user_id):
             401,
         )
 
-    denied_action = require_pm_execute(user)
+    denied_action = _require_pm_execute_action(user)
     if denied_action:
         return None, denied_action
 
@@ -929,6 +929,33 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+def pm_execute_grants_enabled():
+    """Veto de ejecución PM independiente del gate de lectura."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_execute_grant_veto(user):
+    # Solo aplica después del rol legacy; un ALLOW nunca amplía sucursales.
+    if pm_execute_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.execute"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la ejecución de bitácoras PM.",
+            }, 403
+    return None
+
+
+def _require_pm_execute_action(user):
+    denied = require_pm_execute(user)
+    return denied if denied else _pm_execute_grant_veto(user)
+
+
 def pm_read_grants_enabled():
     """Flag de lectura PM; no altera el permiso compartido can_pm_view()."""
     return has_app_context() and current_app.config.get(
@@ -977,7 +1004,9 @@ def pm_read_access():
     return jsonify({
         "allowed": bool(allowed),
         "can_view": bool(allowed),
-        "can_execute": can_pm_execute(user),
+        "can_execute": bool(
+            can_pm_execute(user) and _pm_execute_grant_veto(user) is None
+        ),
     }), 200
 
 
