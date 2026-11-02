@@ -14,6 +14,7 @@ import { ModalAlertaCamposRequeridosComponent } from 'src/app/shared/modal-alert
 import { CatalogoService, CatalogoElemento } from '../../services/catalogo.service';
 import { MantenimientoEquiposService } from '../../services/mantenimiento-equipos.service';
 import { FamiliaEquipoDTO } from '../../types/ticket';
+import { normalizarTipoInventario } from '../movimientos/tipos-inventario.helper';
 
 @Component({
   selector: 'app-dialogo-inventario',
@@ -74,7 +75,7 @@ export class DialogoInventarioComponent implements OnInit {
     this.form = this.fb.group({
       nombre: [data?.item?.nombre || '', Validators.required],
       descripcion: [data?.item?.descripcion || ''],
-      tipo: [data?.item?.tipo || '', Validators.required],
+      tipo: [this.tipoParaSelector(data?.item?.tipo), Validators.required],
       familia_equipo_id: [data?.item?.familia_equipo_id ?? null],
       marca: [data?.item?.marca || '', Validators.required],
       proveedor: [data?.item?.proveedor || ''],
@@ -102,6 +103,11 @@ export class DialogoInventarioComponent implements OnInit {
       semana_pedido: [data?.item?.semana_pedido || ''],
       subcategoria: [data?.item?.subcategoria || '']
     });
+  }
+
+  private tipoParaSelector(tipo: unknown): string {
+    const canonico = normalizarTipoInventario(tipo);
+    return canonico ? canonico.charAt(0).toUpperCase() + canonico.slice(1) : '';
   }
 
   // 1) Helper para aplicar validadores según tipo
@@ -190,8 +196,18 @@ export class DialogoInventarioComponent implements OnInit {
       this.unidadesFiltradas = res;
     });
     this.catalogoService.getTiposInventario().subscribe(res => {
-      this.tiposInventario = res;
-      this.tiposFiltrados = res;
+      // Presentar una opción por clase, sin modificar el catálogo legado.
+      const opciones = new Map<string, CatalogoElemento>();
+      for (const tipo of res) {
+        const nombre = normalizarTipoInventario(tipo.nombre);
+        if (!nombre || opciones.has(nombre)) continue;
+        opciones.set(nombre, {
+          ...tipo,
+          nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1),
+        });
+      }
+      this.tiposInventario = [...opciones.values()];
+      this.tiposFiltrados = this.tiposInventario;
     });
     this.catalogoService.getGrupoMuscular().subscribe(res => {
       this.gruposMusculares = res;

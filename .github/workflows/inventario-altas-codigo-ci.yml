@@ -6,7 +6,9 @@ on:
       - "backend/app/routes/inventarios.py"
       - "backend/tests/routes/test_inventario_altas_codigos_qa11.py"
       - "frontend/src/app/inventario/dialogo-inventario/**"
+      - "frontend/src/app/inventario/movimientos/**"
       - "frontend/tests/inventario-alta-maestro-contrato.test.cjs"
+      - "frontend/tests/inventario-tipos-qa.test.cjs"
       - ".github/workflows/inventario-altas-codigo-ci.yml"
   workflow_dispatch:
 
@@ -59,5 +61,7 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Ticket-ready master form contract
         run: node tests/inventario-alta-maestro-contrato.test.cjs
+      - name: Compatible inventory types
+        run: node --test tests/inventario-tipos-qa.test.cjs
       - name: Build Angular
         run: npm run build

@@ -261,3 +261,35 @@ def test_editar_asigna_categoria_oficial_sin_perder_codigo(entorno):
     assert viejo.unidad_compra == "Caja"
     assert viejo.factor_compra == 6
     assert sesiones.commit.call_count == 1
+
+
+
+@pytest.mark.parametrize(
+    ("tipo_entrada", "tipo_canonico"),
+    [
+        ("Aparato", "Aparatos"),
+        ("Aparatos", "Aparatos"),
+        ("Sistema", "Dispositivos"),
+        ("Dispositivos", "Dispositivos"),
+    ],
+)
+def test_alta_normaliza_el_tipo_para_no_crear_duplicados(entorno, tipo_entrada, tipo_canonico):
+    client, token, articulos, _, sesiones = entorno
+    response = _alta(client, token, "CAPV1-TPZ09", tipo=tipo_entrada)
+    assert response.status_code == 200
+    assert articulos[0].tipo == tipo_canonico
+    assert sesiones.commit.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("filtro", "esperados"),
+    [
+        ("aparato", ("aparato", "aparatos")),
+        ("aparatos", ("aparato", "aparatos")),
+        ("sistema", ("sistema", "sistemas", "dispositivo", "dispositivos")),
+        ("dispositivos", ("sistema", "sistemas", "dispositivo", "dispositivos")),
+        ("desconocido", ()),
+    ],
+)
+def test_tipo_selector_tickets_incluye_variantes_historicas(filtro, esperados):
+    assert routes._tipos_equipo_compatibles(filtro) == esperados

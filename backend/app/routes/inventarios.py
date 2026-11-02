@@ -356,6 +356,16 @@ def _validar_categoria_inventario_activa(value):
     return categoria, None
 
 
+def _tipos_equipo_compatibles(tipo):
+    """Mantiene visibles los equipos históricos sin cambiar su tipo almacenado."""
+    tipo_normalizado = str(tipo or '').strip().casefold()
+    if tipo_normalizado in {'aparato', 'aparatos'}:
+        return ('aparato', 'aparatos')
+    if tipo_normalizado in {'sistema', 'sistemas', 'dispositivo', 'dispositivos'}:
+        return ('sistema', 'sistemas', 'dispositivo', 'dispositivos')
+    return ()
+
+
 def _validar_familia_equipo_activa(value, tipo_inventario):
     if value is None or (isinstance(value, str) and not value.strip()):
         return None, None
@@ -408,6 +418,12 @@ def crear_inventario():
         codigo = normalizar_campo(data.get('codigo_interno')).upper()
         tipo_inventario = normalizar_campo(data.get('tipo', 'producto'))
         tipo_normalizado = tipo_inventario.casefold()
+        # La API conserva la compatibilidad de lectura, pero las nuevas altas
+        # guardan un único nombre de tipo para no perpetuar duplicados.
+        if tipo_normalizado in {'aparato', 'aparatos'}:
+            tipo_inventario = 'Aparatos'
+        elif tipo_normalizado in {'dispositivo', 'dispositivos', 'sistema', 'sistemas'}:
+            tipo_inventario = 'Dispositivos'
         requiere_codigo = tipo_normalizado in {
             'aparato', 'aparatos', 'sistema', 'sistemas',
             'dispositivo', 'dispositivos',
@@ -1527,7 +1543,13 @@ def listar_equipos():
         query = query.filter(InventarioGeneral.codigo_interno.isnot(None))
 
         if tipo:
-            query = query.filter(db.func.lower(InventarioGeneral.tipo) == tipo)
+            # Los valores históricos singulares y plurales representan la
+            # misma clase: Tickets no debe perder equipos por esa variante.
+            tipos_compatibles = _tipos_equipo_compatibles(tipo)
+            query = query.filter(
+                db.func.lower(db.func.trim(InventarioGeneral.tipo))
+                .in_(tipos_compatibles)
+            )
 
         # ----------------------------
         # Filtro sucursal
