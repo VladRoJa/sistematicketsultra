@@ -142,6 +142,11 @@ class Config:
         "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Warehouse: veto global sobre archivar uploads, además de can_archive.
+    PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
