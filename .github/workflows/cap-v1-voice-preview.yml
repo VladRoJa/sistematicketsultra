@@ -5,9 +5,11 @@ on:
     paths:
       - ".github/workflows/cap-v1-voice-preview.yml"
       - "scripts/training/voice_preview.py"
+      - "scripts/training/voice_sync_preview.py"
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   voice-preview:
@@ -37,3 +39,37 @@ jobs:
             artifacts/capacitacion/voz-demo/jorge-neural-15s.mp3
             artifacts/capacitacion/voz-demo/texto.txt
             artifacts/capacitacion/voz-demo/manifest.json
+
+  video-voice-sync-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar voz de prueba y FFmpeg
+        run: |
+          python -m pip install edge-tts==7.3.1
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Recuperar MP4 verificado de CAP-V1 (sin nueva navegación)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 41506639194 \
+            --repo "${{ github.repository }}" \
+            --name CAP-V1-ULTRA-DEMO-READONLY-2 \
+            --dir artifacts/capacitacion/source-readonly
+      - name: Narrar y sincronizar escenas existentes
+        run: python -m scripts.training.voice_sync_preview
+      - name: Entregar MP4 doblado y subtítulos para revisión (experimental)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP-V1-ULTRA-DEMO-JorgeNeural-Preview
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            artifacts/capacitacion/voice-sync-preview/capacitacion-jorge-neural.mp4
+            artifacts/capacitacion/voice-sync-preview/subtitulos.srt
+            artifacts/capacitacion/voice-sync-preview/manifiesto.json
