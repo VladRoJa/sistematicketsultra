@@ -169,7 +169,7 @@ def create_synced_preview() -> None:
     filter_terms.append(
         f"{mix}amix=inputs={len(scenes)}:duration=longest:normalize=0,"
         f"atrim=duration={end:.3f},"
-        f"loudnorm=I=-16:TP=-1.5:LRA=11[narracion]"
+        f"aresample=48000,volume=0.80,alimiter=limit=0.95[narracion]"
     )
     mp4 = OUTPUT_DIR / "capacitacion-jorge-neural.mp4"
     args = [
