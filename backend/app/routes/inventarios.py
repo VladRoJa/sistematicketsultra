@@ -461,14 +461,11 @@ def crear_inventario():
         categoria_nombre = (
             categoria_oficial.nombre if categoria_oficial else normalizar_campo(data['categoria'])
         )
-        try:
-            factor_compra = _parse_int_nonneg(
-                data.get('factor_compra', 1), 'factor_compra',
-            )
-        except ValueError as exc:
-            return error_response(str(exc))
-        if factor_compra is None or factor_compra < 1:
-            return error_response('factor_compra debe ser un entero mayor o igual a 1')
+        factor_compra = _parse_positive_movement_quantity(
+            data.get('factor_compra', 1),
+        )
+        if factor_compra is None:
+            return error_response('factor_compra debe ser un entero positivo')
         
         
         nuevo = InventarioGeneral(
@@ -1125,12 +1122,9 @@ def editar_inventario(inventario_id):
                         return error_response(str(ve))
                     
                 if campo == 'factor_compra':
-                    try:
-                        valor = _parse_int_nonneg(valor, campo)
-                    except ValueError as ve:
-                        return error_response(str(ve))
-                    if not valor or valor < 1:
-                        valor = 1
+                    valor = _parse_positive_movement_quantity(valor)
+                    if valor is None:
+                        return error_response('factor_compra debe ser un entero positivo')
 
                 setattr(inventario, campo, valor)
 
