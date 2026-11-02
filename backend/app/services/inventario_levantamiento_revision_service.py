@@ -94,6 +94,11 @@ def _casos(lev, parsed, referencias):
             }
             usados.add(k)
     for ref in referencias:
+        # Solo códigos legados de sucursales 1..99 se derivan del ID.
+        # Otros identificadores (p. ej. ULTRA DEMO) necesitan una regla
+        # de nomenclatura explícita, no recodificaciones presumidas.
+        if not (1 <= lev.sucursal_id <= 99):
+            continue
         codigo = str(ref.codigo_interno_original or "").strip()
         if not re.match(r"^[0-9]{2}", codigo) or codigo[:2] == f"{lev.sucursal_id:02d}":
             continue
