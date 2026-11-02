@@ -253,6 +253,11 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.module_key === 'tickets' &&
       row.role !== 'LECTOR_GLOBAL' &&
       this.result?.tickets_close_grants_enabled === true
+    ) || (
+      row.action_key === 'inventory.master_write' &&
+      row.module_key === 'inventory' &&
+      ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN', 'MANTENIMIENTO', 'SISTEMAS', 'TECNICO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.inventory_master_write_grants_enabled === true
     );
   }
 
@@ -262,7 +267,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -270,7 +275,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write'].includes(row.action_key)
       ? 'Control de veto: no otorga acceso ni autoriza cierres por sí solo'
       : 'Check conectado al guard real';
   }
@@ -279,9 +284,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey: 'track' | 'openings' | 'tickets' =
+    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' =
       row.action_key === 'track.read' ? 'track' :
-      row.module_key === 'tickets' ? 'tickets' : 'openings';
+      row.module_key === 'tickets' ? 'tickets' :
+      row.module_key === 'inventory' ? 'inventory' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
