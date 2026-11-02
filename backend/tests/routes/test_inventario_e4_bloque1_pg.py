@@ -183,8 +183,9 @@ def test_hallazgo_no_puede_reciclar_codigo_de_aparato_oficial():
     raw = BytesIO()
     book.save(raw)
     resultado = parse_xlsx_v01(raw.getvalue(), 7, refs, "VERIFICACION")
-    assert resultado["resultado"] == "INVALID"
-    assert resultado["resumen"]["errores"] == 1
+    assert resultado["resultado"] == "VALIDATED"
+    assert resultado["resumen"]["errores"] == 0
+    assert resultado["resumen"]["avisos"] == 1
     assert any(d["codigo"] == "CODIGO_HALLAZGO_EN_CORTE"
                and d["inventario_ids_existentes"] == [501]
                for d in resultado["diagnosticos"])
@@ -773,7 +774,8 @@ def test_api_san_luis_real_http_recepcion_y_bloqueo_por_codigo_duplicado(api):
     assert summary["referencias_esperadas"] == 139
     assert (summary["si"], summary["no"], summary["sin_revisar"]) == (137, 2, 0)
     assert summary["hallazgos"] == 7
-    assert imported["resultado"] == "INVALID"
+    assert imported["resultado"] == "VALIDATED"
+    assert summary["errores"] == 0
     codes = [d["codigo"] for d in imported["diagnosticos"]]
     assert codes.count("PREFIJO_SUCURSAL_INCONSISTENTE") == 4
     assert "CODIGO_HALLAZGO_EN_CORTE" in codes
@@ -1006,6 +1008,108 @@ def test_piloto_cinco_aparatos_cinco_escenarios_en_mismo_xlsx(api, monkeypatch):
     board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
     assert board["puede_cerrar"] is False
     assert "SIN_REVISAR" in board["bloqueos"]
+
+
+
+def test_hallazgo_con_codigo_del_corte_bloquea_solo_su_revision(api, monkeypatch):
+    """Una etiqueta reutilizada no invalida otros SI/NO ni abre alta E2."""
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte_original.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+
+    wb = load_workbook(BytesIO(workbook(
+        first="SI", second="NO", found=True,
+    )))
+    wb["APARATOS"]["G9"] = (
+        "Inspeccionado físicamente en todas las áreas de cardio y resguardo;"
+        " no fue localizado"
+    )
+    # Código de 501 registrado en APARATOS, pero reusado por otro hallazgo.
+    wb["HALLAZGOS"]["A8"] = "07CA01"
+    buf = BytesIO()
+    wb.save(buf)
+    raw = buf.getvalue()
+
+    before = _snapshot(app)
+    first = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "hallazgo_ambiguo.xlsx"),
+    })
+    assert first.status_code == 201, first.get_json()
+    imp = first.get_json()["importacion"]
+    assert imp["resultado"] == "VALIDATED"
+    assert (imp["resumen"]["si"], imp["resumen"]["no"],
+            imp["resumen"]["sin_revisar"]) == (1, 1, 0)
+    assert imp["resumen"]["errores"] == 0
+    assert any(d["codigo"] == "CODIGO_HALLAZGO_EN_CORTE"
+               and d["inventario_ids_existentes"] == [501]
+               for d in imp["diagnosticos"])
+
+    board = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert board["total"] == 2, board
+    review_by_type = {i["tipo"]: i for i in board["items"]}
+    assert review_by_type["NOT_LOCATED"]["estado"] == "AWAITING_E3"
+    assert review_by_type["NOT_LOCATED"]["inventario_id"] == 502
+    assert review_by_type["NOT_LOCATED"]["solicitud_e2_id"] is not None
+    assert review_by_type["UNREGISTERED_FIND"]["estado"] == "BLOCKED"
+    assert review_by_type["UNREGISTERED_FIND"]["solicitud_e2_id"] is None
+    assert review_by_type["UNREGISTERED_FIND"]["motivo_bloqueo"] == "CODIGO_HALLAZGO_EN_CORTE"
+    assert board["resumen"]["bloqueadas"] == 1
+    assert board["resumen"]["por_autorizar"] == 1
+
+    repeat = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw), "mismo_archivo.xlsx"),
+    })
+    assert repeat.status_code == 200 and repeat.get_json()["replayed"] is True
+    assert client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["total"] == 2
+    after = _snapshot(app)
+    assert after["stock"] == before["stock"]
+    assert after["master"] == before["master"]
+    assert after["mov"] == before["mov"]
+    assert after["e2"] == before["e2"] + 1
+
+    decision = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert decision["puede_cerrar"] is False
+    assert "REVISIONES_SIN_AUTORIZACION" in decision["bloqueos"]
+
+
+def test_archivo_solo_archivado_no_puede_aparecer_listo_para_cerrar(api, monkeypatch):
+    """Un expediente válido sin revisiones E4 no es conciliación final."""
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", raising=False)
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    raw = workbook(first="SI", second="SI", found=False)
+    first = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "completo.xlsx"),
+    })
+    assert first.status_code == 201, first.get_json()
+    assert first.get_json()["importacion"]["resultado"] == "VALIDATED"
+    assert first.get_json()["importacion"]["resumen"]["revisiones_auto"][
+        "auto_revisiones_habilitadas"] is False
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is False
+    assert "REVISIONES_AUTOMATICAS_NO_HABILITADAS" in board["bloqueos"]
+
+    # Encender el flag despues no concilia retroactivamente el Excel recibido.
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    still_blocked = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert still_blocked["puede_cerrar"] is False
+    assert "REVISIONES_AUTOMATICAS_NO_HABILITADAS" in still_blocked["bloqueos"]
 
 
 def test_dos_hallazgos_distintos_generan_dos_e2_pendientes_sin_colision(api, monkeypatch):
