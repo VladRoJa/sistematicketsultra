@@ -263,6 +263,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.module_key === 'inventory' &&
       ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN', 'MANTENIMIENTO', 'SISTEMAS', 'TECNICO', 'AUX_MANTENIMIENTO', 'SR_MANTENIMIENTO'].includes(row.role.trim().toUpperCase()) &&
       this.result?.inventory_movement_write_grants_enabled === true
+    ) || (
+      row.action_key === 'inventory.read' &&
+      row.module_key === 'inventory' &&
+      this.result?.inventory_read_grants_enabled === true
     );
   }
 
@@ -272,7 +276,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -280,8 +284,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write'].includes(row.action_key)
-      ? (row.action_key === 'inventory.movement_write'
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read'].includes(row.action_key)
+      ? (row.action_key === 'inventory.read'
+          ? 'Veto global: un ALLOW no autoriza sucursales ni amplía consultas'
+          : row.action_key === 'inventory.movement_write'
           ? 'Veto global: un ALLOW no autoriza sucursales ni anulación de movimientos'
           : 'Control de veto: no otorga acceso ni autoriza cierres por sí solo')
       : 'Check conectado al guard real';
