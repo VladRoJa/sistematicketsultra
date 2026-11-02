@@ -270,6 +270,30 @@
             <button type="button" class="primary" (click)="sustituirPropuesta()"
               [disabled]="!puedeSustituir">Crear nueva solicitud E2 pendiente</button>
           </section>
+          <section class="panel" *ngIf="correccionHallazgoActiva as rev"
+            aria-label="Corregir etiqueta de hallazgo">
+            <div class="panel-header">
+              <h4>Corregir código de hallazgo · Revisión #{{ rev.id }}</h4>
+              <button type="button" class="quiet"
+                (click)="cancelarCorreccionHallazgo()" [disabled]="procesando">Cancelar</button>
+            </div>
+            <p class="help">Código declarado en Excel: {{ rev.codigo_observado }}.
+              La corrección conserva el Excel y crea una solicitud E2 para autorización E3.
+              No cambiará el inventario oficial hasta que E3 apruebe el alta.
+              La etiqueta física se verificará de forma independiente.</p>
+            <div class="fields">
+              <label>Nuevo código único
+                <input type="text" maxlength="50" placeholder="Ej. 06PLJW55"
+                  [(ngModel)]="codigoCorregidoHallazgo" (ngModelChange)="cambioCodigoHallazgo()">
+              </label>
+              <label>Justificación de identidad
+                <textarea rows="3" maxlength="1000"
+                  [(ngModel)]="motivoCodigoHallazgo" (ngModelChange)="cambioCodigoHallazgo()"></textarea>
+              </label>
+            </div>
+            <button type="button" class="primary" (click)="corregirHallazgo()"
+              [disabled]="!puedeCorregirHallazgo">Crear E2 con código corregido</button>
+          </section>
           <div class="pagination" *ngIf="auto.total > 20">
             <button type="button" (click)="cambiarPaginaRevisiones(-1)" [disabled]="paginaRevisiones === 1">Anterior</button>
             <span>Página {{ paginaRevisiones }} · {{ auto.total }} revisiones</span>
