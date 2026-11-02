@@ -98,11 +98,11 @@ def test_inventory_master_write_exact_guard_role(monkeypatch, role, allowed):
     monkeypatch.setattr(inventarios, "_get_current_inventory_user", lambda: user)
     with Flask(__name__).app_context():
         actual = inventarios._require_inventory_global_write() is None
-    row = _row(user, "inventory.master_write")
-    assert actual is allowed
-    assert row["legacy_allowed"] is actual
-    assert row["scope"] == "global"
-    assert _row(user, "inventory.master_write", branch_id=9)["legacy_allowed"] is actual
+        row = _row(user, "inventory.master_write")
+        assert actual is allowed
+        assert row["legacy_allowed"] is actual
+        assert row["scope"] == "global"
+        assert _row(user, "inventory.master_write", branch_id=9)["legacy_allowed"] is actual
 
 
 @pytest.mark.parametrize("role,branches,primary,branch,allowed", [
@@ -129,12 +129,12 @@ def test_inventory_movement_write_parity_per_branch(
     )
     with Flask(__name__).app_context():
         real = inventarios._require_inventory_movement_write(branch) is None
-    row = _row(user, "inventory.movement_write", branch_id=branch)
-    assert real is allowed
-    assert row["legacy_allowed"] is real
-    assert row["scope"] == "sucursal"
-    assert row["context"]["branch_id"] == branch
-    assert _row(user, "inventory.movement_write")["legacy_allowed"] is None
+        row = _row(user, "inventory.movement_write", branch_id=branch)
+        assert real is allowed
+        assert row["legacy_allowed"] is real
+        assert row["scope"] == "sucursal"
+        assert row["context"]["branch_id"] == branch
+        assert _row(user, "inventory.movement_write")["legacy_allowed"] is None
 
 
 @pytest.mark.parametrize("role,enabled,expected", [
@@ -177,9 +177,10 @@ def test_heterogeneous_or_object_dependent_actions_remain_unknown(role, action):
 
 def test_inventory_movement_is_never_global_without_branch_even_for_admin():
     user = _user("ADMINISTRADOR")
-    row = _row(user, "inventory.movement_write")
-    assert row["legacy_allowed"] is None
-    assert row["scope"] == "requiere_contexto"
+    with Flask(__name__).app_context():
+        row = _row(user, "inventory.movement_write")
+        assert row["legacy_allowed"] is None
+        assert row["scope"] == "requiere_contexto"
 
 
 def test_pm_scoped_grant_without_assigned_branch_is_not_authorization():

@@ -5,7 +5,7 @@ from io import BytesIO
 import io
 import os
 import tempfile
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app, has_app_context
 from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
@@ -123,6 +123,32 @@ def _get_user_sucursales_scope_from_db(user_id):
 
 
 
+def inventory_read_grants_enabled():
+    """Veto de consultas de inventario, independiente de escritura y movimiento."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED", False
+    ) is True
+
+
+def _inventory_read_authorized_scope(user, allowed_sucursales):
+    # Sólo se llama DESPUÉS de la validación legacy de sucursal.
+    # Un ALLOW nunca amplía lista de sucursales ni convierte un rol.
+    if inventory_read_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="inventory.read"
+        )
+        if decision is False:
+            return None, (
+                jsonify({
+                    "error": "Forbidden",
+                    "detail": "No tienes habilitada la consulta de inventario.",
+                }),
+                403,
+            )
+    return allowed_sucursales, None
+
+
 def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
     user = _get_current_inventory_user()
     requested_sucursal_id = _coerce_int_or_none(requested_sucursal_id)
@@ -140,8 +166,8 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
         if requested_sucursal_id is not None:
-            return [requested_sucursal_id], None
-        return None, None
+            return _inventory_read_authorized_scope(user, [requested_sucursal_id])
+        return _inventory_read_authorized_scope(user, None)
 
     allowed_sucursales = []
 
@@ -184,22 +210,65 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
                 403,
             )
 
-        return [requested_sucursal_id], None
+        return _inventory_read_authorized_scope(user, [requested_sucursal_id])
 
-    return allowed_sucursales, None
+    return _inventory_read_authorized_scope(user, allowed_sucursales)
+
+
+def inventory_master_write_grants_enabled():
+    """Activa un veto global sin sustituir roles ni validaciones existentes."""
+    return current_app.config.get(
+        "PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED", False
+    ) is True
 
 
 def _require_inventory_global_write():
     user = _get_current_inventory_user()
     rol = str(getattr(user, "rol", "") or "").strip().upper() if user else ""
 
-    if rol in INVENTORY_GLOBAL_WRITE_ROLES:
+    # ALLOW nunca eleva a un usuario fuera de los roles históricos.
+    if rol not in INVENTORY_GLOBAL_WRITE_ROLES:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes permiso para administrar el inventario maestro.",
+        }), 403
+
+    if inventory_master_write_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        grant_decision = _simple_global_action_grant_override(
+            user=user, action_full_key="inventory.master_write"
+        )
+        if grant_decision is False:
+            return jsonify({
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la administración del inventario maestro.",
+            }), 403
+
+    return None
+
+
+def inventory_movement_write_grants_enabled():
+    """Veto de movimiento independiente del inventario maestro (OFF por defecto)."""
+    return current_app.config.get(
+        "PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _inventory_movement_grant_veto(user):
+    # Ejecutar SOLO tras validar rol y sucursal: ALLOW nunca da acceso nuevo.
+    if not inventory_movement_write_grants_enabled():
         return None
 
-    return jsonify({
-        "error": "Forbidden",
-        "detail": "No tienes permiso para administrar el inventario maestro.",
-    }), 403
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    decision = _simple_global_action_grant_override(
+        user=user, action_full_key="inventory.movement_write"
+    )
+    if decision is False:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes habilitado el registro de movimientos de inventario.",
+        }), 403
+    return None
 
 
 def _require_inventory_movement_write(sucursal_id):
@@ -221,12 +290,12 @@ def _require_inventory_movement_write(sucursal_id):
     rol = str(getattr(user, "rol", "") or "").strip().upper()
 
     if rol in INVENTORY_GLOBAL_WRITE_ROLES:
-        return None
+        return _inventory_movement_grant_veto(user)
 
     if rol == "AUX_MANTENIMIENTO":
         user_sucursal_id = _coerce_int_or_none(getattr(user, "sucursal_id", None))
         if user_sucursal_id is not None and target_sucursal_id == user_sucursal_id:
-            return None
+            return _inventory_movement_grant_veto(user)
 
         return jsonify({
             "error": "Forbidden",
@@ -242,7 +311,7 @@ def _require_inventory_movement_write(sucursal_id):
             allowed_sucursales = _get_user_sucursales_scope_from_db(user.id)
 
         if target_sucursal_id in allowed_sucursales:
-            return None
+            return _inventory_movement_grant_veto(user)
 
         return jsonify({
             "error": "Forbidden",

@@ -1,9 +1,9 @@
 # app/utils/warehouse_access.py
 
-from flask import jsonify
+from flask import jsonify, current_app, has_app_context
 from flask_jwt_extended import get_jwt_identity
 
-from app.models import WarehouseOperatorORM
+from app.models import WarehouseOperatorORM, UserORM
 
 
 def get_current_warehouse_operator() -> WarehouseOperatorORM | None:
@@ -54,12 +54,45 @@ def require_warehouse_operator():
     return None
 
 
+def _warehouse_flag_enabled(flag: str) -> bool:
+    return has_app_context() and current_app.config.get(flag, False) is True
+
+
+def warehouse_view_grants_enabled() -> bool:
+    return _warehouse_flag_enabled("PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED")
+
+
+def warehouse_upload_grants_enabled() -> bool:
+    return _warehouse_flag_enabled("PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED")
+
+
+def warehouse_catalogs_grants_enabled() -> bool:
+    return _warehouse_flag_enabled("PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED")
+
+
+def _warehouse_action_grant_veto(action_key: str, detail: str):
+    # Solo después del guard de operador/capacidad. No eleva permisos legacy.
+    user = UserORM.get_by_id(int(get_jwt_identity()))
+    if user is None:
+        return _forbidden_response(detail)
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    if _simple_global_action_grant_override(
+        user=user, action_full_key=action_key
+    ) is False:
+        return _forbidden_response(detail)
+    return None
+
+
 def require_warehouse_view():
     operator = get_current_warehouse_operator()
 
     if operator is None or not bool(operator.can_view):
         return _forbidden_response("No autorizado para consultar Warehouse")
 
+    if warehouse_view_grants_enabled():
+        return _warehouse_action_grant_veto(
+            "warehouse.view", "No tienes habilitada la consulta de Warehouse"
+        )
     return None
 
 
@@ -71,6 +104,10 @@ def require_warehouse_catalogs():
     ):
         return _forbidden_response("No autorizado para consultar catálogos de Warehouse")
 
+    if warehouse_catalogs_grants_enabled():
+        return _warehouse_action_grant_veto(
+            "warehouse.catalogs", "No tienes habilitada la consulta de catálogos de Warehouse"
+        )
     return None
 
 
@@ -80,7 +117,18 @@ def require_warehouse_upload():
     if operator is None or not bool(operator.can_upload):
         return _forbidden_response("No autorizado para subir documentos a Warehouse")
 
+    if warehouse_upload_grants_enabled():
+        return _warehouse_action_grant_veto(
+            "warehouse.upload", "No tienes habilitadas las operaciones de carga de Warehouse"
+        )
     return None
+
+
+def warehouse_archive_grants_enabled():
+    """Veto opcional de archivar, además de la allowlist can_archive."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", False
+    ) is True
 
 
 def require_warehouse_archive():
@@ -88,5 +136,18 @@ def require_warehouse_archive():
 
     if operator is None or not bool(operator.can_archive):
         return _forbidden_response("No autorizado para archivar documentos de Warehouse")
+
+    # La casilla es solo un veto; un ALLOW nunca crea operador ni can_archive.
+    # Con el flag OFF se conserva el guard legacy sin consultar grants.
+    if warehouse_archive_grants_enabled():
+        user = UserORM.get_by_id(int(get_jwt_identity()))
+        if user is None:
+            return _forbidden_response("No autorizado para archivar documentos de Warehouse")
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="warehouse.archive"
+        )
+        if decision is False:
+            return _forbidden_response("No tienes habilitado archivar documentos de Warehouse")
 
     return None

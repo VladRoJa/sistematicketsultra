@@ -20,7 +20,36 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
-from app.routes.openings_routes import OPENINGS_READ_ROLES, openings_read_grants_enabled
+from app.utils.planning_access import planning_action_grants_enabled
+from app.utils.warehouse_access import (
+    warehouse_view_grants_enabled, warehouse_upload_grants_enabled,
+    warehouse_catalogs_grants_enabled, warehouse_archive_grants_enabled,
+)
+from app.routes.inventarios import (
+    inventory_master_write_grants_enabled,
+    inventory_movement_write_grants_enabled,
+    inventory_read_grants_enabled,
+)
+from app.routes.pm_routes import (
+    pm_read_grants_enabled,
+    pm_execute_grants_enabled,
+    pm_validate_grants_enabled,
+    pm_configure_grants_enabled,
+)
+from app.routes.ticket_routes import (
+    tickets_create_grants_enabled,
+    tickets_update_status_grants_enabled,
+    tickets_notify_grants_enabled,
+    tickets_update_grants_enabled,
+    tickets_close_grants_enabled,
+)
+from app.routes.openings_routes import (
+    OPENINGS_READ_ROLES,
+    openings_read_grants_enabled,
+    openings_comment_grants_enabled,
+    openings_manage_grants_enabled,
+    OPENINGS_ADMIN_ROLES,
+)
 from app.utils.pm_permissions import (
     PM_VIEW_ROLES, PM_EXECUTE_ROLES, PM_VALIDATE_ROLES,
     PM_CONFIGURE_ROLES, SCOPED_MAINTENANCE_READER_ROLES,
@@ -248,7 +277,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs", "planning.read", "planning.edit", "planning.submit", "planning.approve", "planning.publish", "planning.configure_model"}
     }
     for grant in query.all():
         principal = (
@@ -280,6 +309,29 @@ def _legacy_guard_result(user, action_key, context, document, branch_id=None):
         return role in OPENINGS_READ_ROLES, "openings._require_openings_read", "guard_de_rol_aperturas"
     if action_key == "openings.comment":
         return role in OPENINGS_READ_ROLES, "openings._require_openings_comment", "guard_de_comentarios_aperturas"
+    if action_key == "openings.manage":
+        return role in OPENINGS_ADMIN_ROLES, "openings._require_openings_admin", "guard_administrativo_aperturas"
+    if action_key == "tickets.create":
+        if branch_id is not None:
+            return None, "tickets.create_ticket", "sucursal_destino_se_valida_en_endpoint"
+        return user is not None, "tickets.create_ticket+jwt", "entrada_autenticada_sin_omitir_validaciones"
+    if action_key == "tickets.update_status":
+        if branch_id is not None:
+            return None, "tickets.update_ticket_status", "alcance_de_ticket_requiere_recurso"
+        allowed_entry = user is not None and role != "LECTOR_GLOBAL"
+        return allowed_entry, "tickets.update_ticket_status+role", "entrada_sin_bypass_alcance_ni_doble_check"
+    if action_key == "tickets.notify":
+        if branch_id is not None:
+            return None, "tickets.notify_ticket", "autorizacion_sobre_ticket_requiere_recurso"
+        return user is not None, "tickets.notify_ticket+jwt", "entrada_autenticada_con_filtro_por_ticket"
+    if action_key == "tickets.update":
+        # /compromiso exige admin o jefe de departamento según el ticket.
+        # Sin objeto es imposible asegurar que un allow autorice la operación.
+        return None, "tickets.set_compromiso+update_ticket_status", "permiso_metadatos_requiere_ticket_y_rol"
+    if action_key == "tickets.close":
+        # El mismo check gobierna tres rutas, pero cada una exige un guard
+        # por ticket (jefatura, coordinación, estado y tapizado).
+        return None, "tickets.cierre_solicitar+aceptar+gerente_desde_cero", "cierre_requiere_ticket_y_etapa"
     if action_key in {"track.run_daily_pipeline", "track.run_agregadoras"}:
         return role in TRACK_ADMIN, "track._require_track_admin_role", "guard_admin_track"
     if action_key in WAREHOUSE_FLAGS or action_key == "warehouse.catalogs":
@@ -423,6 +475,112 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             catalog_allowed = legacy
             catalog_source = "openings_grant_operativo"
             catalog_reason = "check_openings_refleja_autorizacion_real"
+    if action.full_key == "openings.comment" and openings_comment_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_comment+grant"
+            legacy_reason = "grant_global_comentarios_aperturas_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_comment_grant_operativo"
+            catalog_reason = "check_comentarios_autorizacion_real"
+    if action.full_key == "openings.manage" and openings_manage_grants_enabled():
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "openings._require_openings_admin+grant"
+            legacy_reason = "grant_global_gestion_aperturas_guard_real"
+            catalog_allowed = legacy
+            catalog_source = "openings_manage_grant_operativo"
+            catalog_reason = "check_gestion_autorizacion_real"
+    if action.full_key == "tickets.create" and tickets_create_grants_enabled():
+        # Solo entrada autenticada; un allow no evita sucursal, clasificación,
+        # inventario, aprobaciones o validaciones de tapizado posteriores.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = candidate.effect == "allow"
+            legacy_source = "tickets.create_ticket+grant_entry"
+            legacy_reason = "grant_crear_ticket_no_evita_validaciones_de_negocio"
+            catalog_allowed = legacy
+            catalog_source = "tickets_create_grant_operativo"
+            catalog_reason = "check_crear_ticket_controla_entrada_http"
+    if action.full_key == "tickets.update_status" and tickets_update_status_grants_enabled():
+        # El grant puede vetar entrada; un allow NUNCA evade decorador
+        # LECTOR_GLOBAL ni el filtro de sucursal/flujo y cierre.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+            legacy_source = "tickets.update_ticket_status+grant_entry"
+            legacy_reason = "accion_veto_y_validaciones_de_ticket_inalteradas"
+            catalog_allowed = legacy
+            catalog_source = "tickets_update_status_grant_operativo"
+            catalog_reason = "check_estado_controla_entrada_sin_bypass"
+    if action.full_key == "tickets.notify" and tickets_notify_grants_enabled():
+        # Permiso de entrada solamente: NO certifica sucursal ni destinatarios.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+            legacy_source = "tickets.notify_ticket+grant_entry"
+            legacy_reason = "veto_notificacion_sin_eludir_filtro_ticket"
+            catalog_allowed = legacy
+            catalog_source = "tickets_notify_grant_operativo"
+            catalog_reason = "check_notificar_controla_entrada_sin_bypass"
+    if action.full_key == "tickets.update" and tickets_update_grants_enabled():
+        # Sólo los DENY son concluyentes globalmente. Un allow no suplanta
+        # los guards de PM, jefatura, sucursal ni estado del ticket.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            legacy_source = "tickets.metadata_commitment+grant_entry"
+            legacy_reason = "veto_metadata_sin_bypass_de_objeto"
+            catalog_source = "tickets_update_grant_operativo"
+            catalog_reason = "check_metadatos_es_veto_no_autorizacion_sobre_ticket"
+    if action.full_key == "tickets.close" and tickets_close_grants_enabled():
+        # DENY global es verificable; ALLOW nunca certifica alcance,
+        # doble check, recepción de tapizado o conformidad por objeto.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            legacy_source = "tickets.closure_three_routes+grant_entry"
+            legacy_reason = "veto_cierre_sin_omitir_validaciones_por_ticket"
+            catalog_source = "tickets_close_grant_operativo"
+            catalog_reason = "check_veta_cierre_no_autoriza_objeto"
+    if action.full_key == "inventory.master_write" and inventory_master_write_grants_enabled():
+        # Un DENY veta; un ALLOW mantiene el requisito del rol global.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = bool(legacy) and candidate.effect == "allow"
+            catalog_allowed = legacy
+            legacy_source = "inventarios._require_inventory_global_write+grant"
+            legacy_reason = "veto_inventario_maestro_preserva_rol_legacy"
+            catalog_source = "inventory_master_write_grant_operativo"
+            catalog_reason = "check_global_no_eleva_roles_ni_evade_validaciones"
+    if action.full_key == "inventory.movement_write" and inventory_movement_write_grants_enabled():
+        # Sin sucursal solo DENY permite afirmar denegación HTTP universal.
+        # ALLOW no certifica permisos sobre ninguna sucursal o movimiento.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                # Sin contexto de sucursal, el check representa exclusivamente
+                # el ALLOW global, nunca un permiso final de movimiento.
+                catalog_allowed = legacy if branch_id is not None else True
+            legacy_source = "inventarios._require_inventory_movement_write+grant"
+            legacy_reason = "veto_movimiento_sin_bypass_de_sucursal"
+            catalog_source = "inventory_movement_write_grant_operativo"
+            catalog_reason = "check_global_no_certifica_sucursal_ni_reversion"
+    if action.full_key == "inventory.read" and inventory_read_grants_enabled():
+        # Una prohibición global veta cualquier consulta aunque no haya sucursal.
+        # Un ALLOW no certifica una sucursal que la petición no ha validado.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = True if branch_id is None else None
+            legacy_source = "inventarios._resolve_inventory_read_sucursal_ids+grant"
+            legacy_reason = "veto_lectura_global_preserva_alcance_real"
+            catalog_source = "inventory_read_grant_operativo"
+            catalog_reason = "check_global_no_certifica_sucursal"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -439,10 +597,105 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             set(WAREHOUSE_FLAGS) | set(PLANNING_FLAGS) |
             {"warehouse.catalogs", "track.read", "track.run_daily_pipeline",
              "track.run_agregadoras", "internal_documents.manage", "internal_documents.view",
-             "inventory.master_write", "inventory.movement_write", "tickets.delete_all"}
+             "inventory.master_write", "inventory.movement_write", "inventory.read", "tickets.delete_all"}
         ):
             legacy, legacy_reason = None, "branch_guard_no_evaluable_sin_recurso"
         # Documentos mantienen sus propios controles, no heredados del filtro global.
+    # Aplicar el veto global DESPUÉS de degradar los ALLOW sin contexto de
+    # sucursal. Un DENY sí es concluyente para cualquier recurso PM.
+    if action.full_key == "pm.read" and pm_read_grants_enabled():
+        # DENY es concluyente aun sin recurso. ALLOW no acredita sucursales
+        # ni reemplaza la excepción individual COMPRAS/COORDINADOR.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_read_action+grant"
+            legacy_reason = "veto_lectura_pm_no_evade_acl_ni_sucursal"
+            catalog_source = "pm_read_grant_operativo"
+            catalog_reason = "check_global_no_autoriza_bitacora_ni_sucursal"
+    if action.full_key == "pm.execute" and pm_execute_grants_enabled():
+        # Un DENY veta ambas rutas de creación incluso con sucursal específica;
+        # un ALLOW no certifica validaciones por activo/rol/sucursal.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_execute_action+grant"
+            legacy_reason = "veto_ejecucion_pm_preserva_scope_y_inventario"
+            catalog_source = "pm_execute_grant_operativo"
+            catalog_reason = "check_no_autoriza_bitacora_ni_sucursal"
+    if action.full_key == "pm.validate" and pm_validate_grants_enabled():
+        # La denegación veta todas las validaciones. ALLOW no certifica
+        # sucursal, autoría, decisión, motivo ni ausencia de validación previa.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_validate_action+grant"
+            legacy_reason = "veto_validacion_pm_preserva_scope_y_autoria"
+            catalog_source = "pm_validate_grant_operativo"
+            catalog_reason = "check_no_autoriza_bitacora_ni_sucursal"
+    if action.full_key == "pm.configure" and pm_configure_grants_enabled():
+        # DENY veta ambos writes. ALLOW no certifica sucursal ni equipo PM.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_configure_action+grant"
+            legacy_reason = "veto_programacion_pm_preserva_scope_y_equipo"
+            catalog_source = "pm_configure_grant_operativo"
+            catalog_reason = "check_no_autoriza_configuracion_ni_sucursal"
+    if action.full_key in PLANNING_FLAGS and planning_action_grants_enabled(action.full_key):
+        # Veto sobre el guard específico. Un ALLOW no activa al operador ni
+        # habilita capacidades distintas. Estado/autoría del batch siguen vigentes.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy
+            legacy_source = "planning_access.require_planning_*+grant"
+            legacy_reason = "veto_global_preserva_operador_activo_y_capacidad"
+            catalog_source = "planning_grant_operativo"
+            catalog_reason = "check_no_autoriza_batch_ni_transicion"
+    warehouse_flags = {
+        "warehouse.view": warehouse_view_grants_enabled,
+        "warehouse.upload": warehouse_upload_grants_enabled,
+        "warehouse.catalogs": warehouse_catalogs_grants_enabled,
+    }
+    if action.full_key in warehouse_flags and warehouse_flags[action.full_key]():
+        # DENY veta el guard compartido; ALLOW no concede capacidades legacy.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy
+            legacy_source = "warehouse_access.require_warehouse_*+grant"
+            legacy_reason = "veto_global_preserva_operador_y_capacidad"
+            catalog_source = "warehouse_grant_operativo"
+            catalog_reason = "check_no_concede_operador_ni_capacidad"
+    if action.full_key == "warehouse.archive" and warehouse_archive_grants_enabled():
+        # DENY veta el endpoint operativo; ALLOW no crea operador ni can_archive.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy
+            legacy_source = "warehouse_access.require_warehouse_archive+grant"
+            legacy_reason = "veto_global_preserva_operador_y_can_archive"
+            catalog_source = "warehouse_archive_grant_operativo"
+            catalog_reason = "check_no_concede_rol_ni_operador"
     comparison = (
         "coincide" if legacy == catalog_allowed else "diferencia"
     ) if legacy is not None and catalog_allowed is not None else "no_concluyente"
@@ -595,6 +848,28 @@ def visual_audit_matrix():
         "status": "ok", "mode": "visual_audit_readonly_v1",
         "track_read_grants_enabled": track_read_grants_enabled(),
         "openings_read_grants_enabled": openings_read_grants_enabled(),
+        "openings_comment_grants_enabled": openings_comment_grants_enabled(),
+        "openings_manage_grants_enabled": openings_manage_grants_enabled(),
+        "tickets_create_grants_enabled": tickets_create_grants_enabled(),
+        "tickets_update_status_grants_enabled": tickets_update_status_grants_enabled(),
+        "tickets_notify_grants_enabled": tickets_notify_grants_enabled(),
+        "tickets_update_grants_enabled": tickets_update_grants_enabled(),
+        "tickets_close_grants_enabled": tickets_close_grants_enabled(),
+        "inventory_master_write_grants_enabled": inventory_master_write_grants_enabled(),
+        "inventory_movement_write_grants_enabled": inventory_movement_write_grants_enabled(),
+        "inventory_read_grants_enabled": inventory_read_grants_enabled(),
+        "pm_read_grants_enabled": pm_read_grants_enabled(),
+        "pm_execute_grants_enabled": pm_execute_grants_enabled(),
+        "pm_validate_grants_enabled": pm_validate_grants_enabled(),
+        "pm_configure_grants_enabled": pm_configure_grants_enabled(),
+        "warehouse_archive_grants_enabled": warehouse_archive_grants_enabled(),
+        "warehouse_view_grants_enabled": warehouse_view_grants_enabled(),
+        "warehouse_upload_grants_enabled": warehouse_upload_grants_enabled(),
+        "warehouse_catalogs_grants_enabled": warehouse_catalogs_grants_enabled(),
+        "planning_grants_enabled": {
+            action_key: planning_action_grants_enabled(action_key)
+            for action_key in PLANNING_FLAGS
+        },
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},

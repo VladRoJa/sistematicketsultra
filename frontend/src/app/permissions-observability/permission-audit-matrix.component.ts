@@ -62,7 +62,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
   loadingUsers = false;
   error = '';
   saveError = '';
-  savingReadUserId: number | null = null;
+  savingActionUserId: number | null = null;
   private requestVersion = 0;
 
   constructor(
@@ -209,7 +209,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
       });
   }
 
-  canEditBasicRead(row: VisualAuditRow): boolean {
+  canEditAction(row: VisualAuditRow): boolean {
     // Solo la acción cuyo guard HTTP esté enlazado, nunca por objeto.
     if (row.action_id === null || row.context?.branch_id || row.context?.document_id) {
       return false;
@@ -222,18 +222,149 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'openings.read' &&
       row.module_key === 'openings' &&
       this.result?.openings_read_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.comment' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_comment_grants_enabled === true
+    ) || (
+      row.action_key === 'openings.manage' &&
+      row.module_key === 'openings' &&
+      this.result?.openings_manage_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.create' &&
+      row.module_key === 'tickets' &&
+      this.result?.tickets_create_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.update_status' &&
+      row.module_key === 'tickets' &&
+      row.role !== 'LECTOR_GLOBAL' &&
+      this.result?.tickets_update_status_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.notify' &&
+      row.module_key === 'tickets' &&
+      this.result?.tickets_notify_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.update' &&
+      row.module_key === 'tickets' &&
+      row.role !== 'LECTOR_GLOBAL' &&
+      this.result?.tickets_update_grants_enabled === true
+    ) || (
+      row.action_key === 'tickets.close' &&
+      row.module_key === 'tickets' &&
+      row.role !== 'LECTOR_GLOBAL' &&
+      this.result?.tickets_close_grants_enabled === true
+    ) || (
+      row.action_key === 'inventory.master_write' &&
+      row.module_key === 'inventory' &&
+      ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN', 'MANTENIMIENTO', 'SISTEMAS', 'TECNICO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.inventory_master_write_grants_enabled === true
+    ) || (
+      row.action_key === 'inventory.movement_write' &&
+      row.module_key === 'inventory' &&
+      ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN', 'MANTENIMIENTO', 'SISTEMAS', 'TECNICO', 'AUX_MANTENIMIENTO', 'SR_MANTENIMIENTO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.inventory_movement_write_grants_enabled === true
+    ) || (
+      row.action_key === 'inventory.read' &&
+      row.module_key === 'inventory' &&
+      this.result?.inventory_read_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.read' &&
+      row.module_key === 'pm' &&
+      this.result?.pm_read_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.execute' &&
+      row.module_key === 'pm' &&
+      ['ADMINISTRADOR', 'SUPER_ADMIN', 'ADMIN', 'MANTENIMIENTO', 'SR_MANTENIMIENTO', 'AUX_MANTENIMIENTO', 'SISTEMAS', 'TECNICO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.pm_execute_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.validate' &&
+      row.module_key === 'pm' &&
+      ['ADMINISTRADOR', 'SUPER_ADMIN', 'ADMIN', 'MANTENIMIENTO', 'SR_MANTENIMIENTO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.pm_validate_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.configure' &&
+      row.module_key === 'pm' &&
+      ['ADMINISTRADOR', 'SUPER_ADMIN', 'ADMIN', 'MANTENIMIENTO', 'SR_MANTENIMIENTO'].includes(row.role.trim().toUpperCase()) &&
+      this.result?.pm_configure_grants_enabled === true
+    ) || (
+      row.action_key === 'warehouse.archive' &&
+      row.module_key === 'warehouse' &&
+      this.result?.warehouse_archive_grants_enabled === true
+    ) || (
+      row.action_key === 'warehouse.view' &&
+      row.module_key === 'warehouse' &&
+      this.result?.warehouse_view_grants_enabled === true
+    ) || (
+      row.action_key === 'warehouse.upload' &&
+      row.module_key === 'warehouse' &&
+      this.result?.warehouse_upload_grants_enabled === true
+    ) || (
+      row.action_key === 'warehouse.catalogs' &&
+      row.module_key === 'warehouse' &&
+      this.result?.warehouse_catalogs_grants_enabled === true
+    ) || (
+      row.module_key === 'planning' &&
+      row.action_key !== null &&
+      this.result?.planning_grants_enabled?.[row.action_key] === true
     );
   }
 
-  toggleBasicRead(row: VisualAuditRow, checked: boolean): void {
-    if (!this.canEditBasicRead(row) || this.savingReadUserId !== null) {
+  getCatalogCheckDecision(row: VisualAuditRow): boolean | null {
+    if (!this.canEditAction(row)) {
+      return row.catalog_allowed;
+    }
+    // Sin contexto de ticket, tickets.update sólo certifica el veto global;
+    // no inventar un allow de objeto para pintar el check.
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs', 'planning.read', 'planning.edit', 'planning.submit', 'planning.approve', 'planning.publish', 'planning.configure_model'].includes(row.action_key)
+      ? row.catalog_allowed : row.legacy_allowed;
+  }
+
+  getCatalogCheckNote(row: VisualAuditRow): string {
+    if (!this.canEditAction(row)) {
+      return 'Solo diagnóstico';
+    }
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs', 'planning.read', 'planning.edit', 'planning.submit', 'planning.approve', 'planning.publish', 'planning.configure_model'].includes(row.action_key)
+      ? (row.module_key === 'planning'
+          ? 'Veto global: un ALLOW no crea operador activo, no concede capacidades ni evita estados o validaciones de metas'
+          : row.action_key === 'warehouse.upload'
+          ? 'Veto global: también abarca operaciones M6 y Agregadoras que usan can_upload; ALLOW no otorga capacidad'
+          : row.action_key === 'warehouse.view'
+          ? 'Veto global: también abarca consultas y revisiones que usan can_view; ALLOW no otorga capacidad'
+          : row.action_key === 'warehouse.catalogs'
+          ? 'Veto global: ALLOW no sustituye can_view ni can_upload'
+          : row.action_key === 'warehouse.archive'
+          ? 'Veto global: un ALLOW no crea operador Warehouse ni habilita can_archive'
+          : row.action_key === 'pm.configure'
+          ? 'Veto global: un ALLOW no autoriza programación fuera de sucursal ni omite validaciones'
+          : row.action_key === 'pm.validate'
+          ? 'Veto global: un ALLOW no autoriza sucursales, autovalidación ni validación duplicada'
+          : row.action_key === 'pm.execute'
+          ? 'Veto global: un ALLOW no autoriza ejecución fuera de sucursal ni evita validaciones'
+          : row.action_key === 'pm.read'
+          ? 'Veto global: un ALLOW no autoriza bitácoras ni sucursales fuera del alcance'
+          : row.action_key === 'inventory.read'
+          ? 'Veto global: un ALLOW no autoriza sucursales ni amplía consultas'
+          : row.action_key === 'inventory.movement_write'
+          ? 'Veto global: un ALLOW no autoriza sucursales ni anulación de movimientos'
+          : 'Control de veto: no otorga acceso ni autoriza cierres por sí solo')
+      : 'Check conectado al guard real';
+  }
+
+  toggleAction(row: VisualAuditRow, checked: boolean): void {
+    if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey = row.action_key === 'track.read' ? 'track' : 'openings';
+    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' | 'warehouse' | 'planning' =
+      row.action_key === 'track.read' ? 'track' :
+      row.module_key === 'tickets' ? 'tickets' :
+      row.module_key === 'inventory' ? 'inventory' :
+      row.module_key === 'pm' ? 'pm' :
+      row.module_key === 'warehouse' ? 'warehouse' :
+      row.module_key === 'planning' ? 'planning' : 'openings';
     this.saveError = '';
-    this.savingReadUserId = row.user_id;
-    this.catalog.setBasicReadAccess(row.user_id, moduleKey, checked)
-      .pipe(finalize(() => { this.savingReadUserId = null; }))
+    this.savingActionUserId = row.user_id;
+    this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
+      .pipe(finalize(() => { this.savingActionUserId = null; }))
       .subscribe({
         next: () => { this.load(); },
         error: response => {

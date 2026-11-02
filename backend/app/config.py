@@ -72,6 +72,112 @@ class Config:
         "PERMISSIONS_OPENINGS_READ_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Comentarios de Aperturas: acción de escritura, independiente de lectura.
+    PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_COMMENT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Gestión de Aperturas: control independiente de lectura y comentarios.
+    PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Tickets: veto opcional de creación, jamás bypass de sucursal/flujo.
+    PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Cambio de estado Tickets: flag seguro OFF, no evita validaciones del recurso.
+    PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Notificar: veto opcional antes de correo/WhatsApp; scope sigue obligatorio.
+    PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Edición de metadatos/compromiso Tickets, independiente del estado.
+    PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Cierres: veta solicitar/aceptar/administrativo, no los rechazos.
+    PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Inventario maestro: veto por acción que no elimina las reglas legacy.
+    PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Movimiento de inventario: veto global; la sucursal sigue siendo obligatoria.
+    PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Inventario consulta: veto global; no amplía sucursales ni acceso a registros.
+    PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # PM lectura: veto adicional sobre las rutas GET, sin ampliar scopes ni rol.
+    PERMISSIONS_PM_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # PM ejecución: veto por acción; no reemplaza scope ni validaciones de bitácora.
+    PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # PM validación: veto por acción, sin cambiar sucursales o reglas de validación.
+    PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # PM programación: veto global que conserva rol, sucursal y reglas del equipo.
+    PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Warehouse: vetos por acción, sin crear operadores ni superar capacidades.
+    PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Warehouse: veto global sobre archivar uploads, además de can_archive.
+    PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
+    # Planeación Comercial: vetos globales, conserva operador activo y capacidades.
+    PERMISSIONS_PLANNING_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

@@ -628,6 +628,90 @@ def cambiar_recepciones_lote_tapizado(ticket_id):
         return jsonify({"mensaje": "No se pudieron guardar las recepciones"}), 500
 
 
+def tickets_create_grants_enabled() -> bool:
+    """El check afecta la entrada a creación, nunca su alcance por sucursal."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def tickets_update_status_grants_enabled() -> bool:
+    """Acción estado: OFF conserva guard legacy y bloqueo LECTOR_GLOBAL."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def tickets_update_grants_enabled() -> bool:
+    """Veto opcional de metadatos y compromisos; no autoriza cambiar estados."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_update_metadata_requested(data) -> bool:
+    """Diferencia metadatos de la mera transición de estado en PUT /update."""
+    if not isinstance(data, dict):
+        return False
+    return (
+        bool(data.get("fecha_solucion"))
+        or bool(data.get("historial_fechas"))
+        or bool(data.get("motivo_cambio"))
+        or "necesita_refaccion" in data
+        or "descripcion_refaccion" in data
+        or "refaccion_definida_por_jefe" in data
+    )
+
+
+def tickets_close_grants_enabled() -> bool:
+    """Veto opcional de tres operaciones de cierre; no modifica rechazos."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_close_grant_denied(user) -> bool:
+    """DENY de cierre; ALLOW no reemplaza jefatura, scope ni doble check."""
+    return (
+        user is not None
+        and tickets_close_grants_enabled()
+        and _ticket_action_grant_denied(user, "tickets.close")
+    )
+
+
+def tickets_notify_grants_enabled() -> bool:
+    """Check de notificación; OFF mantiene el guard JWT y scope legacy."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_action_grant_denied(user, action_full_key: str) -> bool:
+    """Veto, no autorización: las validaciones de objeto siguen siendo fuente real."""
+    from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+    return _simple_global_action_grant_override(
+        user=user, action_full_key=action_full_key,
+    ) is False
+
+
+def _ticket_create_grant_denied(user) -> bool:
+    """Solo un DENY efectivo bloquea; allow NO evita validaciones existentes."""
+    return (
+        tickets_create_grants_enabled()
+        and _ticket_action_grant_denied(user, "tickets.create")
+    )
+
+
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
@@ -636,6 +720,11 @@ def create_ticket():
         user = UserORM.get_by_id(usuario_actual)
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        # Entrada por acción. Un allow NO amplía sucursales, aparatos o flujos
+        # de negocio y un deny detiene antes de cualquier escritura.
+        if _ticket_create_grant_denied(user):
+            return jsonify({"mensaje": "No autorizado para crear tickets."}), 403
 
         try:
             data, image_file = _parse_create_ticket_request()
@@ -1358,6 +1447,13 @@ def update_ticket_status(id):
         if not actor:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
+        # Check por acción de entrada. DENY bloquea; ALLOW no omite
+        # bloquea_lectores_globales, alcance de ticket ni doble check.
+        if tickets_update_status_grants_enabled() and _ticket_action_grant_denied(
+            actor, "tickets.update_status",
+        ):
+            return jsonify({"mensaje": "No autorizado para cambiar estado de tickets."}), 403
+
         ticket = Ticket.query.get(id)
         if not ticket:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
@@ -1371,6 +1467,15 @@ def update_ticket_status(id):
             return jsonify({"mensaje": "No autorizado para actualizar este ticket"}), 403
 
         data = request.get_json() or {}
+        # /update mezcla cambio de estado y metadatos. Si vienen ambos,
+        # ambos checks pueden vetar; el allow nunca omite las reglas existentes.
+        if (
+            tickets_update_grants_enabled()
+            and _ticket_update_metadata_requested(data)
+            and _ticket_action_grant_denied(actor, "tickets.update")
+        ):
+            return jsonify({"mensaje": "No autorizado para actualizar datos de tickets."}), 403
+
         estado = data.get("estado")
         fecha_solucion = data.get("fecha_solucion")
         fecha_en_progreso = data.get("fecha_en_progreso")
@@ -2738,6 +2843,13 @@ def notify_ticket(ticket_id):
     if not user:
         return jsonify({"mensaje":"Usuario no encontrado"}), 404
 
+    # DENY detiene antes de procesar destinatarios y emitir notificaciones.
+    # ALLOW nunca evita filtrar_tickets_por_usuario ni concede otros tickets.
+    if tickets_notify_grants_enabled() and _ticket_action_grant_denied(
+        user, "tickets.notify",
+    ):
+        return jsonify({"mensaje": "No autorizado para notificar tickets."}), 403
+
     data = request.get_json() or {}
     emails  = data.get("emails") or []
     phones  = data.get("phones") or []
@@ -2782,6 +2894,13 @@ def notify_ticket(ticket_id):
 @jwt_required()
 def set_compromiso(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    # Este endpoint modifica datos de compromiso/refacción, nunca el estado.
+    # El guard de roles/objeto y las restricciones PM siguen después.
+    if user and tickets_update_grants_enabled() and _ticket_action_grant_denied(
+        user, "tickets.update",
+    ):
+        return jsonify({"mensaje": "No autorizado para actualizar datos de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje": "Ticket no encontrado"}), 404
@@ -2862,6 +2981,9 @@ def cierre_gerente_desde_cero(ticket_id):
         user = UserORM.get_by_id(get_jwt_identity())
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
+
+        if _ticket_close_grant_denied(user):
+            return jsonify({"mensaje": "No autorizado para cerrar tickets."}), 403
 
         t = Ticket.query.get(ticket_id)
         if not t:
@@ -2953,11 +3075,14 @@ def cierre_gerente_desde_cero(ticket_id):
 @jwt_required()
 def cierre_solicitar(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+    if _ticket_close_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para solicitar cierre de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
-    if not user:
-        return jsonify({"mensaje": "Usuario no encontrado"}), 401
 
     if t.departamento_id == 1:
         # El usuario 45 conserva cierre legacy SIN responsable, con alcance
@@ -3116,6 +3241,9 @@ def cierre_rechazar_jefe(ticket_id):
 @jwt_required()
 def cierre_aceptar_creador(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if _ticket_close_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para aceptar cierre de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje": "Ticket no encontrado"}), 404

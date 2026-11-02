@@ -92,7 +92,7 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     script = ScriptDirectory.from_config(cfg)
     # E4 debe seguir en una sola cadena aunque otros módulos añadan migraciones.
     head = script.get_current_head()
-    assert head is not None
+    assert head == "p1181c102030"
     assert script.get_revision("v2e4b3103026") in list(
         script.iterate_revisions(head, "v2e4b2103026")
     )

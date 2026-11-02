@@ -1,7 +1,7 @@
 #backend\app\routes\pm_routes.py
 
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app, has_app_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
@@ -255,7 +255,7 @@ def _crear_bitacora(data, user_id):
             401,
         )
 
-    denied_action = require_pm_execute(user)
+    denied_action = _require_pm_execute_action(user)
     if denied_action:
         return None, denied_action
 
@@ -411,7 +411,7 @@ def _crear_validacion_pm(data, user_id):
         )
 
     # 7) Permiso de acción: validar bitácora PM
-    denied_action = require_pm_validate(user)
+    denied_action = _require_pm_validate_action(user)
     if denied_action:
         return None, denied_action
 
@@ -572,7 +572,7 @@ def _crear_configuracion_pm(data, user_id):
     if user_err:
         return None, user_err
 
-    denied_action = require_pm_configure(user)
+    denied_action = _require_pm_configure_action(user)
     if denied_action:
         return None, denied_action
 
@@ -649,7 +649,7 @@ def _actualizar_configuracion_pm(config_id, data, user_id):
     if user_err:
         return None, user_err
 
-    denied_action = require_pm_configure(user)
+    denied_action = _require_pm_configure_action(user)
     if denied_action:
         return None, denied_action
 
@@ -929,6 +929,115 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+def pm_configure_grants_enabled():
+    """Flag del veto operativo PM sobre crear/actualizar programación."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_configure_grant_veto(user):
+    # Solo después del guard legacy de rol; ALLOW no habilita sucursales.
+    if pm_configure_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.configure"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la programación de preventivos.",
+            }, 403
+    return None
+
+
+def _require_pm_configure_action(user):
+    denied = require_pm_configure(user)
+    return denied if denied else _pm_configure_grant_veto(user)
+
+
+def pm_validate_grants_enabled():
+    """Check de validación PM independiente de ejecutar o consultar."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_validate_grant_veto(user):
+    # No sustituye roles ni alcance: solo veta una acción ya autorizada.
+    if pm_validate_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.validate"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la validación de bitácoras PM.",
+            }, 403
+    return None
+
+
+def _require_pm_validate_action(user):
+    denied = require_pm_validate(user)
+    return denied if denied else _pm_validate_grant_veto(user)
+
+
+def pm_execute_grants_enabled():
+    """Veto de ejecución PM independiente del gate de lectura."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_execute_grant_veto(user):
+    # Solo aplica después del rol legacy; un ALLOW nunca amplía sucursales.
+    if pm_execute_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.execute"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la ejecución de bitácoras PM.",
+            }, 403
+    return None
+
+
+def _require_pm_execute_action(user):
+    denied = require_pm_execute(user)
+    return denied if denied else _pm_execute_grant_veto(user)
+
+
+def pm_read_grants_enabled():
+    """Flag de lectura PM; no altera el permiso compartido can_pm_view()."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_READ_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_read_grant_veto(user):
+    # Ejecutar sólo después del gate de rol/ACL. ALLOW nunca concede sucursal.
+    if pm_read_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.read"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la consulta de PM.",
+            }, 403
+    return None
+
+
+def _require_pm_read_action(user):
+    # Conserva las excepciones COMPRAS/COORDINADOR y el gate legacy.
+    denied = require_pm_view(user)
+    return denied if denied else _pm_read_grant_veto(user)
+
+
 @pm_bp.route("/access", methods=["GET"])
 @jwt_required()
 def pm_read_access():
@@ -942,10 +1051,16 @@ def pm_read_access():
         # La excepción individual solo es útil con sucursales asignadas.
         allowed = allowed and bool(_pm_user_assigned_sucursales(user))
 
+    # /access conserva HTTP 200 de capabilities; el veto apaga SOLO la lectura.
+    if allowed and _pm_read_grant_veto(user) is not None:
+        allowed = False
+
     return jsonify({
         "allowed": bool(allowed),
         "can_view": bool(allowed),
-        "can_execute": can_pm_execute(user),
+        "can_execute": bool(
+            can_pm_execute(user) and _pm_execute_grant_veto(user) is None
+        ),
     }), 200
 
 
@@ -1013,7 +1128,7 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1046,7 +1161,7 @@ def pm_listar_bitacoras():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1162,7 +1277,7 @@ def pm_listar_configuraciones():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1294,7 +1409,7 @@ def pm_preventivo_dashboard():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1510,7 +1625,7 @@ def pm_calendario():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
