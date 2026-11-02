@@ -177,6 +177,44 @@ def test_flag_off_skips_user_and_grants(flag, gate):
     grant.assert_not_called()
 
 
+@pytest.mark.parametrize("gate", [
+    access.require_warehouse_view,
+    access.require_warehouse_upload,
+    access.require_warehouse_catalogs,
+])
+def test_enabled_veto_requires_existing_user_even_with_operator(gate):
+    from app.routes import permissions_catalog_routes as catalog
+    app = Flask(__name__)
+    app.config.update(FLAGS)
+    with app.test_request_context(), \
+         patch.object(access, "get_current_warehouse_operator",
+                      return_value=operator()), \
+         patch.object(access, "get_jwt_identity", return_value="47"), \
+         patch.object(access.UserORM, "get_by_id", return_value=None), \
+         patch.object(catalog, "_simple_global_action_grant_override") as grant:
+        result = gate()
+    assert result[1] == 403
+    grant.assert_not_called()
+
+
+def test_m6_admicorp_guard_precedes_warehouse_grant():
+    from app.routes import permissions_catalog_routes as catalog
+    api, headers = client()
+    with api.application.app_context(), \
+         patch.object(m6, "require_current_admicorp",
+                      side_effect=PermissionError()), \
+         patch.object(access, "get_current_warehouse_operator") as warehouse, \
+         patch.object(catalog, "_simple_global_action_grant_override",
+                      return_value=True) as grant:
+        response = api.post(
+            "/api/google-ads-m6/manual/confirm", headers=headers
+        )
+    assert response.status_code == 403
+    assert response.json["code"] == "FORBIDDEN"
+    warehouse.assert_not_called()
+    grant.assert_not_called()
+
+
 def test_flags_default_off():
     with Flask(__name__).app_context():
         assert not access.warehouse_view_grants_enabled()
