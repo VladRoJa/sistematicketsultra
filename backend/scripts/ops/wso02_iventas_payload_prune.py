@@ -216,6 +216,52 @@ def _prune_one(conn, item: dict) -> str:
     return "pruned"
 
 
+def _apply_items(
+    *,
+    engine,
+    items: list[dict],
+    manifest_parent: Path,
+    max_runs: int,
+    min_free_gb: int,
+) -> dict[str, int]:
+    """Process at most max_runs *new* runs, skipping earlier completed runs.
+
+    The same immutable manifest can be reused for each bounded batch.
+    A failed run aborts the current invocation; prior run transactions stay
+    committed and future invocations resume after them.
+    """
+    completed = 0
+    already = 0
+    considered = 0
+    for item in items:
+        if completed >= max_runs:
+            break
+        free = shutil.disk_usage(manifest_parent).free
+        if free < min_free_gb * 1024 ** 3:
+            raise RuntimeError(
+                "WSO-02 blocked: disk headroom below the configured "
+                f"{min_free_gb} GiB threshold"
+            )
+        with engine.begin() as conn:
+            state = _prune_one(conn, item)
+        considered += 1
+        if state == "pruned":
+            completed += 1
+            print(json.dumps({
+                "run_id": item["id"], "state": state,
+                "completed": completed,
+            }), flush=True)
+        elif state == "already_pruned":
+            already += 1
+        else:
+            raise RuntimeError("WSO-02 blocked: unexpected pruning state")
+    return {
+        "runs_pruned": completed,
+        "runs_already_pruned": already,
+        "runs_remaining_in_manifest": len(items) - considered,
+    }
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("mode", choices=("preview", "apply"))
@@ -271,30 +317,14 @@ def main() -> None:
         if args.min_free_gb < 20:
             raise RuntimeError("WSO-02 blocked: minimum free space must be at least 20 GiB")
         items = _read_manifest(manifest)
-        completed = 0
-        already = 0
-        for item in items[:args.max_runs]:
-            free = shutil.disk_usage(manifest.parent).free
-            if free < args.min_free_gb * 1024 ** 3:
-                raise RuntimeError(
-                    "WSO-02 blocked: disk headroom below the configured "
-                    f"{args.min_free_gb} GiB threshold"
-                )
-            with db.engine.begin() as conn:
-                state = _prune_one(conn, item)
-            if state == "pruned":
-                completed += 1
-            else:
-                already += 1
-            print(json.dumps({
-                "run_id": item["id"], "state": state,
-                "completed": completed, "already_pruned": already,
-            }), flush=True)
-        print(json.dumps({
-            "mode": "apply", "runs_pruned": completed,
-            "runs_already_pruned": already,
-            "runs_remaining_in_manifest": len(items) - min(len(items), args.max_runs),
-        }))
+        summary = _apply_items(
+            engine=db.engine,
+            items=items,
+            manifest_parent=manifest.parent,
+            max_runs=args.max_runs,
+            min_free_gb=args.min_free_gb,
+        )
+        print(json.dumps({"mode": "apply", **summary}))
 
 
 if __name__ == "__main__":
