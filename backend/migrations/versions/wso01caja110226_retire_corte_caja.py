@@ -3,9 +3,11 @@
 Revision ID: wso01caja110226
 Revises: v2e4b3103026
 
-Destructive migration. Apply ONLY after verified backup/restore, dry-run of
-wso01_corte_caja_files.py and physical-file quarantine confirmation.
-Downgrade requires restoring the database backup, not empty tables.
+Destructive migration. The owner elected direct deletion without a new
+database backup; Gasca retains upstream source data, but Suite Ultra history
+will be irrecoverable from the current database after upgrade.
+First create a verified WSO-01 RAW manifest; execute file deletion ONLY after
+this migration commits. Downgrade cannot reconstruct deleted data.
 """
 
 from alembic import op
@@ -96,7 +98,7 @@ def upgrade():
 
 def downgrade():
     raise RuntimeError(
-        "WSO-01 is data-destructive. Recreate the environment from the "
-        "verified pre-migration database backup; an empty-table downgrade "
-        "would falsely suggest that the historical data was recovered."
+        "WSO-01 is data-destructive and cannot be downgraded without a "
+        "pre-existing valid database restore point. Data cannot be recreated "
+        "from an empty-table schema downgrade."
     )
