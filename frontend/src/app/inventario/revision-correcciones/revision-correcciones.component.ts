@@ -47,7 +47,11 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   filtroSucursal: number | 'todas' = 'todas';
   filtroEstado: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
   filtroTipo: TipoSolicitudInventario | 'todos' = 'todos';
+  // Identidad y datos de las solicitudes seleccionadas persisten entre páginas.
+  // Nunca se usa el arreglo de la página actual para construir un lote E3.
   seleccion = new Set<number>();
+  private solicitudesSeleccionadas = new Map<number, SolicitudCorreccionInventario>();
+  readonly maxLote = 10;
   decision: Decision | null = null;
   motivo = '';
   confirmo = false;
@@ -84,7 +88,27 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   }
 
   get seleccionadas(): SolicitudCorreccionInventario[] {
-    return this.solicitudes.filter(s => this.seleccion.has(s.id) && s.estado === 'PENDING');
+    return [...this.solicitudesSeleccionadas.values()]
+      .filter(s => s.estado === 'PENDING')
+      .sort((a, b) => a.id - b.id);
+  }
+
+  get seleccionadasEnPagina(): number {
+    return this.solicitudes.filter(s => s.estado === 'PENDING' && this.seleccion.has(s.id)).length;
+  }
+
+  get pendientesEnPagina(): number {
+    return this.solicitudes.filter(s => s.estado === 'PENDING').length;
+  }
+
+  get todasPaginaSeleccionadas(): boolean {
+    return this.pendientesEnPagina > 0 && this.seleccionadasEnPagina === this.pendientesEnPagina;
+  }
+
+  limpiarSeleccion(): void {
+    if (this.procesando || this.decision) return;
+    this.seleccion.clear();
+    this.solicitudesSeleccionadas.clear();
   }
 
   get paginas(): number {
@@ -149,11 +173,11 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     });
   }
 
-  cargar(): void {
+  cargar(preservarSeleccion = false): void {
     if (!this.contexto || this.procesando) return;
     this.subListado?.unsubscribe();
     this.cerrarDecision();
-    this.seleccion = new Set<number>();
+    if (!preservarSeleccion) this.limpiarSeleccion();
     const version = ++this.consulta;
     this.cargando = true;
     this.error = '';
@@ -168,6 +192,17 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
       next: data => {
         if (version !== this.consulta) return;
         this.solicitudes = data.items;
+        // Refrescar los elementos visibles sin perder los de páginas anteriores.
+        // Una solicitud ya resuelta no puede seguir seleccionada.
+        for (const item of data.items) {
+          if (!this.seleccion.has(item.id)) continue;
+          if (item.estado !== 'PENDING') {
+            this.seleccion.delete(item.id);
+            this.solicitudesSeleccionadas.delete(item.id);
+          } else {
+            this.solicitudesSeleccionadas.set(item.id, item);
+          }
+        }
         this.total = data.total;
         this.cargando = false;
       },
@@ -187,23 +222,37 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   cambiarPagina(delta: number): void {
     if (this.pagina + delta < 1 || this.pagina + delta > this.paginas) return;
     this.pagina += delta;
-    this.cargar();
+    this.cargar(true);
   }
 
   marcar(id: number): void {
     const row = this.solicitudes.find(s => s.id === id && s.estado === 'PENDING');
-    if (!row || this.procesando) return;
-    const next = new Set(this.seleccion);
-    if (next.has(id)) next.delete(id);
-    else if (next.size < 10) next.add(id);
-    this.seleccion = next;
+    if (!row || this.procesando || this.cargando) return;
+    if (this.seleccion.has(id)) {
+      this.seleccion.delete(id);
+      this.solicitudesSeleccionadas.delete(id);
+    } else if (this.seleccion.size < this.maxLote) {
+      this.seleccion.add(id);
+      this.solicitudesSeleccionadas.set(id, row);
+    }
   }
 
   marcarPagina(): void {
-    if (this.procesando) return;
+    if (this.procesando || this.cargando) return;
     const pending = this.solicitudes.filter(s => s.estado === 'PENDING');
-    this.seleccion = pending.every(s => this.seleccion.has(s.id))
-      ? new Set<number>() : new Set(pending.slice(0, 10).map(s => s.id));
+    if (pending.every(s => this.seleccion.has(s.id))) {
+      // Desmarcar esta página no debe quitar lo seleccionado en otras páginas.
+      for (const row of pending) {
+        this.seleccion.delete(row.id);
+        this.solicitudesSeleccionadas.delete(row.id);
+      }
+      return;
+    }
+    for (const row of pending) {
+      if (this.seleccion.size >= this.maxLote) break;
+      this.seleccion.add(row.id);
+      this.solicitudesSeleccionadas.set(row.id, row);
+    }
   }
 
   preparar(decision: Decision): void {
