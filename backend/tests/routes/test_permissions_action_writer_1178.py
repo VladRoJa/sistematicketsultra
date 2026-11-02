@@ -44,6 +44,7 @@ def client():
         PERMISSIONS_OPENINGS_MANAGE_GRANTS_ENABLED=True,
         PERMISSIONS_TICKETS_CREATE_GRANTS_ENABLED=True,
         PERMISSIONS_TICKETS_UPDATE_STATUS_GRANTS_ENABLED=True,
+        PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -113,6 +114,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("openings", "openings.manage"),
     ("tickets", "tickets.create"),
     ("tickets", "tickets.update_status"),
+    ("tickets", "tickets.notify"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
