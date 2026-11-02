@@ -213,6 +213,29 @@ def ticket_page(page, url: str):
     install_focus_page(page)
 
 
+def observe_ticket_state(page, url: str, ticket_id: int) -> dict:
+    """Diagnóstico de un ticket sintético autorizado, sin exponer el JWT."""
+    if not os.getenv("CAP_V1_SYNTHETIC_CI"):
+        return {}
+    token = page.evaluate("() => localStorage.getItem('token')")
+    response = page.context.request.get(
+        url + "/api/tickets/all?limit=50&offset=0",
+        headers={"Authorization": "Bearer " + token},
+        timeout=15000, max_redirects=0,
+    )
+    if response.status != 200:
+        raise RuntimeError(f"CAP-V1 QA: la bandeja API respondió {response.status}")
+    ticket = next((t for t in response.json().get("tickets", [])
+                   if t.get("id") == ticket_id), None)
+    if not ticket:
+        raise RuntimeError("CAP-V1 QA: ticket sintético fuera de alcance")
+    return {
+        "estado": ticket.get("estado"), "estado_cierre": ticket.get("estado_cierre"),
+        "username": ticket.get("username"),
+        "sucursal_id_destino": ticket.get("sucursal_id_destino"),
+    }
+
+
 def walkthrough(page, args, story: dict) -> list[dict]:
     username, password = os.environ["CAP_ACTOR_USER"], os.environ["CAP_ACTOR_PASSWORD"]
     reviewer, reviewer_pass = os.environ["CAP_REVIEWER_USER"], os.environ["CAP_REVIEWER_PASSWORD"]
@@ -253,10 +276,22 @@ def walkthrough(page, args, story: dict) -> list[dict]:
         "Recepción de todos los aparatos verificada en capacitación.")
     guided_click(page, finish.get_by_role("button", name="Solicitar conformidad"))
     scene("cierre")
+    after_request = observe_ticket_state(page, args.base_url, args.ticket_id)
+    if after_request and (after_request["estado"] != "por_validar"
+                          or after_request["estado_cierre"] != "pendiente_creador"):
+        raise RuntimeError(
+            "CAP-V1 QA: solicitud no creó pendiente de conformidad: "
+            + str(after_request)
+        )
 
     switch_account(page, args.base_url, reviewer, reviewer_pass)
     ticket_page(page, args.base_url)
     row = find_ticket(page, args.ticket_id)
+    reviewer_status = observe_ticket_state(page, args.base_url, args.ticket_id)
+    if reviewer_status and (reviewer_status["estado"] != "por_validar"
+                            or reviewer_status["estado_cierre"] != "pendiente_creador"):
+        raise RuntimeError("CAP-V1 QA: vista de revisor no está por validar: "
+                           + str(reviewer_status))
     guided_click(page, row.get_by_role("button", name="Rechazar cierre"))
     page.locator(".swal2-textarea").fill("Se detectó un equipo que requiere corregir su recepción.")
     guided_click(page, page.locator(".swal2-confirm"))
