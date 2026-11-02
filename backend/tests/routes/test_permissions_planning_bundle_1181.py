@@ -190,6 +190,25 @@ def test_access_payload_reflects_denied_capability_without_changing_others():
     assert effective["has_access"] is True
 
 
+def test_read_veto_hides_module_entry_in_access_payload():
+    from app.routes import permissions_catalog_routes as catalog
+    api, headers = client()
+    def deny_read(*, user, action_full_key):
+        return False if action_full_key == "planning.read" else None
+    with api.application.app_context(), \
+         patch.object(access, "get_current_planning_operator",
+                      return_value=operator()), \
+         patch.object(access.UserORM, "get_by_id", return_value=actor()), \
+         patch.object(catalog, "_simple_global_action_grant_override",
+                      side_effect=deny_read):
+        response = api.get("/api/planning/targets/access", headers=headers)
+    assert response.status_code == 200
+    assert response.json["has_access"] is False
+    assert response.json["can_view"] is False
+    # A veto on read does not independently rewrite the other capabilities.
+    assert response.json["can_edit"] is True
+
+
 @pytest.mark.parametrize("key,capability,guard", ACTIONS)
 @pytest.mark.parametrize("effect,expected", [("deny", False), ("allow", True)])
 def test_visual_matrix_global_veto_matches_runtime(key, capability, guard,
