@@ -54,6 +54,7 @@ def client():
         PERMISSIONS_PM_EXECUTE_GRANTS_ENABLED=True,
         PERMISSIONS_PM_VALIDATE_GRANTS_ENABLED=True,
         PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED=True,
+        PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -236,6 +237,26 @@ def test_pm_configure_writer_flag_off_rejects_without_mutation(monkeypatch):
     session.commit.assert_not_called()
 
 
+def test_warehouse_archive_writer_flag_off_rejects_without_mutation(monkeypatch):
+    api, headers = client()
+    api.application.config["PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED"] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    response = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "warehouse",
+            "action_full_key": "warehouse.archive",
+            "override": "deny",
+        }]},
+    )
+    assert response.status_code == 409
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
 def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch):
     api, headers = client()
     admin_and_target(monkeypatch)
@@ -270,6 +291,7 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("pm", "pm.execute"),
     ("pm", "pm.validate"),
     ("pm", "pm.configure"),
+    ("warehouse", "warehouse.archive"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
