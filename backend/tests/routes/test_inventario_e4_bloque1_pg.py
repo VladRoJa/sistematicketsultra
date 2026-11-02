@@ -490,6 +490,69 @@ def test_recepcion_unica_resuelve_sucursal_y_corte_sin_ids_ni_csv_por_carga(api)
     assert ambiguo.get_json()["error"] == "CORTE_AMBIGUO"
 
 
+
+def test_recepcion_folio_preliminar_distribuido_v02_sin_bypass_ambiguo(api):
+    """El folio preliminar real identifica UN corte previamente registrado."""
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    endpoint = root + "/recepciones"
+    libro = load_workbook(BytesIO(workbook(
+        first="SI", second="SI", found=False,
+        version="v0.2 · base CSV 2026-10-28",
+    )))
+    libro["CONTROL"]["C9"] = "PRELIMINAR · SIN FOLIO E4"
+    output = BytesIO()
+    libro.save(output)
+    raw = output.getvalue()
+
+    missing = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert missing.status_code == 409
+    assert missing.get_json()["error"] == "CORTE_NO_REGISTRADO"
+
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte_original.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    before = _snapshot(app)
+    received = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    assert received.get_json()["levantamiento_id"] == lev
+    assert received.get_json()["importacion"]["control"]["folio_declarado"] == (
+        "PRELIMINAR · SIN FOLIO E4"
+    )
+    assert _snapshot(app) == before
+
+    # Folios ajenos no pueden adivinar el ciclo aunque sea el único.
+    libro["CONTROL"]["C9"] = "OTRO-FOLIO-123"
+    unknown = BytesIO()
+    libro.save(unknown)
+    rejected = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(unknown.getvalue()), "otro.xlsx"),
+    })
+    assert rejected.status_code == 422
+    assert rejected.get_json()["error"] == "FOLIO_NO_RECONOCIDO"
+
+    # Ni siquiera el marcador preliminar elige un ciclo arbitrario.
+    second_cycle = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "segundo_corte.csv"),
+    })
+    assert second_cycle.status_code == 201
+    ambiguous = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert ambiguous.status_code == 409
+    assert ambiguous.get_json()["error"] == "CORTE_AMBIGUO"
+
+
 def test_inicial_restringido_y_evidencia_persistente(api):
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
