@@ -304,6 +304,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
       this.result?.warehouse_catalogs_grants_enabled === true
     ) || (
       row.module_key === 'planning' &&
+      row.action_key !== null &&
       this.result?.planning_grants_enabled?.[row.action_key] === true
     );
   }
