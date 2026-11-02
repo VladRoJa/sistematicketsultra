@@ -646,6 +646,15 @@ def tickets_update_status_grants_enabled() -> bool:
     return str(value).strip().lower() == "true"
 
 
+def tickets_notify_grants_enabled() -> bool:
+    """Check de notificación; OFF mantiene el guard JWT y scope legacy."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_NOTIFY_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
 def _ticket_action_grant_denied(user, action_full_key: str) -> bool:
     """Veto, no autorización: las validaciones de objeto siguen siendo fuente real."""
     from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
@@ -2783,6 +2792,13 @@ def notify_ticket(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
     if not user:
         return jsonify({"mensaje":"Usuario no encontrado"}), 404
+
+    # DENY detiene antes de procesar destinatarios y emitir notificaciones.
+    # ALLOW nunca evita filtrar_tickets_por_usuario ni concede otros tickets.
+    if tickets_notify_grants_enabled() and _ticket_action_grant_denied(
+        user, "tickets.notify",
+    ):
+        return jsonify({"mensaje": "No autorizado para notificar tickets."}), 403
 
     data = request.get_json() or {}
     emails  = data.get("emails") or []
