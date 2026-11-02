@@ -20,7 +20,10 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
-from app.utils.warehouse_access import warehouse_archive_grants_enabled
+from app.utils.warehouse_access import (
+    warehouse_view_grants_enabled, warehouse_upload_grants_enabled,
+    warehouse_catalogs_grants_enabled, warehouse_archive_grants_enabled,
+)
 from app.routes.inventarios import (
     inventory_master_write_grants_enabled,
     inventory_movement_write_grants_enabled,
@@ -273,7 +276,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs"}
     }
     for grant in query.all():
         principal = (
@@ -650,6 +653,23 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_programacion_pm_preserva_scope_y_equipo"
             catalog_source = "pm_configure_grant_operativo"
             catalog_reason = "check_no_autoriza_configuracion_ni_sucursal"
+    warehouse_flags = {
+        "warehouse.view": warehouse_view_grants_enabled,
+        "warehouse.upload": warehouse_upload_grants_enabled,
+        "warehouse.catalogs": warehouse_catalogs_grants_enabled,
+    }
+    if action.full_key in warehouse_flags and warehouse_flags[action.full_key]():
+        # DENY veta el guard compartido; ALLOW no concede capacidades legacy.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy
+            legacy_source = "warehouse_access.require_warehouse_*+grant"
+            legacy_reason = "veto_global_preserva_operador_y_capacidad"
+            catalog_source = "warehouse_grant_operativo"
+            catalog_reason = "check_no_concede_operador_ni_capacidad"
     if action.full_key == "warehouse.archive" and warehouse_archive_grants_enabled():
         # DENY veta el endpoint operativo; ALLOW no crea operador ni can_archive.
         if candidate is not None and catalog._is_simple_global_module_grant(candidate):
@@ -829,6 +849,9 @@ def visual_audit_matrix():
         "pm_validate_grants_enabled": pm_validate_grants_enabled(),
         "pm_configure_grants_enabled": pm_configure_grants_enabled(),
         "warehouse_archive_grants_enabled": warehouse_archive_grants_enabled(),
+        "warehouse_view_grants_enabled": warehouse_view_grants_enabled(),
+        "warehouse_upload_grants_enabled": warehouse_upload_grants_enabled(),
+        "warehouse_catalogs_grants_enabled": warehouse_catalogs_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
