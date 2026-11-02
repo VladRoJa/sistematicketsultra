@@ -98,3 +98,15 @@ Coinciden exactamente con los registros y suma de `file_size_bytes` para `wareho
 
 Este conteo **no** prueba correspondencia individual entre cada ID y ruta, SHA-256, ausencia de hardlinks/colisiones entre tipos ni restaurabilidad del respaldo. Mantener bloqueada cuarentena/migración/purga hasta verificar esos gates.
 
+## Gate de integridad física SHA-256 — PASS (2026-11-02)
+
+Prueba ejecutada en servidor mediante backend Flask y lectura de `warehouse_uploads`: cada upload de `corte_caja` se contrastó con su archivo físico, `file_size_bytes` y `file_hash_sha256` de PostgreSQL.
+
+```text
+REGISTROS: 2061
+HASHES_CORRECTOS: 2061
+ERRORES: 0
+DETALLE: []
+```
+
+**Dictamen:** correspondencia individual de los 2,061 archivos registrada, íntegra según los SHA-256 de Warehouse. Sin cambios de datos ni movimientos de archivos. Este PASS no sustituye la verificación de respaldo, restauración ni la inspección del entorno de ejecución para cuarentena.
