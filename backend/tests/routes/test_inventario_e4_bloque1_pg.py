@@ -1439,3 +1439,68 @@ def test_dos_hallazgos_distintos_generan_dos_e2_pendientes_sin_colision(api, mon
     assert _snapshot(app)["stock"] == before["stock"]
     assert _snapshot(app)["master"] == before["master"]
     assert _snapshot(app)["mov"] == before["mov"]
+
+
+def test_e4_hallazgo_codigo_duplicado_se_corrige_sin_duplicar_revision_y_exporta(api, monkeypatch):
+    """Caso real análogo: rack con código vigente y prensa nueva en HALLAZGOS."""
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(original_csv()), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    book = load_workbook(BytesIO(workbook(first="SI", second="SI", found=True)))
+    book["HALLAZGOS"]["A8"] = "07CA01"  # ocupado por #501 del corte
+    book["HALLAZGOS"]["B8"] = "Prensa Vertical"
+    book["HALLAZGOS"]["F8"] = "Nuevo aparato incorporado al piso durante el recorrido"
+    buf = BytesIO()
+    book.save(buf)
+    received = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(buf.getvalue()), "recibido.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    reviews = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    findings = [r for r in reviews["items"] if r["tipo"] == "UNREGISTERED_FIND"]
+    assert len(findings) == 1
+    rev = findings[0]
+    assert rev["estado"] == "BLOCKED" and rev["solicitud_e2_id"] is None
+    endpoint = f"{root}/{lev}/revisiones/{rev['id']}/corregir-hallazgo"
+    payload = {
+        "nuevo_codigo": "07NEW55", "motivo": "La Prensa Vertical requiere etiqueta propia.",
+        "idempotency_key": str(uuid4()),
+    }
+    assert client.post(endpoint, headers=tokens[2], json=payload).status_code == 403
+    conflict = client.post(endpoint, headers=tokens[1], json={**payload, "nuevo_codigo": "07CA01"})
+    assert conflict.status_code == 422 or conflict.status_code == 409
+    first = client.post(endpoint, headers=tokens[1], json=payload)
+    assert first.status_code == 201, first.get_json()
+    request_id = first.get_json()["correccion"]["solicitud_e2_id"]
+    assert client.post(endpoint, headers=tokens[1], json=payload).status_code == 200
+    assert client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["total"] == reviews["total"]
+    refreshed = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["items"]
+    assert next(r for r in refreshed if r["id"] == rev["id"])["estado"] == "AWAITING_E3"
+    with app.app_context():
+        assert db.session.execute(sa.text("""
+            SELECT hallazgo_provisional ->> 'codigo_interno'
+            FROM inventario_correccion_solicitudes WHERE id=:id
+        """), {"id": request_id}).scalar_one() == "07NEW55"
+        assert db.session.execute(sa.text("""
+            SELECT count(*) FROM inventario_levantamiento_revision_evidencias
+            WHERE revision_id=:rev AND valor_observado->>'evento'='CORRECCION_CODIGO_HALLAZGO'
+        """), {"rev": rev["id"]}).scalar_one() == 1
+        assert db.session.execute(sa.text("SELECT count(*) FROM inventario_general")).scalar_one() == 3
+    report = client.get(f"{root}/{lev}/reportes/cambios", headers=tokens[1])
+    assert report.status_code == 200
+    wb = load_workbook(BytesIO(report.data), read_only=True)
+    records = list(wb["CAMBIOS_Y_ETIQUETAS"].values)
+    assert any(row[8] == "07CA01" and row[9] == "07NEW55" and row[12] == "PENDIENTE"
+               for row in records[1:])
+    inventory = client.get(f"{root}/{lev}/reportes/existencias", headers=tokens[1])
+    assert inventory.status_code == 200
+    inv_book = load_workbook(BytesIO(inventory.data), read_only=True)
+    assert any(row[1] == 503 and row[6] == 0
+               for row in list(inv_book["EXISTENCIAS_OFICIALES"].values)[1:])
+    assert client.get(f"{root}/{lev}/reportes/cambios", headers=tokens[2]).status_code == 403
