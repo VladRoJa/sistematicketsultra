@@ -361,8 +361,10 @@ def recibir_excel(actor_id, levantamiento_id, key, filename, raw):
         # revisiones sin evidencia. El bloqueo del levantamiento serializa
         # cargas concurrentes de este ciclo.
         from app.services.inventario_levantamiento_revision_service import reconciliar_importacion
-        parsed["resumen"]["revisiones_auto"] = reconciliar_importacion(lev, imp, parsed, actor_id)
-        imp.resumen = parsed["resumen"]
+        revision_summary = reconciliar_importacion(lev, imp, parsed, actor_id)
+        # JSONB inmutable para SQLAlchemy: el objeto ya fue FLUSH en el INSERT.
+        # Reemplazar el dict asegura un UPDATE real, no una mutación invisible.
+        imp.resumen = {**parsed["resumen"], "revisiones_auto": revision_summary}
         if parsed["resultado"] != "INVALID":
             lev.ultima_importacion_id = imp.id
         db.session.commit()
