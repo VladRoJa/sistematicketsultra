@@ -1,6 +1,7 @@
 name: Permissions visual audit — read-only matrix
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "backend/app/routes/permissions_visual_audit_routes.py"
