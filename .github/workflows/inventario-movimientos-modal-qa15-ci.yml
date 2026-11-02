@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "frontend/src/app/inventario/movimientos/dialogo-registrar-movimiento/**"
+      - "frontend/src/app/inventario/movimientos/tipos-inventario.helper.ts"
       - "frontend/src/app/inventario/movimientos/movimientos.component.ts"
       - "frontend/tests/inventario-movimientos-modal-qa15.test.cjs"
       - ".github/workflows/inventario-movimientos-modal-qa15-ci.yml"
