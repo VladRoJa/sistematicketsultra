@@ -90,7 +90,7 @@ export class DialogoInventarioComponent implements OnInit {
       unidad_compra: [data?.item?.unidad_compra || ''],                // p.ej. "caja" (opcional)
       factor_compra: [
         data?.item?.factor_compra ?? 1,
-        [Validators.required, Validators.min(1)]
+        [Validators.required, Validators.min(1), Validators.pattern(/^[1-9]\\d*$/)]
       ],
 
        codigo_interno: [data?.item?.codigo_interno || ''],
@@ -136,6 +136,10 @@ export class DialogoInventarioComponent implements OnInit {
 
     if (!esAparato) {
       familiaCtrl?.setValue(null, { emitEvent: false });
+      this.form.get('grupo_muscular')?.setValue('', { emitEvent: false });
+    }
+    if (!esAparato && !esSistemaODispositivo) {
+      this.form.get('no_equipo')?.setValue('', { emitEvent: false });
     }
   }
 
