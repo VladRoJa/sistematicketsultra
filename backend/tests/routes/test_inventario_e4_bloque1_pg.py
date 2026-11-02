@@ -90,7 +90,12 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["v2e4b3103026"]
+    # E4 debe seguir en una sola cadena aunque otros módulos añadan migraciones.
+    head = script.get_current_head()
+    assert head is not None
+    assert script.get_revision("v2e4b3103026") in list(
+        script.iterate_revisions(head, "v2e4b2103026")
+    )
     assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
     assert script.get_revision("v2e4b2103026").down_revision == "n26c10202626"
     assert script.get_revision("v2e4b3103026").down_revision == "v2e4b2103026"
@@ -931,6 +936,120 @@ def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api, monkeypatch):
             " ORDER BY importacion_id"
         )).scalars().all()
         assert len(ids) == 2 and len(set(ids)) == 2
+
+
+
+
+def test_sustitucion_e2_rechazada_reutiliza_revision_y_audita_sin_v1(api, monkeypatch):
+    """No enmendar E2 PENDING: rechazo formal, sustitución única y E3 independiente."""
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    # Test aislado: referencia con prefijo antiguo pero el aparato sí existe.
+    with app.app_context():
+        with db.engine.begin() as con:
+            con.execute(sa.text(
+                "UPDATE inventario_general SET codigo_interno='05EL01' WHERE id=502"
+            ))
+        db.session.remove()
+    cut = original_csv().replace(b"07EL01", b"05EL01")
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()), "baseline_csv": (BytesIO(cut), "corte.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    first = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(workbook(first="SI", second="SI", code="05EL01", found=False)),
+                 "recepcion.xlsx"),
+    })
+    assert first.status_code == 201, first.get_json()
+    lista = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert lista["total"] == 1, lista
+    rev = lista["items"][0]
+    assert rev["tipo"] == "MASTER_FIELD" and rev["inventario_id"] == 502
+    sid = rev["solicitud_e2_id"]
+    assert sid
+    with app.app_context():
+        old = db.session.execute(sa.text(
+            "SELECT valor_propuesto FROM inventario_correccion_solicitudes WHERE id=:id"
+        ), {"id": sid}).scalar_one()
+        assert old == "07EL01"
+    path = f"{root}/{lev}/revisiones/{rev['id']}/sustituir-e2"
+    key = str(uuid4())
+    payload = {
+        "idempotency_key": key,
+        "nuevo_codigo": "07EL04",
+        "motivo": "La etiqueta física verificada tiene terminación 04, no 01",
+    }
+    before = _snapshot(app)
+    unauthorized = client.post(path, headers=tokens[2], json=payload)
+    assert unauthorized.status_code == 403
+    not_rejected = client.post(path, headers=tokens[1], json=payload)
+    assert not_rejected.status_code == 409
+    assert not_rejected.get_json()["error"] == "RECHAZO_E3_REQUERIDO"
+    with app.app_context():
+        # Simula solo el estado resultante de decisión E3; las pruebas E3
+        # verifican por separado firma/actor/auditoría de esa operación.
+        with db.engine.begin() as con:
+            con.execute(sa.text("""
+                UPDATE inventario_correccion_solicitudes
+                SET estado='REJECTED' WHERE id=:id
+            """), {"id": sid})
+        db.session.remove()
+    wrong_branch = client.post(path, headers=tokens[1], json={
+        **payload, "idempotency_key": str(uuid4()), "nuevo_codigo": "08EL04",
+    })
+    assert wrong_branch.status_code == 422
+    conflict = client.post(path, headers=tokens[1], json={
+        **payload, "idempotency_key": str(uuid4()), "nuevo_codigo": "07CA01",
+    })
+    assert conflict.status_code == 409
+    assert conflict.get_json()["error"] == "PROPUESTA_NO_ADMISIBLE"
+    done = client.post(path, headers=tokens[1], json=payload)
+    assert done.status_code == 201, done.get_json()
+    subst = done.get_json()["sustitucion"]
+    assert subst["solicitud_anterior_id"] == sid
+    assert subst["codigo_nuevo"] == "07EL04"
+    nueva_id = subst["solicitud_nueva_id"]
+    assert nueva_id != sid
+    replay = client.post(path, headers=tokens[1], json=payload)
+    assert replay.status_code == 200
+    assert replay.get_json()["replayed"] is True
+    assert replay.get_json()["sustitucion"] == subst
+    clash = client.post(path, headers=tokens[1], json={**payload, "nuevo_codigo": "07EL05"})
+    assert clash.status_code == 409
+    assert clash.get_json()["error"] == "IDEMPOTENCIA_CONFLICTO"
+
+    revised = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert revised["total"] == 1
+    assert revised["items"][0]["id"] == rev["id"]
+    assert revised["items"][0]["solicitud_e2_id"] == nueva_id
+    assert revised["items"][0]["estado"] == "AWAITING_E3"
+    with app.app_context():
+        statuses = db.session.execute(sa.text("""
+            SELECT id, estado, valor_propuesto
+            FROM inventario_correccion_solicitudes WHERE id IN (:old, :new)
+            ORDER BY id
+        """), {"old": sid, "new": nueva_id}).all()
+        assert statuses == [(sid, "REJECTED", "07EL01"), (nueva_id, "PENDING", "07EL04")]
+        events = db.session.execute(sa.text("""
+            SELECT valor_observado FROM inventario_levantamiento_revision_evidencias
+            WHERE revision_id=:rev AND valor_observado->>'evento'='SUSTITUCION_E2'
+        """), {"rev": rev["id"]}).scalars().all()
+        assert len(events) == 1
+        assert events[0]["solicitud_anterior_id"] == sid
+        assert events[0]["solicitud_nueva_id"] == nueva_id
+        assert events[0]["motivo"] == payload["motivo"]
+    after = _snapshot(app)
+    assert after["e2"] == before["e2"] + 1
+    assert after["stock"] == before["stock"]
+    assert after["master"] == before["master"]
+    assert after["mov"] == before["mov"]
+    board = client.get(f"{root}/{lev}/conciliacion", headers=tokens[1]).get_json()
+    assert board["puede_cerrar"] is False
+    assert "REVISIONES_SIN_AUTORIZACION" in board["bloqueos"]
 
 
 def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api, monkeypatch):
