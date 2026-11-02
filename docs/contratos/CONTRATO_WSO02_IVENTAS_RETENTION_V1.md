@@ -43,3 +43,34 @@ No implementar todavía un job de borrado ni una migración: primero resolver la
 
 ## Referencia histórica (no reconfirmada en este diagnóstico)
 Se estimaron ~12 GB para iVentas, 5 corridas canónicas y 359 no canónicas; esos números deben validarse contra PostgreSQL actual antes de cualquier conclusión sobre ahorro.
+
+## Diagnóstico productivo de solo lectura — 2026-11-02
+
+Resultados comunicados del SQL WSO-02, sin modificaciones:
+
+| Tabla | Total | Heap | Índices | TOAST y otros |
+|---|---:|---:|---:|---:|
+| `marketing_iventas_contacts` | **12 GB** | 7,394 MB | **4,855 MB** | 2,104 kB |
+| `marketing_iventas_raw_pages` | 1,024 MB | 49 MB | 18 MB | 957 MB |
+| `marketing_iventas_contact_tags` | 628 MB | 339 MB | 289 MB | 128 kB |
+| `marketing_iventas_sync_runs` | 192 kB | 64 kB | 96 kB | 32 kB |
+| `marketing_iventas_branch_failures` | 8,192 bytes | 0 bytes | 8,192 bytes | 0 |
+
+Las ~16,948,868 filas de contactos reportadas por `pg_class.reltuples` son una **estimación de estadísticas**. El inventario de 365 corridas es exacto:
+
+- 5 canónicas, con suma de contador `contacts_unique` de 414,324.
+- 69 últimas completadas por corte (excluyendo las canónicas), con contador 3,424,420.
+- 216 `COMPLETED` desplazadas para la misma clave de corte; contador 11,038,412.
+- 75 `FAILED/PARTIAL`; contador 2,213,736.
+- Canónicos actuales: `IVENTAS-2026-07` hasta `IVENTAS-2026-11`, una corrida por mes.
+- Solo cuatro FKs internas: tags → contacts, raw pages/contacts/branch failures → sync runs. **Esto NO demuestra ausencia de referencias lógicas.**
+
+### Referencia lógica encontrada que exige protección
+
+`contact_center_contact_links` guarda `source_type='IVENTAS_CONTACT'` y `source_row_id` sin FK hacia `marketing_iventas_contacts.id`; `contact_center_iventas_reconciliation_service.py` escribe esos IDs. Además `contact_center_service.py` puede consultar contactos por ID puntual. El borrado de contactos con vínculos así podría dejar identidades de CRM incongruentes aun sin error SQL. El diagnóstico ampliado 7 clasifica **`PROTECTED_CONTACT_CENTER`** para toda corrida que contenga alguna referencia lógica vigente.
+
+Los 216 `SUPERSEDED_COMPLETED_REVIEW` son **candidatos de análisis**, no todavía autorización de `DELETE`. El conteo exacto de filas persistidas por bucket y la dimensión de referencias lógicas se obtendrán del diagnóstico ampliado. Las 75 incompletas se mantienen en revisión separada para no borrar evidencia de fallos operativos.
+
+### Espacio físico: advertencia operativa
+
+Eliminar filas de PostgreSQL por `DELETE` **no equivale a liberar inmediatamente bytes a `df -h`**. `VACUUM` normal recupera espacio *internamente* para reutilizar; reducir archivos físicos de la tabla y sus índices requiere una estrategia adicional como reescritura controlada (`VACUUM FULL` con bloqueo fuerte) u otra opción respaldada por extensiones. No programar estas acciones sin medición, plan de bloqueo, espacio temporal y compatibilidad. WSO-02 no debe prometer recuperar 12 GB solo por eliminar 216 corridas.
