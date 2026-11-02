@@ -669,6 +669,24 @@ def _ticket_update_metadata_requested(data) -> bool:
     )
 
 
+def tickets_close_grants_enabled() -> bool:
+    """Veto opcional de tres operaciones de cierre; no modifica rechazos."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_close_grant_denied(user) -> bool:
+    """DENY de cierre; ALLOW no reemplaza jefatura, scope ni doble check."""
+    return (
+        user is not None
+        and tickets_close_grants_enabled()
+        and _ticket_action_grant_denied(user, "tickets.close")
+    )
+
+
 def tickets_notify_grants_enabled() -> bool:
     """Check de notificación; OFF mantiene el guard JWT y scope legacy."""
     from flask import has_app_context
@@ -2964,6 +2982,9 @@ def cierre_gerente_desde_cero(ticket_id):
         if not user:
             return jsonify({"mensaje": "Usuario no encontrado"}), 404
 
+        if _ticket_close_grant_denied(user):
+            return jsonify({"mensaje": "No autorizado para cerrar tickets."}), 403
+
         t = Ticket.query.get(ticket_id)
         if not t:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
@@ -3054,11 +3075,14 @@ def cierre_gerente_desde_cero(ticket_id):
 @jwt_required()
 def cierre_solicitar(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 401
+    if _ticket_close_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para solicitar cierre de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
-    if not user:
-        return jsonify({"mensaje": "Usuario no encontrado"}), 401
 
     if t.departamento_id == 1:
         # El usuario 45 conserva cierre legacy SIN responsable, con alcance
@@ -3217,6 +3241,9 @@ def cierre_rechazar_jefe(ticket_id):
 @jwt_required()
 def cierre_aceptar_creador(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if _ticket_close_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para aceptar cierre de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje": "Ticket no encontrado"}), 404
