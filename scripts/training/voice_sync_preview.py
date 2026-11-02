@@ -34,7 +34,14 @@ NARRATION_MARGIN_SECONDS = 0.22
 
 
 def run(args: list[str]) -> str:
-    process = subprocess.run(args, capture_output=True, text=True, check=True)
+    # Sólo comandos de FFmpeg/FFprobe y frases sintéticas. No hay credenciales
+    # ni URLs privadas en los argumentos que se usan en este experimento.
+    process = subprocess.run(args, capture_output=True, text=True)
+    if process.returncode:
+        raise RuntimeError(
+            f"{args[0]} falló (código {process.returncode}): "
+            + process.stderr[-3500:]
+        )
     return process.stdout.strip()
 
 
