@@ -20,7 +20,9 @@ from app.services.inventario_levantamiento_conciliacion_service import (
     tablero_e4, cerrar_e4,
 )
 
-from app.services.inventario_levantamiento_revision_service import listado_revisiones
+from app.services.inventario_levantamiento_revision_service import (
+    listado_revisiones, sustituir_propuesta_maestra,
+)
 
 inventario_levantamientos_bp = Blueprint("inventario_levantamientos", __name__)
 
@@ -222,6 +224,22 @@ def consultar_revisiones_automaticas(levantamiento_id):
             or not 1 <= int(raw_size) <= 100):
         raise E4Error(400, "PAGINACION_INVALIDA", "Paginación inválida")
     return jsonify(listado_revisiones(levantamiento_id, int(raw_page), int(raw_size))), 200
+
+
+@inventario_levantamientos_bp.post("/<int:levantamiento_id>/revisiones/<int:revision_id>/sustituir-e2")
+@jwt_required()
+def sustituir_propuesta_e4(levantamiento_id, revision_id):
+    """Solo administrador E4, después del rechazo formal E3 del E2 anterior."""
+    actor_id = _actor()
+    try:
+        resultado, replay = sustituir_propuesta_maestra(
+            levantamiento_id, revision_id, actor_id, request.get_json(silent=True),
+        )
+    except IntegrityError:
+        db.session.rollback()
+        raise E4Error(409, "CONFLICTO_CONCURRENTE",
+                      "La solicitud cambió durante la sustitución; actualiza la revisión")
+    return jsonify({"sustitucion": resultado, "replayed": replay}), 200 if replay else 201
 
 
 @inventario_levantamientos_bp.get("/<int:levantamiento_id>/conciliacion")
