@@ -271,3 +271,19 @@ def test_bounded_batches_resume_without_reprocessing_prior_runs(monkeypatch, tmp
     assert [r["runs_remaining_in_manifest"] for r in results] == [2, 1, 0]
     assert states == {1: True, 2: True, 3: True}
     assert seen == [1, 1, 2, 1, 2, 3]
+
+
+def test_campaign_secondary_metadata_pin_not_masked_by_unrelated_primary(pg):
+    # Campaign records may contain both JSON locations. A different primary
+    # source must not hide a matching secondary source for the same run.
+    with pg.begin() as conn:
+        conn.exec_driver_sql("""
+            UPDATE public.marketing_campaign_v2_campaigns
+               SET audience_definition_json =
+                   '{"source_metadata":{"iventas_sync_run_id":999},'
+                   '"sources":{"iventas_sync_run_id":8}}'
+             WHERE id = 1
+        """)
+    with pg.connect() as conn:
+        assert conn.execute(text(prune.ELIGIBLE_SQL), {"id": 8}).scalar_one_or_none() is None
+        assert all(item["id"] != 8 for item in prune._manifest_rows(conn))
