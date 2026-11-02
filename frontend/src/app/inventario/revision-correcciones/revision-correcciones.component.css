@@ -7,7 +7,7 @@
 .revision-etiqueta { color: #31719e; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; }
 .revision-filtros { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 26px; background: #f8fbff; }
 .revision-filtros label, .revision-modal label { display: flex; flex-direction: column; gap: 6px; color: #465e78; font-size: 12px; font-weight: 750; }
-.revision-filtros select, .revision-modal textarea, .revision-modal input[type='number'] { width: 100%; padding: 10px 11px; border: 1px solid #cddce9; border-radius: 8px; font: inherit; font-size: 13px; color: #203956; background: white; box-sizing: border-box; }
+.revision-filtros select, .revision-modal textarea, .revision-modal input[type='number'], .revision-modal input[type='text'], .revision-modal select { width: 100%; padding: 10px 11px; border: 1px solid #cddce9; border-radius: 8px; font: inherit; font-size: 13px; color: #203956; background: white; box-sizing: border-box; }
 .revision-filtros label { min-width: 190px; flex: 1; }
 .revision-bandeja { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
 .revision-bandeja__cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 13px 26px; border-bottom: 1px solid #e9eef5; font-size: 12px; color: #6b8197; }
