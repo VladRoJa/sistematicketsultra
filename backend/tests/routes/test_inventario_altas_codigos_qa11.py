@@ -247,9 +247,17 @@ def test_editar_asigna_categoria_oficial_sin_perder_codigo(entorno):
                 "codigo_interno": "CAPV1-TPZ05",
                 "categoria": "No oficial",
                 "categoria_inventario_id": 88,
+                "grupo_muscular": "Pierna",
+                "unidad_compra": "Caja",
+                "factor_compra": 6,
+                "no_equipo": "CAP05",
             },
         )
     assert resp.status_code == 200
     assert viejo.categoria_inventario_id == 88
     assert viejo.categoria == "Fuerza oficial"
+    assert viejo.grupo_muscular == "Pierna"
+    assert viejo.no_equipo == "CAP05"
+    assert viejo.unidad_compra == "Caja"
+    assert viejo.factor_compra == 6
     assert sesiones.commit.call_count == 1
