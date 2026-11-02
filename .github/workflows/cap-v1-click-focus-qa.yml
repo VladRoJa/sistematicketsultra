@@ -39,4 +39,5 @@ jobs:
           if-no-files-found: error
           path: |
             artifacts/capacitacion/click-focus-qa/clicks-y-foco-sintetico.mp4
+            artifacts/capacitacion/click-focus-qa/flecha-antes-del-clic.png
             artifacts/capacitacion/click-focus-qa/qa.json
