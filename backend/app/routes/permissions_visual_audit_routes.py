@@ -20,6 +20,7 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
+from app.routes.inventarios import inventory_master_write_grants_enabled
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
     tickets_update_status_grants_enabled,
@@ -261,7 +262,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write"}
     }
     for grant in query.all():
         principal = (
@@ -528,6 +529,15 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_cierre_sin_omitir_validaciones_por_ticket"
             catalog_source = "tickets_close_grant_operativo"
             catalog_reason = "check_veta_cierre_no_autoriza_objeto"
+    if action.full_key == "inventory.master_write" and inventory_master_write_grants_enabled():
+        # Un DENY veta; un ALLOW mantiene el requisito del rol global.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            legacy = bool(legacy) and candidate.effect == "allow"
+            catalog_allowed = legacy
+            legacy_source = "inventarios._require_inventory_global_write+grant"
+            legacy_reason = "veto_inventario_maestro_preserva_rol_legacy"
+            catalog_source = "inventory_master_write_grant_operativo"
+            catalog_reason = "check_global_no_eleva_roles_ni_evade_validaciones"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -707,6 +717,7 @@ def visual_audit_matrix():
         "tickets_notify_grants_enabled": tickets_notify_grants_enabled(),
         "tickets_update_grants_enabled": tickets_update_grants_enabled(),
         "tickets_close_grants_enabled": tickets_close_grants_enabled(),
+        "inventory_master_write_grants_enabled": inventory_master_write_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
