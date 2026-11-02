@@ -1251,7 +1251,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1400,6 +1400,16 @@ def update_user_module_access(user_id: int):
                 return jsonify({
                     "error": "Conflict",
                     "detail": "El check de programación PM no está habilitado en backend.",
+                    "module_key": module_key,
+                    "action_full_key": action_full_key,
+                }), 409
+
+        if module_key == "warehouse" and action_full_key == "warehouse.archive":
+            from app.utils.warehouse_access import warehouse_archive_grants_enabled
+            if not warehouse_archive_grants_enabled():
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El check de archivar Warehouse no está habilitado en backend.",
                     "module_key": module_key,
                     "action_full_key": action_full_key,
                 }), 409
