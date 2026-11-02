@@ -36,4 +36,6 @@ test('Alta del maestro no ofrece Aparato y Aparatos separados', () => {
   const source = fs.readFileSync(path.join(base, 'dialogo-inventario/dialogo-inventario.component.ts'), 'utf8');
   assert.match(source, /normalizarTipoInventario\(tipo\.nombre\)/);
   assert.match(source, /opciones\.has\(nombre\)/);
+  assert.match(source, /tipo:\s*\[this\.tipoParaSelector\(data\?\.item\?\.tipo\)/,
+    'El modo edición debe reconocer Aparato legado en la opción Aparatos');
 });
