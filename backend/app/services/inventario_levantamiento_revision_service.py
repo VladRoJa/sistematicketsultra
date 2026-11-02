@@ -529,6 +529,24 @@ def reconciliar_importacion(lev, imp, parsed, actor):
         revision.logical_key: revision
         for revision in Revision.query.filter_by(levantamiento_id=lev.id).all()
     }
+    # Si la siguiente entrega usa ya la etiqueta corregida, conservar la
+    # misma revisión lógica y E2, no crear otro hallazgo por cambio de hash.
+    corregidas = {}
+    for rev in actuales.values():
+        if rev.tipo != "UNREGISTERED_FIND" or rev.estado == "SUPERSEDED":
+            continue
+        events = Evidencia.query.filter_by(revision_id=rev.id).all()
+        if any((event.valor_observado or {}).get("evento") == "CORRECCION_CODIGO_HALLAZGO"
+               for event in events):
+            corregidas.setdefault(norm(rev.codigo_observado).upper(), []).append(rev)
+    for nueva_clave, caso in list(casos.items()):
+        if caso["tipo"] != "UNREGISTERED_FIND" or nueva_clave in actuales:
+            continue
+        matches = corregidas.get(norm(caso["codigo"]).upper(), [])
+        if (len(matches) == 1 and matches[0].logical_key not in casos):
+            del casos[nueva_clave]
+            caso["clave"] = matches[0].logical_key
+            casos[caso["clave"]] = caso
     nuevos = reutilizados = bloqueados = e2_creadas = 0
     presentes = set()
     for clave, caso in sorted(casos.items()):
