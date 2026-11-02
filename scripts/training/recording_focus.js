@@ -2,6 +2,7 @@
 (() => {
   if (window.__capV1FocusRecorder) return;
   const interactions = [];
+  let previewCounter = 0;
   const W = window;
   let spotlight, targetBox, pointer, pulse, cue, dismissTimer, watchTimer, selectedElement;
   const now = () => Math.round(performance.now());
@@ -127,6 +128,7 @@
       Math.max(8, rect.y - 66)) + 'px';
     cue.classList.toggle('cap-v1-cue-below', below);
     cue.classList.add('cap-v1-visible');
+    previewCounter += 1;
     return true;
   };
   window.__capV1FocusRecorder = {
@@ -134,6 +136,7 @@
     ready: () => !!document.getElementById('cap-v1-recording-overlay'),
     preview,
     cueVisible: () => !!cue?.classList.contains('cap-v1-visible'),
+    previewCount: () => previewCounter,
   };
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, {once: true});
