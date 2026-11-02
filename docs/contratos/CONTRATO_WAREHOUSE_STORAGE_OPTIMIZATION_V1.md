@@ -110,3 +110,17 @@ DETALLE: []
 ```
 
 **Dictamen:** correspondencia individual de los 2,061 archivos registrada, íntegra según los SHA-256 de Warehouse. Sin cambios de datos ni movimientos de archivos. Este PASS no sustituye la verificación de respaldo, restauración ni la inspección del entorno de ejecución para cuarentena.
+
+## Decisión operativa del propietario — sin respaldo completo nuevo (2026-11-02)
+
+El propietario informó que **no ejecutará un nuevo respaldo completo de PostgreSQL**, por costo de tiempo. No reintentar automáticamente `pg_basebackup` ni sustituirlo por otro backup sin pedirlo.
+
+**Evidencia de estado real del respaldo existente:**
+- `cron` root: `15 2 * * * /usr/local/bin/backup_postgres.sh`.
+- Backups locales más recientes listados: 2026-09-24, 2026-09-23 y 2026-09-22; no hay copia reciente confirmada.
+- Log 2026-11-01 y 2026-11-02: servidor PostgreSQL 15, tamaño lógico de todas las BD ~56 GB, espacio libre ~70 GB; `backup_postgres.sh` exige ~122 GB y falla antes de crear la copia.
+- La existencia de backups antiguos no acredita posibilidad de recuperar datos modificados desde septiembre.
+
+**Consecuencia:** el retiro de archivos por *cuarentena* sigue siendo reversible sin duplicar los 5.96 GB. En cambio, el `upgrade` Alembic borra definitivamente los 7.4 GB estructurados, 2,061 metadatos y 2,084 auditorías; no hay recuperación completa reciente demostrada. La validación 2061/2061 SHA-256 y CI no reemplazan respaldo de base de datos.
+
+**Control de ejecución:** la negativa a hacer respaldo no equivale a afirmar que la operación es reversible. Mantener **sin ejecutar la migración destructiva ni `purge`** hasta registrar autorización expresa para asumir pérdida irreversible del histórico de Corte de Caja *sin copia recuperable actual*. No alterar ni deshabilitar el cron de backup como parte de WSO-01; su fallo recurrente merece seguimiento operativo separado.
