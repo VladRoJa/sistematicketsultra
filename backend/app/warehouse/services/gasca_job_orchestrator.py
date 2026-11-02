@@ -49,12 +49,12 @@ RUN_MODE_COMPATIBILITY: dict[str, set[str]] = {
         "manual_backfill",
         "manual_retry",
     },
-        "cargos_recurrentes": {
+    "cargos_recurrentes": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
     },
-        "venta_total": {
+    "venta_total": {
         "scheduled_daily",
         "manual_backfill",
         "manual_retry",
@@ -512,7 +512,7 @@ def _dispatch_ingestion_if_applicable(
 
         return ingestion_result
     
-        if command.report_type_key == "venta_total":
+    if command.report_type_key == "venta_total":
         ingestor = _get_required_callable(
             "WAREHOUSE_VENTA_TOTAL_INGESTOR",
             description="ingerir estructuradamente venta_total",
