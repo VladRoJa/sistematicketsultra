@@ -26,6 +26,7 @@ on:
       - "backend/tests/routes/test_permissions_pm_configure_1181.py"
       - "backend/app/utils/warehouse_access.py"
       - "backend/tests/routes/test_permissions_warehouse_archive_1181.py"
+      - "backend/tests/routes/test_permissions_warehouse_bundle_1181.py"
       - "backend/app/config.py"
       - "backend/tests/routes/test_permissions_live_track_read_check.py"
       - "backend/tests/routes/test_permissions_action_writer_1178.py"
@@ -114,6 +115,7 @@ jobs:
             tests/routes/test_permissions_pm_validate_1181.py \
             tests/routes/test_permissions_pm_configure_1181.py \
             tests/routes/test_permissions_warehouse_archive_1181.py \
+            tests/routes/test_permissions_warehouse_bundle_1181.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
