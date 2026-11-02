@@ -53,6 +53,10 @@ export class LevantamientosComponent implements OnInit {
   revisionesAutomaticas: ListaRevisionesE4 | null = null;
   paginaRevisiones = 1;
   sustitucionActiva: RevisionAutomaticaE4 | null = null;
+  correccionHallazgoActiva: RevisionAutomaticaE4 | null = null;
+  codigoCorregidoHallazgo = '';
+  motivoCodigoHallazgo = '';
+  private correccionHallazgoKey: string | null = null;
   codigoSustituto = '';
   motivoSustitucion = '';
   private sustitucionKey: string | null = null;
@@ -227,6 +231,7 @@ export class LevantamientosComponent implements OnInit {
     this.revisionesAutomaticas = null;
     this.paginaRevisiones = 1;
     this.casoActivo = null;
+    this.correccionHallazgoActiva = null;
     this.motivoCierre = '';
     this.confirmoCierre = false;
     this.e4.detalle(id).subscribe({
