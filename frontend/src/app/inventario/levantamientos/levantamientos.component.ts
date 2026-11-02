@@ -356,6 +356,35 @@ export class LevantamientosComponent implements OnInit {
     });
   }
 
+  abrirCorreccionHallazgo(row: RevisionAutomaticaE4): void {
+    if (this.procesando || this.seleccionado?.estado === 'CLOSED' ||
+        row.tipo !== 'UNREGISTERED_FIND' || row.estado !== 'BLOCKED' ||
+        row.solicitud_e2_id !== null) return;
+    this.correccionHallazgoActiva = row;
+    this.codigoCorregidoHallazgo = '';
+    this.motivoCodigoHallazgo = '';
+    this.correccionHallazgoKey = null;
+  }
+
+  cancelarCorreccionHallazgo(): void {
+    if (this.procesando) return;
+    this.correccionHallazgoActiva = null;
+    this.correccionHallazgoKey = null;
+  }
+
+  cambioCodigoHallazgo(): void {
+    this.correccionHallazgoKey = null;
+  }
+
+  get puedeCorregirHallazgo(): boolean {
+    return !this.procesando && !!this.seleccionado &&
+      this.seleccionado.estado !== 'CLOSED' && !!this.correccionHallazgoActiva &&
+      this.correccionHallazgoActiva.estado === 'BLOCKED' &&
+      /^[A-Z0-9][A-Z0-9-]{0,49}$/.test(this.codigoCorregidoHallazgo.trim()) &&
+      this.motivoCodigoHallazgo.trim().length >= 20 &&
+      this.motivoCodigoHallazgo.trim().length <= 1000;
+  }
+
   abrirSustitucion(row: RevisionAutomaticaE4): void {
     if (this.procesando || this.seleccionado?.estado === 'CLOSED'
         || row.tipo !== 'MASTER_FIELD' || row.campo !== 'codigo_interno'
