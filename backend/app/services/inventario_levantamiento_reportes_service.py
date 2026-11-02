@@ -68,6 +68,16 @@ def _changes(lev):
         item.id: item for item in
         Solicitud.query.filter(Solicitud.id.in_(sol_ids)).all()
     } if sol_ids else {}
+    decisions = {}
+    if sol_ids:
+        decisions = {
+            item["solicitud_id"]: item for item in db.session.execute(text("""
+                SELECT solicitud_id, actor_usuario_id, decidido_en_utc, motivo_decision
+                FROM inventario_correccion_decisiones
+                WHERE solicitud_id IN :ids
+            """).bindparams(__import__("sqlalchemy").bindparam("ids", expanding=True)),
+            {"ids": sol_ids}).mappings().all()
+        }
     original_codes = {}
     for r in revisions:
         history = (Evidencia.query.filter_by(revision_id=r.id)
@@ -125,11 +135,13 @@ def _changes(lev):
         stage = "AUTORIZADO" if valid_effect else "PENDIENTE"
         observed = r.ultimo_valor or {}
         name = (master["nombre"] if master else str(observed.get("aparato") or ""))
+        approved_by = decisions.get(r.solicitud_e2_id)
         rows.append([
             lev.sucursal_id, lev.id, r.id, r.solicitud_e2_id or "",
             resolved_id or "", name, r.tipo, action, old_code,
             effect_code, code, current_stock, stage,
-            s.creado_por_usuario_id if s else "",
+            approved_by["actor_usuario_id"] if approved_by else "",
+            (approved_by["decidido_en_utc"].isoformat() if approved_by else ""),
             "NO APLICAR HASTA AUTORIZAR" if stage != "AUTORIZADO"
             else ("SIN REETIQUETADO" if action == "BAJA_EXISTENCIA"
                   else "VERIFICAR/COLOCAR ETIQUETA EN PISO"),
@@ -167,7 +179,8 @@ def generar_reporte_e4(levantamiento_id, tipo):
             "Inventario oficial ID", "Aparato", "Tipo de revisión", "Acción",
             "Código observado en corte/Excel", "Código propuesto/autorizado",
             "Código oficial actual", "Existencia oficial actual", "Estado de decisión",
-            "Autor solicitud E2", "Instrucción para sucursal", "Etiqueta verificada físicamente (SI/NO)"
+            "Autorizó E3 (usuario)", "Fecha decisión E3 UTC",
+            "Instrucción para sucursal", "Etiqueta verificada físicamente (SI/NO)"
         ], _changes(lev), confirmacion=True)
     else:
         rows = db.session.execute(text("""
