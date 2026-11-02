@@ -491,6 +491,68 @@ def test_recepcion_unica_resuelve_sucursal_y_corte_sin_ids_ni_csv_por_carga(api)
     assert ambiguo.get_json()["error"] == "CORTE_AMBIGUO"
 
 
+def test_recepcion_folio_preliminar_distribuido_v02_sin_bypass_ambiguo(api):
+    """El folio preliminar real identifica UN corte previamente registrado."""
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    endpoint = root + "/recepciones"
+    libro = load_workbook(BytesIO(workbook(
+        first="SI", second="SI", found=False,
+        version="v0.2 · base CSV 2026-10-28",
+    )))
+    libro["CONTROL"]["C9"] = "PRELIMINAR · SIN FOLIO E4"
+    output = BytesIO()
+    libro.save(output)
+    raw = output.getvalue()
+
+    missing = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert missing.status_code == 409
+    assert missing.get_json()["error"] == "CORTE_NO_REGISTRADO"
+
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "corte_original.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+    before = _snapshot(app)
+    received = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    assert received.get_json()["levantamiento_id"] == lev
+    assert received.get_json()["importacion"]["control"]["folio_declarado"] == (
+        "PRELIMINAR · SIN FOLIO E4"
+    )
+    assert _snapshot(app) == before
+
+    # Folios ajenos no pueden adivinar el ciclo aunque sea el único.
+    libro["CONTROL"]["C9"] = "OTRO-FOLIO-123"
+    unknown = BytesIO()
+    libro.save(unknown)
+    rejected = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(unknown.getvalue()), "otro.xlsx"),
+    })
+    assert rejected.status_code == 422
+    assert rejected.get_json()["error"] == "FOLIO_NO_RECONOCIDO"
+
+    # Ni siquiera el marcador preliminar elige un ciclo arbitrario.
+    second_cycle = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "7", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(original_csv()), "segundo_corte.csv"),
+    })
+    assert second_cycle.status_code == 201
+    ambiguous = client.post(endpoint, headers=tokens[1], data={
+        "idempotency_key": str(uuid4()), "file": (BytesIO(raw), "preliminar.xlsx"),
+    })
+    assert ambiguous.status_code == 409
+    assert ambiguous.get_json()["error"] == "CORTE_AMBIGUO"
+
+
 def test_inicial_restringido_y_evidencia_persistente(api):
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
@@ -889,11 +951,12 @@ def test_auto_revisiones_sin_evidencia_se_bloquean_sin_e2(api, monkeypatch):
     assert _snapshot(app) == before
 
 
-def test_auto_e2_jamas_se_activa_fuera_is_demo_ni_sin_flag(api, monkeypatch):
-    """Aunque el flag esté ON, una sucursal operativa real nunca crea E2."""
+def test_auto_e2_jamas_se_activa_sin_habilitacion_productiva(api, monkeypatch):
+    """El flag DEMO jamás activa una sucursal real sin su flag separado."""
     client, tokens, app = api
     root = "/api/inventario/levantamientos"
     monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED", raising=False)
     # En este esquema QA la sucursal 6 es NO demo.
     created = client.post(root, headers=tokens[1], data={
         "sucursal_id": "6", "origen_corte": "INICIAL",
@@ -916,7 +979,7 @@ def test_auto_e2_jamas_se_activa_fuera_is_demo_ni_sin_flag(api, monkeypatch):
         "motivo": "Intento de cierre de sucursal que no es demo",
     })
     assert cierre.status_code == 409
-    assert cierre.get_json()["error"] == "PILOTO_DEMO_NO_HABILITADO"
+    assert cierre.get_json()["error"] == "E4_AUTO_REVIEW_NO_HABILITADO"
 
     # Y sin el flag ni siquiera la sucursal demo puede generar revisiones.
     monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", raising=False)
@@ -935,6 +998,110 @@ def test_auto_e2_jamas_se_activa_fuera_is_demo_ni_sin_flag(api, monkeypatch):
     assert no_flag.get_json()["importacion"]["resumen"]["revisiones_auto"]["auto_revisiones_habilitadas"] is False
     assert client.get(f"{root}/{demo_id}/revisiones", headers=tokens[1]).get_json()["total"] == 0
     assert _snapshot(app) == before
+
+
+def test_auto_e4_produccion_opt_in_genera_e2_pendiente_sin_autorizacion(api, monkeypatch):
+    """Gate real genérico: no hardcode de sucursal, E3 manda, DEMO aislado."""
+    from app.services.inventario_levantamiento_revision_service import e4_auto_enabled
+
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", raising=False)
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED", raising=False)
+    client, tokens, app = api
+    root = "/api/inventario/levantamientos"
+    with app.app_context():
+        assert not e4_auto_enabled(6)
+        assert not e4_auto_enabled(7)
+        assert not e4_auto_enabled(9999)
+
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED", "true")
+    with app.app_context():
+        assert e4_auto_enabled(6)
+        assert not e4_auto_enabled(7)  # Activar real NO habilita DEMO.
+        with db.engine.begin() as con:
+            con.exec_driver_sql("""
+                INSERT INTO inventario_general (id,codigo_interno,tipo,nombre,marca)
+                VALUES (604,'06EL01','APARATOS','Eliptica','Precor')
+            """)
+            con.exec_driver_sql(
+                "INSERT INTO inventario_sucursal VALUES (604,6,1)"
+            )
+        db.session.remove()
+
+    csv_corte = (
+        "sucursal_id,sucursal,inventario_id,codigo_interno,categoria,aparato,marca,stock_sistema_qa\n"
+        "6,San Luis,604,06EL01,Cardio,Eliptica,Precor,1\n"
+    ).encode()
+    created = client.post(root, headers=tokens[1], data={
+        "sucursal_id": "6", "origen_corte": "CSV_HISTORICO",
+        "cycle_key": str(uuid4()),
+        "baseline_csv": (BytesIO(csv_corte), "corte_distribuido.csv"),
+    })
+    assert created.status_code == 201, created.get_json()
+    lev = created.get_json()["levantamiento"]["id"]
+
+    libro = load_workbook(BytesIO(workbook(branch=6, found=False)))
+    aparatos = libro["APARATOS"]
+    aparatos.delete_rows(9)
+    aparatos["A8"] = 604
+    aparatos["B8"] = "06EL01"
+    aparatos["C8"] = "Cardio"
+    aparatos["D8"] = "Eliptica"
+    aparatos["E8"] = "Precor"
+    aparatos["F8"] = "NO"
+    aparatos["G8"] = "Inspeccionado completo: no se encontro en el club ni en resguardo"
+    raw = BytesIO()
+    libro.save(raw)
+
+    before = _snapshot(app)
+    # El acceso a E4 sigue siendo exclusivo de perfiles ya autorizados.
+    assert client.post(root + "/recepciones", headers=tokens[2], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw.getvalue()), "real_denegado.xlsx"),
+    }).status_code == 403
+    received = client.post(root + "/recepciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(raw.getvalue()), "real.xlsx"),
+    })
+    assert received.status_code == 201, received.get_json()
+    resumen = received.get_json()["importacion"]["resumen"]
+    assert resumen["revisiones_auto"]["e2_creadas"] == 1
+    assert received.get_json()["levantamiento_id"] == lev
+
+    lista = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()
+    assert lista["total"] == 1
+    assert lista["items"][0]["estado"] == "AWAITING_E3"
+    assert lista["items"][0]["solicitud_e2_id"]
+    with app.app_context():
+        estado = db.session.execute(sa.text("""
+            SELECT estado FROM inventario_correccion_solicitudes WHERE id=:id
+        """), {"id": lista["items"][0]["solicitud_e2_id"]}).scalar_one()
+        assert estado == "PENDING"
+    after = _snapshot(app)
+    assert after["stock"] == before["stock"]
+    assert after["master"] == before["master"]
+    assert after["mov"] == before["mov"]
+    assert after["e2"] == before["e2"] + 1
+
+    cierre = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()),
+        "motivo": "Intento de cierre con solicitud E3 pendiente de autorizar",
+    })
+    assert cierre.status_code == 409
+    assert cierre.get_json()["error"] == "CIERRE_BLOQUEADO"
+
+    monkeypatch.delenv("INVENTARIO_E4_AUTO_REVIEW_PRODUCTION_ENABLED", raising=False)
+    with app.app_context():
+        assert not e4_auto_enabled(6)
+    cierre_flag_off = client.post(f"{root}/{lev}/cerrar", headers=tokens[1], json={
+        "idempotency_key": str(uuid4()),
+        "motivo": "Intento de cierre tras desactivar el flag de produccion",
+    })
+    assert cierre_flag_off.status_code == 409
+    assert cierre_flag_off.get_json()["error"] == "E4_AUTO_REVIEW_NO_HABILITADO"
+    monkeypatch.setenv("INVENTARIO_E4_AUTO_REVIEW_DEMO_ENABLED", "true")
+    with app.app_context():
+        assert e4_auto_enabled(7)
+        assert not e4_auto_enabled(6)
 
 
 def test_piloto_cinco_aparatos_cinco_escenarios_en_mismo_xlsx(api, monkeypatch):
