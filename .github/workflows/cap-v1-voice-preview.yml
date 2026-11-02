@@ -57,9 +57,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 41506639194 \
+          gh run download 41523253741 \
             --repo "${{ github.repository }}" \
-            --name CAP-V1-ULTRA-DEMO-READONLY-2 \
+            --name CAP-V1-ULTRA-DEMO-READONLY-3 \
             --dir artifacts/capacitacion/source-readonly
       - name: Narrar y sincronizar escenas existentes
         run: python -m scripts.training.voice_sync_preview
