@@ -19,7 +19,7 @@ test('QA-11A: etiquetas visibles independientes de floating labels MDC compactas
   assert.match(html, /<input matInput id="inv-nombre"/);
   assert.match(html, /formControlName="nombre"/);
   assert.match(html, /formControlName="marca"/);
-  assert.match(html, /formControlName="categoria"/);
+  assert.match(html, /formControlName="categoria_inventario_id"/);
   assert.match(css, /\.form-item__label/);
   assert.match(css, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /@media \(max-width: 700px\)/);
@@ -30,8 +30,8 @@ test('QA-11A: cuerpo desplazable y acciones separadas, sin estilos inline', () =
   assert.match(html, /mat-dialog-actions/);
   assert.match(html, /class="inventory-dialog__content"/);
   assert.match(html, /class="botones"/);
-  assert.match(html, /Datos del artículo en el catálogo maestro/);
-  assert.match(html, /Las existencias por sucursal se registran por separado/);
+  assert.match(html, /Registra primero la identidad y clasificación del artículo/);
+  assert.match(html, /La asignación[\s\S]*?a sucursales y sus existencias se hacen mediante movimientos de inventario/);
   assert.doesNotMatch(html, /\bstyle="/);
   assert.match(parentTs, /width:\s*'780px'/);
   assert.match(parentTs, /maxWidth:\s*'96vw'/);
