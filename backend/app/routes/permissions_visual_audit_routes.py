@@ -23,6 +23,7 @@ from app.routes.track_routes import track_read_grants_enabled
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
     tickets_update_status_grants_enabled,
+    tickets_notify_grants_enabled,
 )
 from app.routes.openings_routes import (
     OPENINGS_READ_ROLES,
@@ -258,7 +259,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify"}
     }
     for grant in query.all():
         principal = (
@@ -301,6 +302,10 @@ def _legacy_guard_result(user, action_key, context, document, branch_id=None):
             return None, "tickets.update_ticket_status", "alcance_de_ticket_requiere_recurso"
         allowed_entry = user is not None and role != "LECTOR_GLOBAL"
         return allowed_entry, "tickets.update_ticket_status+role", "entrada_sin_bypass_alcance_ni_doble_check"
+    if action_key == "tickets.notify":
+        if branch_id is not None:
+            return None, "tickets.notify_ticket", "autorizacion_sobre_ticket_requiere_recurso"
+        return user is not None, "tickets.notify_ticket+jwt", "entrada_autenticada_con_filtro_por_ticket"
     if action_key in {"track.run_daily_pipeline", "track.run_agregadoras"}:
         return role in TRACK_ADMIN, "track._require_track_admin_role", "guard_admin_track"
     if action_key in WAREHOUSE_FLAGS or action_key == "warehouse.catalogs":
@@ -481,6 +486,16 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             catalog_allowed = legacy
             catalog_source = "tickets_update_status_grant_operativo"
             catalog_reason = "check_estado_controla_entrada_sin_bypass"
+    if action.full_key == "tickets.notify" and tickets_notify_grants_enabled():
+        # Permiso de entrada solamente: NO certifica sucursal ni destinatarios.
+        if branch_id is None and candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+            legacy_source = "tickets.notify_ticket+grant_entry"
+            legacy_reason = "veto_notificacion_sin_eludir_filtro_ticket"
+            catalog_allowed = legacy
+            catalog_source = "tickets_notify_grant_operativo"
+            catalog_reason = "check_notificar_controla_entrada_sin_bypass"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -657,6 +672,7 @@ def visual_audit_matrix():
         "openings_manage_grants_enabled": openings_manage_grants_enabled(),
         "tickets_create_grants_enabled": tickets_create_grants_enabled(),
         "tickets_update_status_grants_enabled": tickets_update_status_grants_enabled(),
+        "tickets_notify_grants_enabled": tickets_notify_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
