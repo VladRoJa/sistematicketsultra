@@ -3,7 +3,7 @@
   if (window.__capV1FocusRecorder) return;
   const interactions = [];
   const W = window;
-  let spotlight, targetBox, pointer, pulse, dismissTimer;
+  let spotlight, targetBox, pointer, pulse, dismissTimer, watchTimer, selectedElement;
   const now = () => Math.round(performance.now());
   const point = (element, x, y) => {
     element.style.left = Math.round(x) + 'px';
@@ -12,6 +12,20 @@
   const dismiss = () => {
     spotlight?.classList.remove('cap-v1-visible');
     targetBox?.classList.remove('cap-v1-visible');
+    clearInterval(watchTimer);
+    selectedElement = null;
+  };
+  const watchSelection = () => {
+    if (!selectedElement || !selectedElement.isConnected) {
+      targetBox?.classList.remove('cap-v1-visible');
+      return;
+    }
+    const rect = selectedElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      // El botón puede desaparecer al abrir/cerrar un diálogo: no dibujar un
+      // contorno fantasma en la posición anterior.
+      targetBox?.classList.remove('cap-v1-visible');
+    }
   };
   const init = () => {
     if (document.getElementById('cap-v1-recording-overlay')) return;
@@ -57,6 +71,9 @@
       spotlight.style.setProperty('--focus-x', Math.round(x) + 'px');
       spotlight.style.setProperty('--focus-y', Math.round(y) + 'px');
       spotlight.classList.add('cap-v1-visible');
+      selectedElement = clickable;
+      clearInterval(watchTimer);
+      watchTimer = setInterval(watchSelection, 80);
       const rect = clickable?.getBoundingClientRect();
       if (rect && rect.width > 0 && rect.height > 0 &&
           rect.width < innerWidth * .8 && rect.height < innerHeight * .8) {
