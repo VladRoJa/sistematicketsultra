@@ -480,7 +480,7 @@ def crear_inventario():
             unidad_compra=normalizar_campo(data.get('unidad_compra')),
             factor_compra=factor_compra,
             codigo_interno=codigo,
-            no_equipo=normalizar_campo(data.get('no_equipo')),
+            no_equipo=normalizar_campo(data.get('no_equipo')).upper(),
             gasto_sem=gasto_sem,
             gasto_mes=gasto_mes,
             pedido_mes=pedido_mes,
@@ -1111,7 +1111,7 @@ def editar_inventario(inventario_id):
                 # Normaliza strings
                 if isinstance(valor, str):
                     valor = normalizar_campo(valor)
-                    if campo == 'codigo_interno' and valor:
+                    if campo in ('codigo_interno', 'no_equipo') and valor:
                         valor = valor.upper()
 
                 # Valida numéricos no negativos
