@@ -51,10 +51,10 @@ WHERE r.status = 'COMPLETED'
   )
   AND NOT EXISTS (
     SELECT 1 FROM public.marketing_campaign_v2_campaigns v
-    WHERE COALESCE(
-      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id',
-      v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id'
-    ) = r.id::text
+    WHERE (
+      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id' = r.id::text
+      OR v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id' = r.id::text
+    )
   )
 ORDER BY r.id
 """
@@ -83,10 +83,10 @@ WHERE r.id = :id AND r.status = 'COMPLETED'
   )
   AND NOT EXISTS (
     SELECT 1 FROM public.marketing_campaign_v2_campaigns v
-    WHERE COALESCE(
-      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id',
-      v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id'
-    ) = r.id::text
+    WHERE (
+      v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id' = r.id::text
+      OR v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id' = r.id::text
+    )
   )
 """
 
