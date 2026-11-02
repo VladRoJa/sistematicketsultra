@@ -58,6 +58,12 @@ def client():
         PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED=True,
         PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED=True,
         PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_READ_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED=True,
+        PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED=True,
     )
     JWTManager(app)
     app.register_blueprint(catalog.permissions_catalog_bp, url_prefix="/api/permissions/catalog")
@@ -286,6 +292,35 @@ def test_warehouse_remaining_writer_flags_off_reject_without_mutation(
     session.commit.assert_not_called()
 
 
+@pytest.mark.parametrize("action_key,flag", [
+    ("planning.read", "PERMISSIONS_PLANNING_READ_GRANTS_ENABLED"),
+    ("planning.edit", "PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED"),
+    ("planning.submit", "PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED"),
+    ("planning.approve", "PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED"),
+    ("planning.publish", "PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED"),
+    ("planning.configure_model", "PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED"),
+])
+def test_planning_writer_flag_off_rejects_without_mutation(
+    monkeypatch, action_key, flag,
+):
+    api, headers = client()
+    api.application.config[flag] = False
+    admin_and_target(monkeypatch)
+    session = Mock()
+    monkeypatch.setattr(catalog, "db", SimpleNamespace(session=session))
+    result = api.put(
+        "/api/permissions/catalog/users/12/module-access",
+        headers=headers,
+        json={"changes": [{
+            "module_key": "planning", "action_full_key": action_key,
+            "override": "deny",
+        }]},
+    )
+    assert result.status_code == 409
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
 def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch):
     api, headers = client()
     admin_and_target(monkeypatch)
@@ -324,6 +359,12 @@ def test_wrong_module_for_certified_action_rejected_without_mutation(monkeypatch
     ("warehouse", "warehouse.view"),
     ("warehouse", "warehouse.upload"),
     ("warehouse", "warehouse.catalogs"),
+    ("planning", "planning.read"),
+    ("planning", "planning.edit"),
+    ("planning", "planning.submit"),
+    ("planning", "planning.approve"),
+    ("planning", "planning.publish"),
+    ("planning", "planning.configure_model"),
 ])
 def test_certified_action_writes_exact_action_through_existing_endpoint(
     monkeypatch, module_key, full_key,
