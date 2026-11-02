@@ -20,11 +20,11 @@ EXPECTED_SCENES = ("inicio", "ticket", "historial", "avance", "fin")
 # Textos breves: cada frase debe caber en su intervalo real sin acelerar
 # excesivamente la voz. La marca se escribe correctamente en subtítulos.
 SCRIPT = {
-    "inicio": "Bienvenido a Suite Ultra. Este recorrido utiliza nuestra sucursal de prueba.",
-    "ticket": "Este ticket de tapizado reúne tres aparatos y muestra su estado.",
-    "historial": "Aquí consultamos su historial sin modificar la información del ticket.",
-    "avance": "Revisamos el avance por aparato, sin registrar ninguna recepción.",
-    "fin": "El cierre requiere autorización. Terminamos aquí la demostración de solo lectura.",
+    "inicio": "Bienvenido a Suite Ultra. Esta es una demostración.",
+    "ticket": "Este ticket de tapizado incluye tres aparatos.",
+    "historial": "Revisamos el historial sin modificar datos.",
+    "avance": "Consultamos el avance de cada aparato.",
+    "fin": "El cierre necesita autorización. Aquí termina la demostración.",
 }
 ALIAS_PRONUNCIACION = {"Suite Ultra": "Súit Ultra"}
 SOURCE_DIR = Path("artifacts/capacitacion/source-readonly")
