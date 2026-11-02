@@ -21,7 +21,7 @@ Decisión: si no existen consumidores actuales, retirar por completo esta fuente
 5. Antes de limpiar archivos físicos: consultar todas las referencias a `warehouse_uploads.id`, confirmar archivos reales y rutas únicas, generar manifiesto exacto de los 2,061 candidatos, verificar rutas restringidas a `uploads/warehouse/*/corte_caja/` y verificar SHA-256. No borrar rutas compartidas ni referencias activas.
 6. Ejecutar eliminación de archivos y metadatos exclusivamente mediante procedimiento controlado y reversible hasta el punto de confirmación, con respaldos probados; no efectuar `rm -rf` ni `DELETE` sin filtro.
 7. Ejecutar únicamente tras revisión, CI, autorización de migración y respaldo probado.
-6. Medir funcionamiento y espacio real recuperado. Los respaldos de seguridad temporales no equivalen a almacenamiento permanente.
+8. Medir funcionamiento y espacio real recuperado. Los respaldos de seguridad temporales no equivalen a almacenamiento permanente.
 
 Hallazgo: `corte_caja_repository.py::persist_corte_caja_snapshot` inserta un nuevo canónico antes de buscar otro canónico por ID descendente; puede dejar varios canónicos por fecha.
 
@@ -48,4 +48,4 @@ Consulta de solo lectura sobre los 2,061 uploads Corte de Caja:
 - La consulta anterior sobre FKs/vistas de `corte_caja_snapshots` y `corte_caja_snapshot_rows` regresó vacía, pero NO cubre las FKs entrantes de `warehouse_uploads`.
 - El campo `source_file_deleted_at IS NULL` para todos ellos no verifica presencia física. El espacio real recuperable debe medirse en el volumen de archivos.
 
-**Próxima puerta de salida:** enumerar TODAS las FKs entrantes a `warehouse_uploads.id`, medir las referencias de los 2,061 candidatos, y comprobar si rutas/ficheros están disponibles y completos. Solo entonces se puede preparar el borrado seguro y explícitamente acotado a `corte_caja`.
+**Próxima puerta de salida:** la lista de claves foráneas entrantes quedó comprobada (23 restricciones; 2026-11-02). Ejecutar el diagnóstico de solo lectura `backend/scripts/ops/wso01_corte_caja_upload_fk_diagnostic.sql` y exigir cero referencias en las dependencias marcadas `BLOCKER`. El script incluye por separado auditoría (2,084 esperadas) y `corte_caja_snapshots` (1,037 esperadas antes de migración). No confundir el listado de FKs con recuentos de filas. Después comprobar rutas/archivos físicos, colisiones entre tipos, hash y respaldo/restore antes del borrado seguro de `corte_caja`.
