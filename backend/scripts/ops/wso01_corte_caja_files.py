@@ -1,8 +1,9 @@
-"""WSO-01: preflight and quarantining of obsolete Corte de Caja RAW files.
+"""WSO-01: verify and permanently delete retired Corte de Caja RAW files.
 
-Run from the existing Flask/backend runtime. Default is READ ONLY.
-Do not invoke mutate modes before backup/restore and deployment approval.
-The script NEVER invokes DROP/DELETE in PostgreSQL.
+inspect: read-only DB/files + a private hash manifest (no copy of raw files).
+delete: after Alembic migration, verify absence of the source in DB and every
+remaining file against the manifest before unlinking anything.
+No quarantine, no backup creation, no SQL modifications. Irreversible.
 """
 from __future__ import annotations
 
@@ -94,6 +95,25 @@ def _read_db():
     return [dict(row) for row in records]
 
 
+def _assert_retired_in_db() -> None:
+    """Only permit physical deletion after the destructive migration commits."""
+    app = create_app()
+    with app.app_context():
+        state = db.session.execute(text("""
+            SELECT
+              (SELECT COUNT(*) FROM public.warehouse_report_types
+               WHERE key = :key) AS report_types,
+              to_regclass('public.corte_caja_snapshots') IS NOT NULL AS headers_exist,
+              to_regclass('public.corte_caja_snapshot_rows') IS NOT NULL AS rows_exist
+        """), {"key": REPORT_KEY}).mappings().one()
+        db.session.rollback()
+        db.session.remove()
+    if int(state["report_types"]) or state["headers_exist"] or state["rows_exist"]:
+        raise RuntimeError(
+            "WSO-01 blocked: Alembic retirement has not removed Corte de Caja metadata"
+        )
+
+
 def _items_from_db(root: Path, *, expected_count: int, expected_bytes: int) -> list[dict]:
     records = _read_db()
     actual_bytes = sum(int(row["file_size_bytes"]) for row in records)
@@ -134,97 +154,82 @@ def _read_manifest(manifest: Path) -> list[dict]:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("mode", choices=["inspect", "quarantine", "restore", "purge"])
+    p.add_argument("mode", choices=["inspect", "delete"])
     p.add_argument("--root", type=Path, required=True, help="Absolute project root with uploads/warehouse")
     p.add_argument("--manifest", type=Path, required=True, help="Private manifest outside uploads/")
-    p.add_argument("--quarantine-dir", type=Path, required=True)
     p.add_argument("--expected-count", type=int, default=2061)
     p.add_argument("--expected-bytes", type=int, default=5961032253)
-    p.add_argument("--apply", action="store_true", help="Required to mutate the filesystem")
-    p.add_argument("--ack-irreversible", action="store_true", help="Required for final purge")
+    p.add_argument("--apply", action="store_true", help="Required to delete physical files")
+    p.add_argument("--ack-irreversible", action="store_true", help="Explicit permanent-deletion acknowledgment")
     args = p.parse_args()
 
-    if not args.root.is_absolute() or not args.quarantine_dir.is_absolute():
+    if not args.root.is_absolute() or not args.manifest.is_absolute():
         raise RuntimeError("WSO-01 blocked: use absolute filesystem paths")
     root = args.root.resolve(strict=True)
-    quarantine = args.quarantine_dir.resolve()
-    manifest = args.manifest.resolve()
-    if not quarantine.is_relative_to(root) or not manifest.is_relative_to(root):
-        raise RuntimeError("WSO-01 blocked: quarantine/manifest must be inside project root")
-    if quarantine.is_relative_to(root / "uploads") or manifest.is_relative_to(root / "uploads"):
-        raise RuntimeError("WSO-01 blocked: quarantine and manifest must be outside uploads")
-    if quarantine.is_symlink() or manifest.is_symlink():
-        raise RuntimeError("WSO-01 blocked: manifest/quarantine cannot be symlinks")
+    manifest = args.manifest
+    # A manifest is a tiny inventory, never a copy of the RAW data.
+    if manifest.is_symlink() or not manifest.resolve().is_relative_to(root):
+        raise RuntimeError("WSO-01 blocked: manifest location is not trusted")
+    if manifest.resolve().is_relative_to(root / "uploads"):
+        raise RuntimeError("WSO-01 blocked: manifest must be outside uploads/")
 
     if args.mode == "inspect":
         if manifest.exists():
             raise RuntimeError("WSO-01 blocked: manifest already exists (no overwrite)")
-        items = _items_from_db(root, expected_count=args.expected_count, expected_bytes=args.expected_bytes)
+        items = _items_from_db(
+            root, expected_count=args.expected_count, expected_bytes=args.expected_bytes
+        )
         payload = {"report_key": REPORT_KEY, "items": items}
-        print(json.dumps({"mode": "inspect", "files_verified": len(items), "bytes": sum(x["size"] for x in items)}))
-        # Creation of a private manifest is the only write in inspection mode.
+        print(json.dumps({
+            "mode": "inspect", "files_verified": len(items),
+            "bytes": sum(x["size"] for x in items)
+        }))
         manifest.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         manifest.parent.chmod(0o700)
-        fd = os.open(manifest, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        fd = os.open(
+            manifest, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+        )
         with os.fdopen(fd, "w", encoding="utf-8") as output:
-            output.write(json.dumps(payload, indent=2) + "\n")
+            output.write(json.dumps(payload, indent=2) + "\\n")
         return
 
     items = _read_manifest(manifest)
     if len(items) != args.expected_count or sum(x["size"] for x in items) != args.expected_bytes:
         raise RuntimeError("WSO-01 blocked: manifest totals differ")
-    if not args.apply:
-        print(json.dumps({"mode": args.mode, "dry_run": True, "files": len(items)}))
-        return
 
-    if args.mode == "quarantine":
-        fresh = _items_from_db(root, expected_count=args.expected_count, expected_bytes=args.expected_bytes)
-        if fresh != items:
-            raise RuntimeError("WSO-01 blocked: manifest differs from live database")
-        # All files were fully verified before moving the first byte.
-        quarantine.mkdir(parents=True, exist_ok=True)
-        moved = []
-        try:
-            for item in items:
-                rel = Path(item["relative"])
-                source = _safe_file(root, rel, must_exist=True)
-                dest = _safe_file(quarantine, rel, must_exist=False)
-                if dest.exists():
-                    raise RuntimeError("WSO-01 blocked: quarantine target already exists")
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                source.rename(dest)  # Same-filesystem move; no copy or unlink.
-                moved.append((source, dest))
-        except Exception:
-            for source, dest in reversed(moved):
-                dest.rename(source)
-            raise
-        print(json.dumps({"mode": "quarantine", "moved": len(moved)}))
-        return
-
-    # Restore / purge are independent of the retired database rows.
-    if args.mode == "purge":
-        remaining = _read_db()
-        if remaining:
-            raise RuntimeError("WSO-01 blocked: Corte de Caja metadata still exists in DB")
-        if not args.ack_irreversible:
-            raise RuntimeError("WSO-01 blocked: --ack-irreversible required")
+    _assert_retired_in_db()
+    # Verify ALL remaining files before deleting the first one.
+    # Missing paths may be due to a prior partial run; they are not deleted again.
     verified = []
+    already_absent = 0
     for item in items:
         rel = Path(item["relative"])
-        source = _safe_file(root, rel, must_exist=False)
-        dest = _safe_file(quarantine, rel, must_exist=True)
-        if args.mode == "restore" and source.exists():
-            raise RuntimeError("WSO-01 blocked: original path already exists")
-        if dest.stat().st_size != item["size"] or _sha256(dest) != item["sha256"]:
-            raise RuntimeError("WSO-01 blocked: quarantined file checksum mismatch")
-        verified.append((source, dest))
-    for source, dest in verified:
-        if args.mode == "restore":
-            source.parent.mkdir(parents=True, exist_ok=True)
-            dest.rename(source)
-        else:
-            dest.unlink()
-    print(json.dumps({"mode": args.mode, "files": len(verified)}))
+        target = _safe_file(root, rel, must_exist=False)
+        if not target.exists():
+            already_absent += 1
+            continue
+        if not target.is_file() or target.is_symlink():
+            raise RuntimeError(f"WSO-01 blocked: unsafe file for upload {item['id']}")
+        if target.stat().st_size != item["size"] or _sha256(target) != item["sha256"]:
+            raise RuntimeError(f"WSO-01 blocked: changed file for upload {item['id']}")
+        verified.append(target)
+
+    if not (args.apply and args.ack_irreversible):
+        print(json.dumps({
+            "mode": "delete", "dry_run": True,
+            "verified_for_deletion": len(verified), "already_absent": already_absent
+        }))
+        return
+
+    for target in verified:
+        # Recheck pathname safety at time of use.
+        rel = target.relative_to(root)
+        _safe_file(root, rel, must_exist=True)
+        target.unlink()
+
+    print(json.dumps({
+        "mode": "delete", "deleted": len(verified), "already_absent": already_absent
+    }))
 
 
 if __name__ == "__main__":
