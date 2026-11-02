@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 
 from playwright.sync_api import sync_playwright
 
+from scripts.training.recording_focus import install_focus_context, install_focus_page
+
 ROOT = Path(__file__).resolve().parent
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 EXPECTED_ACK = "BD_DE_CAPACITACION_AISLADA"
@@ -180,6 +182,7 @@ def switch_account(page, url: str, username: str, password: str):
 def ticket_page(page, url: str):
     page.goto(url + "/#/main/ver-tickets")
     page.get_by_role("heading", name="Ver Tickets").wait_for(timeout=30_000)
+    install_focus_page(page)
 
 
 def walkthrough(page, args, story: dict) -> list[dict]:
@@ -296,6 +299,7 @@ def main(argv=None):
             else:
                 route.continue_()
         context.route("**/*", guard)
+        install_focus_context(context)
         page = context.new_page()
         video = page.video
         try:

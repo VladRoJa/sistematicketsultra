@@ -1,0 +1,102 @@
+/* Inyección exclusivamente para grabaciones Playwright CAP-V1; nunca en Angular. */
+(() => {
+  if (window.__capV1FocusRecorder) return;
+  const interactions = [];
+  const W = window;
+  let spotlight, targetBox, pointer, pulse, dismissTimer, watchTimer, selectedElement;
+  const now = () => Math.round(performance.now());
+  const point = (element, x, y) => {
+    element.style.left = Math.round(x) + 'px';
+    element.style.top = Math.round(y) + 'px';
+  };
+  const dismiss = () => {
+    spotlight?.classList.remove('cap-v1-visible');
+    targetBox?.classList.remove('cap-v1-visible');
+    clearInterval(watchTimer);
+    selectedElement = null;
+  };
+  const watchSelection = () => {
+    if (!selectedElement || !selectedElement.isConnected) {
+      targetBox?.classList.remove('cap-v1-visible');
+      return;
+    }
+    const rect = selectedElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      // El botón puede desaparecer al abrir/cerrar un diálogo: no dibujar un
+      // contorno fantasma en la posición anterior.
+      targetBox?.classList.remove('cap-v1-visible');
+    }
+  };
+  const init = () => {
+    if (document.getElementById('cap-v1-recording-overlay')) return;
+    const root = document.createElement('div');
+    root.id = 'cap-v1-recording-overlay';
+    root.setAttribute('aria-hidden', 'true');
+    root.innerHTML = [
+      '<div class="cap-v1-spotlight"></div>',
+      '<div class="cap-v1-target"></div>',
+      '<div class="cap-v1-pulse"></div>',
+      '<div class="cap-v1-cursor"></div>',
+    ].join('');
+    document.body.appendChild(root);
+    spotlight = root.querySelector('.cap-v1-spotlight');
+    targetBox = root.querySelector('.cap-v1-target');
+    pulse = root.querySelector('.cap-v1-pulse');
+    pointer = root.querySelector('.cap-v1-cursor');
+
+    document.addEventListener('pointermove', (event) => {
+      if (event.isTrusted && pointer) {
+        point(pointer, event.clientX, event.clientY);
+      }
+    }, true);
+
+    document.addEventListener('pointerdown', (event) => {
+      if (!event.isTrusted || event.button !== 0) return;
+      const x = event.clientX;
+      const y = event.clientY;
+      const clickable = event.target instanceof Element
+        ? event.target.closest(
+          'button, a, input, select, textarea, [role="button"], [role="checkbox"], ' +
+          '[role="option"], [role="tab"], mat-option, mat-checkbox, .mat-mdc-row'
+        ) || event.target
+        : null;
+      // No registrar etiquetas, texto, IDs de usuario ni datos de formulario.
+      interactions.push({x: Math.round(x), y: Math.round(y), ms: now()});
+      if (interactions.length > 500) interactions.shift();
+      point(pointer, x, y);
+      point(pulse, x, y);
+      pulse.classList.remove('cap-v1-animate');
+      void pulse.offsetWidth;
+      pulse.classList.add('cap-v1-animate');
+      spotlight.style.setProperty('--focus-x', Math.round(x) + 'px');
+      spotlight.style.setProperty('--focus-y', Math.round(y) + 'px');
+      spotlight.classList.add('cap-v1-visible');
+      selectedElement = clickable;
+      clearInterval(watchTimer);
+      watchTimer = setInterval(watchSelection, 80);
+      const rect = clickable?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0 &&
+          rect.width < innerWidth * .8 && rect.height < innerHeight * .8) {
+        const pad = 5;
+        targetBox.style.left = Math.max(0, rect.left - pad) + 'px';
+        targetBox.style.top = Math.max(0, rect.top - pad) + 'px';
+        targetBox.style.width = Math.min(innerWidth - rect.left + pad, rect.width + pad * 2) + 'px';
+        targetBox.style.height = Math.min(innerHeight - rect.top + pad, rect.height + pad * 2) + 'px';
+        targetBox.classList.add('cap-v1-visible');
+      } else {
+        targetBox.classList.remove('cap-v1-visible');
+      }
+      clearTimeout(dismissTimer);
+      dismissTimer = setTimeout(dismiss, 1450);
+    }, true);
+  };
+  window.__capV1FocusRecorder = {
+    events: () => interactions.map(e => ({...e})),
+    ready: () => !!document.getElementById('cap-v1-recording-overlay'),
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, {once: true});
+  } else {
+    init();
+  }
+})();

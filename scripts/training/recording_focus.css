@@ -1,0 +1,47 @@
+/* CAP-V1 solo captura Playwright. No forma parte del frontend Angular. */
+#cap-v1-recording-overlay {
+  position: fixed; inset: 0; z-index: 2147483647;
+  pointer-events: none !important; user-select: none !important;
+  overflow: hidden; isolation: isolate;
+}
+#cap-v1-recording-overlay * { pointer-events: none !important; box-sizing: border-box; }
+.cap-v1-spotlight {
+  position: absolute; inset: 0;
+  background: radial-gradient(circle 210px at var(--focus-x, 50%) var(--focus-y, 50%),
+    transparent 0, transparent 195px, rgba(7, 12, 25, .34) 270px);
+  opacity: 0; transition: opacity 160ms ease-out;
+}
+.cap-v1-spotlight.cap-v1-visible { opacity: 1; }
+.cap-v1-target {
+  position: absolute;
+  border: 3px solid #facc15;
+  border-radius: 9px;
+  box-shadow: 0 0 0 6px rgba(250, 204, 21, .28), 0 0 25px rgba(0, 0, 0, .25);
+  opacity: 0; transition: opacity 140ms ease-out;
+}
+.cap-v1-target.cap-v1-visible { opacity: 1; }
+.cap-v1-cursor {
+  position: absolute; width: 24px; height: 30px;
+  left: 0; top: 0; transform: translate(-100px, -100px);
+  background: #fefefe; border: 2px solid #111827;
+  clip-path: polygon(0 0, 0 78%, 24% 61%, 42% 100%, 58% 92%, 41% 56%, 75% 56%);
+  filter: drop-shadow(1px 2px 2px rgba(0,0,0,.5));
+}
+.cap-v1-pulse {
+  position: absolute; width: 44px; height: 44px;
+  margin: -22px 0 0 -22px; border-radius: 50%;
+  border: 5px solid #facc15;
+  background: rgba(250,204,21,.25);
+  opacity: 0; transform: scale(.25);
+}
+.cap-v1-pulse.cap-v1-animate {
+  animation: cap-v1-click-pulse 750ms ease-out forwards;
+}
+@keyframes cap-v1-click-pulse {
+  0% { transform: scale(.25); opacity: 1; }
+  75% { opacity: .95; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cap-v1-spotlight, .cap-v1-target { transition: none; }
+}

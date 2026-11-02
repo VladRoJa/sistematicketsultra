@@ -101,6 +101,27 @@ Los botones y las escrituras son los reales; no hay inyección de estados
 ni rutas API falsas. Se **detiene con error** si el ticket no está en 0/N,
 faltan botones, la API niega la acción o el resultado no coincide.
 
+### Indicadores visuales de interacción (CAP-V1)
+
+Las grabaciones Playwright activan un **overlay únicamente en la captura**.
+Los archivos `scripts/training/recording_focus.{py,js,css}` muestran un
+puntero blanco de borde oscuro, pulso amarillo al presionar, contorno del
+botón y foco temporal en la zona activa. El efecto dura aproximadamente
+1.45 segundos y no bloquea la aplicación (`pointer-events: none`).
+Se aplica después de iniciar sesión y superar los controles de seguridad
+en el flujo de producción de solo lectura; **no se despliega en Angular**,
+no cambia selectores de UI ni hace peticiones nuevas.
+
+Este cambio no amplía la pantalla durante una acción: un zoom CSS sobre
+el DOM podría mover botones mientras Playwright interactúa. Si se necesita
+más aumento, debe añadirse como edición POSTERIOR del MP4 usando
+marcas de tiempo de los clics, nunca transformando el DOM real.
+
+QA focal separado: `.github/workflows/cap-v1-click-focus-qa.yml` genera
+un video de una pantalla completamente sintética y comprueba cuatro clics,
+resaltados visibles, funcionamiento de botones y ausencia de interceptación.
+No necesita Secrets, entorno productivo ni autorización para escribir.
+
 ### Productos y regeneración
 
 - `navegacion.webm`: captura original Playwright, resolución 1920x1080.
