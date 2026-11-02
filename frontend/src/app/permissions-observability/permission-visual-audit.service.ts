@@ -56,6 +56,7 @@ export interface VisualAuditResponse {
   pm_read_grants_enabled: boolean;
   pm_execute_grants_enabled: boolean;
   pm_validate_grants_enabled: boolean;
+  pm_configure_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
