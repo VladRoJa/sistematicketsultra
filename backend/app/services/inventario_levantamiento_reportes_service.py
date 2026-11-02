@@ -13,7 +13,6 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import text
 
 from app.extensions import db
-from app.models.inventario import InventarioGeneral, InventarioSucursal
 from app.models.inventario_levantamiento import (
     InventarioLevantamientoORM as Lev,
     InventarioLevantamientoImportacionORM as Imp,
@@ -92,8 +91,10 @@ def _changes(lev):
                 WHERE solicitud_id=:id
             """), {"id": s.id}).scalar_one_or_none()
             resolved_id = alta
-        master = db.session.get(InventarioGeneral, resolved_id) if resolved_id else None
-        code = master.codigo_interno if master else ""
+        master = (db.session.execute(text("""
+            SELECT id, nombre, codigo_interno FROM inventario_general WHERE id=:id
+        """), {"id": resolved_id}).mappings().first() if resolved_id else None)
+        code = master["codigo_interno"] if master else ""
         current_stock = (db.session.execute(text("""
             SELECT stock FROM inventario_sucursal
             WHERE inventario_id=:id AND sucursal_id=:branch
@@ -123,7 +124,7 @@ def _changes(lev):
         )
         stage = "AUTORIZADO" if valid_effect else "PENDIENTE"
         observed = r.ultimo_valor or {}
-        name = (master.nombre if master else str(observed.get("aparato") or ""))
+        name = (master["nombre"] if master else str(observed.get("aparato") or ""))
         rows.append([
             lev.sucursal_id, lev.id, r.id, r.solicitud_e2_id or "",
             resolved_id or "", name, r.tipo, action, old_code,
@@ -169,19 +170,21 @@ def generar_reporte_e4(levantamiento_id, tipo):
             "Autor solicitud E2", "Instrucción para sucursal", "Etiqueta verificada físicamente (SI/NO)"
         ], _changes(lev), confirmacion=True)
     else:
-        rows = (db.session.query(InventarioGeneral, InventarioSucursal)
-                .join(InventarioSucursal, InventarioSucursal.inventario_id == InventarioGeneral.id)
-                .filter(InventarioSucursal.sucursal_id == lev.sucursal_id)
-                .order_by(InventarioGeneral.codigo_interno, InventarioGeneral.id).all())
+        rows = db.session.execute(text("""
+            SELECT i.id, i.codigo_interno, i.nombre, i.marca, i.categoria,
+                   s.stock
+            FROM inventario_general i JOIN inventario_sucursal s ON s.inventario_id=i.id
+            WHERE s.sucursal_id=:branch
+            ORDER BY i.codigo_interno, i.id
+        """), {"branch": lev.sucursal_id}).mappings().all()
         _sheet(book, "EXISTENCIAS_OFICIALES", [
             "Sucursal", "Inventario ID", "Código interno", "Aparato",
-            "Marca", "Categoría", "Familia ID", "Existencia oficial",
-            "Estado existencia"
+            "Marca", "Categoría", "Existencia oficial", "Estado existencia"
         ], [
-            [lev.sucursal_id, master.id, master.codigo_interno, master.nombre,
-             master.marca, master.categoria, master.familia_equipo_id, stock.stock,
-             "SIN EXISTENCIA" if stock.stock == 0 else "CON EXISTENCIA"]
-            for master, stock in rows
+            [lev.sucursal_id, row["id"], row["codigo_interno"], row["nombre"],
+             row["marca"], row["categoria"], row["stock"],
+             "SIN EXISTENCIA" if row["stock"] == 0 else "CON EXISTENCIA"]
+            for row in rows
         ])
     output = BytesIO()
     book.save(output)
