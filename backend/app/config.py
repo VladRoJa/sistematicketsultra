@@ -102,6 +102,11 @@ class Config:
         "PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Cierres: veta solicitar/aceptar/administrativo, no los rechazos.
+    PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_TICKETS_CLOSE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
