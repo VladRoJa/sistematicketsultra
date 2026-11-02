@@ -121,3 +121,30 @@ git show FETCH_HEAD:backend/scripts/ops/wso02_iventas_campaign_references.sql \
 Para WSO-02 la limpieza de 10 millones de filas puede generar WAL y dead tuples; conservar margen de disco, ventana operativa y monitoreo de backend/scheduler. `VACUUM FULL` requiere bloqueo exclusivo; no forma parte de la ejecución automática. Se escogerá compactación tras verificar si `pg_repack` está disponible y cuánto tiempo/bloqueo/espacio requiere, sin editar código en servidor.
 
 **Estado:** diagnóstico y desarrollo en rama; CI PostgreSQL focal ejecutado inicialmente con éxito, nueva protección Campaign V2/reactivación en revalidación. Sin merge, despliegue, migraciones WSO-02 ni DELETE productivo.
+
+## Gate de referencias cruzadas de campañas — PASS de diagnóstico (2026-11-02)
+
+Resultado **productivo de solo lectura**, posterior al diagnóstico de 17.09 millones de filas:
+
+```text
+all_superseded_runs                216
+cc_protected_runs                  29
+reactivation_protected_runs         9
+campaign_v2_protected_runs          4
+eligible_runs_after_all_pins      174
+eligible_contact_counter_sum  9240870
+```
+
+Los conjuntos protegidos resultaron disjuntos en este corte (29+9+4=42). Las 174 corridas elegibles contienen, según contadores de `marketing_iventas_sync_runs`, **9,240,870 filas de contactos** candidatas; el conteo de filas reales de todas las 187 corridas preliminares coincidió con sus contadores. Aproximadamente **54.1%** de los 17,090,892 contactos estructurados actuales. El ahorro en GB **NO** se declara equivalente al porcentaje de filas porque el heap, el bloat y los índices no escalan linealmente.
+
+**Importante:** los 9,240,870 son contadores por corrida filtrados tras proteger campañas. Al ejecutar un `preview` nuevo sobre base viva el número puede cambiar; la ejecución debe usar el manifiesto de ese instante, revisar diferencias y revalidar en cada transacción.
+
+Protecciones ya implementadas, sin acción en producción:
+- Runs `COMPLETED` no canónicos con `newer.id` mayor para la **misma identidad de corte**; se protegen canónicos y últimos por corte histórico.
+- Cualquier `contact_center_contact_links.source_row_id` de tipo iVentas.
+- `marketing_reactivation_campaigns.filters_json.sources.iventas_sync_run_id`.
+- Ambas ubicaciones de Campaign V2 `audience_definition_json.source_metadata.iventas_sync_run_id` **O** `audience_definition_json.sources.iventas_sync_run_id`. La condición es disyuntiva para impedir que una ubicación con ID diferente oculte otra referencia.
+- Estado, contadores, fechas y metadatos de corridas sin cambios.
+- El modo `apply` procesa hasta `--max-runs` nuevas corridas por invocación y **reanuda saltando las previamente marcadas**; una prueba verifica tres tandas consecutivas de una corrida. Las transacciones de operaciones anteriores no se revierten si una posterior falla.
+
+**Frontera:** no lanzar `apply` sin aprobación explícita de borrado, comprobación de CI y confirmación operativa de espacio libre en el mismo volumen de PostgreSQL. Tampoco ejecutar `VACUUM FULL` ni `pg_repack` sin plan de mantenimiento y capacidad comprobada.
