@@ -169,3 +169,27 @@ def test_close_matrix_veto_is_conclusive_but_allow_not_object_permission(
     assert row["catalog_source"] == "tickets_close_grant_operativo"
     assert row["comparison"] == ("coincide" if effect == "deny" else "no_concluyente")
     assert branch["legacy_allowed"] is None
+
+
+@pytest.mark.parametrize("url", CLOSURE_URLS)
+def test_close_allow_still_blocks_incomplete_tapizado_reception(url):
+    from app.routes import permissions_catalog_routes as catalog
+    api, headers = client(enabled=True)
+    ticket = item()
+    ticket.estado = "por_validar" if "aceptar-creador" in url else "en progreso"
+    ticket.estado_cierre = "pendiente_creador"
+    with api.application.app_context(), \
+         patch.object(tickets.UserORM, "get_by_id", return_value=actor()), \
+         patch.object(catalog, "_simple_global_action_grant_override", return_value=True), \
+         patch.object(tickets.Ticket, "query", SimpleNamespace(get=lambda _: ticket)), \
+         patch.object(tickets, "_puede_cerrar_ticket_desde_cero", return_value=True), \
+         patch.object(tickets, "_puede_validar_cierre_gerente", return_value=True), \
+         patch.object(tickets, "_es_admin_o_corporativo", return_value=True), \
+         patch.object(tickets, "validar_recepcion_completa",
+                      side_effect=tickets.RecepcionTapizadoError("Recepción pendiente")), \
+         patch.object(tickets.db.session, "commit") as commit, \
+         patch.object(tickets, "_notificar_evento_ticket") as notify:
+        r = api.post(url, headers=headers, json={"notas_cierre": "QA"})
+    assert r.status_code == 409
+    commit.assert_not_called()
+    notify.assert_not_called()
