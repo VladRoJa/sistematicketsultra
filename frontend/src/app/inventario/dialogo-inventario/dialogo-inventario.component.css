@@ -14,7 +14,7 @@
 .inventario-form {
   display: flex;
   flex-direction: column;
-  max-height: min(76vh, 760px);
+  max-height: min(82vh, 820px);
   min-width: 0;
   overflow: hidden;
 }
@@ -33,6 +33,53 @@
   color: #667085;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.inventory-section {
+  padding: 14px 0 20px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.inventory-section:first-of-type {
+  padding-top: 0;
+}
+
+.inventory-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.inventory-section__heading {
+  margin-bottom: 12px;
+}
+
+.inventory-section__heading h3 {
+  margin: 0 0 3px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1d2939;
+}
+
+.inventory-section__heading p {
+  margin: 0;
+  font-size: 12px;
+  color: #667085;
+  line-height: 1.45;
+}
+
+.inventory-field-hint {
+  margin-top: -3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #667085;
+}
+
+.inventory-save-hint {
+  margin-right: auto;
+  max-width: 245px;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .form-grid {
@@ -106,5 +153,11 @@
 
   .botones {
     padding-inline: 16px;
+    flex-wrap: wrap;
+  }
+
+  .inventory-save-hint {
+    flex-basis: 100%;
+    max-width: none;
   }
 }
