@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
 from scripts.training.generate import export_video, make_srt, find_ticket
-from scripts.training.recording_focus import install_focus_context, install_focus_page
+from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click
 
 PROD_ORIGIN = "https://suiteultragym.com"
 PROD_ACK = "SOLO_LECTURA_PRODUCCION_CAP_V1"
@@ -217,25 +217,25 @@ def capture(args) -> None:
                 raise ValueError("La bandeja no muestra ULTRA DEMO y Tapizado.")
             scene("ticket")
 
-            row.get_by_role("button", name="Ver Historial").click()
+            guided_click(page, row.get_by_role("button", name="Ver Historial"))
             history = page.locator("mat-dialog-container").filter(has_text="Historial de solución")
             history.wait_for(timeout=15000)
             scene("historial")
-            history.get_by_role("button", name="Cerrar").click()
+            guided_click(page, history.get_by_role("button", name="Cerrar"))
 
             row = find_ticket(page, args.ticket_id)
             receipt_button = row.get_by_role(
                 "button", name=f"Gestionar recepción de tapizado del ticket {args.ticket_id}",
             )
             if receipt_button.count():
-                receipt_button.click()
+                guided_click(page, receipt_button)
                 dialog = page.locator("mat-dialog-container").filter(has_text="Recepción de tapizado")
                 dialog.wait_for(timeout=15000)
                 dialog.get_by_text(
                     f"{sum(bool(x.get('recibido')) for x in next(t for t in tickets if t['id'] == args.ticket_id)['aparatos'])} de {verified['aparatos']} recibidos"
                 ).wait_for(timeout=20000)
                 scene("avance")
-                dialog.get_by_role("button", name="Cerrar", exact=True).click()
+                guided_click(page, dialog.get_by_role("button", name="Cerrar", exact=True))
             else:
                 # Usuario sin permiso de escritura: una cuenta lectora es válida.
                 # No forzar el modal ni ampliar permisos para capturar.
