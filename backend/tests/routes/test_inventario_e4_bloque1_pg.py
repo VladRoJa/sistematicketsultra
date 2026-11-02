@@ -90,7 +90,12 @@ def test_e4_cadena_alembic_no_abre_rama_paralela():
     cfg = AlembicConfig()
     cfg.set_main_option("script_location", str(BASE / "migrations"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["v2e4b3103026"]
+    # E4 debe seguir en una sola cadena aunque otros módulos añadan migraciones.
+    head = script.get_current_head()
+    assert head is not None
+    assert script.get_revision("v2e4b3103026") in list(
+        script.iterate_revisions(head, "v2e4b2103026")
+    )
     assert script.get_revision("n26c10202626").down_revision == "v2e4b1102826"
     assert script.get_revision("v2e4b2103026").down_revision == "n26c10202626"
     assert script.get_revision("v2e4b3103026").down_revision == "v2e4b2103026"
