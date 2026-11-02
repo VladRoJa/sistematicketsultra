@@ -25,6 +25,8 @@ on:
       - "backend/tests/routes/test_permissions_pm_validate_1181.py"
       - "backend/tests/routes/test_permissions_pm_configure_1181.py"
       - "backend/app/utils/warehouse_access.py"
+      - "backend/app/utils/planning_access.py"
+      - "backend/tests/routes/test_permissions_planning_bundle_1181.py"
       - "backend/tests/routes/test_permissions_warehouse_archive_1181.py"
       - "backend/tests/routes/test_permissions_warehouse_bundle_1181.py"
       - "backend/app/config.py"
@@ -116,6 +118,7 @@ jobs:
             tests/routes/test_permissions_pm_configure_1181.py \
             tests/routes/test_permissions_warehouse_archive_1181.py \
             tests/routes/test_permissions_warehouse_bundle_1181.py \
+            tests/routes/test_permissions_planning_bundle_1181.py \
             tests/utils/test_permissions_endpoint_review_report.py \
             tests/routes/test_permissions_phase_a_inventory_parity.py
 
