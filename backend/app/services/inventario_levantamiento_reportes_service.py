@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.worksheet.datavalidation import DataValidation
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
 from app.extensions import db
 from app.models.inventario_levantamiento import (
@@ -75,7 +75,7 @@ def _changes(lev):
                 SELECT solicitud_id, actor_usuario_id, decidido_en_utc, motivo_decision
                 FROM inventario_correccion_decisiones
                 WHERE solicitud_id IN :ids
-            """).bindparams(__import__("sqlalchemy").bindparam("ids", expanding=True)),
+            """).bindparams(bindparam("ids", expanding=True)),
             {"ids": sol_ids}).mappings().all()
         }
     original_codes = {}
