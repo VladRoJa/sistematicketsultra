@@ -129,12 +129,12 @@ def test_inventory_movement_write_parity_per_branch(
     )
     with Flask(__name__).app_context():
         real = inventarios._require_inventory_movement_write(branch) is None
-    row = _row(user, "inventory.movement_write", branch_id=branch)
-    assert real is allowed
-    assert row["legacy_allowed"] is real
-    assert row["scope"] == "sucursal"
-    assert row["context"]["branch_id"] == branch
-    assert _row(user, "inventory.movement_write")["legacy_allowed"] is None
+        row = _row(user, "inventory.movement_write", branch_id=branch)
+        assert real is allowed
+        assert row["legacy_allowed"] is real
+        assert row["scope"] == "sucursal"
+        assert row["context"]["branch_id"] == branch
+        assert _row(user, "inventory.movement_write")["legacy_allowed"] is None
 
 
 @pytest.mark.parametrize("role,enabled,expected", [
