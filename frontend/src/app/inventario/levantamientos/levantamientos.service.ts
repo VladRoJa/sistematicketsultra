@@ -231,6 +231,23 @@ export class LevantamientosE4Service {
     );
   }
 
+  corregirHallazgo(id: number, revisionId: number, data: {
+    nuevo_codigo: string; motivo: string; idempotency_key: string;
+  }): Observable<{
+    correccion: { revision_id: number; codigo_nuevo: string; solicitud_e2_id: number };
+    replayed: boolean;
+  }> {
+    return this.http.post<{
+      correccion: { revision_id: number; codigo_nuevo: string; solicitud_e2_id: number };
+      replayed: boolean;
+    }>(this.base + '/' + id + '/revisiones/' + revisionId + '/corregir-hallazgo', data);
+  }
+
+  descargarReporte(id: number, tipo: 'cambios' | 'existencias'): Observable<Blob> {
+    return this.http.get(this.base + '/' + id + '/reportes/' + tipo,
+      { responseType: 'blob' });
+  }
+
   tablero(id: number): Observable<TableroConciliacionE4> {
     return this.http.get<TableroConciliacionE4>(this.base + '/' + id + '/conciliacion');
   }
