@@ -51,6 +51,7 @@ export interface VisualAuditResponse {
   tickets_update_grants_enabled: boolean;
   tickets_close_grants_enabled: boolean;
   inventory_master_write_grants_enabled: boolean;
+  inventory_movement_write_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
