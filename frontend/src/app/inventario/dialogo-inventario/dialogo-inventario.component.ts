@@ -14,6 +14,7 @@ import { ModalAlertaCamposRequeridosComponent } from 'src/app/shared/modal-alert
 import { CatalogoService, CatalogoElemento } from '../../services/catalogo.service';
 import { MantenimientoEquiposService } from '../../services/mantenimiento-equipos.service';
 import { FamiliaEquipoDTO } from '../../types/ticket';
+import { normalizarTipoInventario } from '../movimientos/tipos-inventario.helper';
 
 @Component({
   selector: 'app-dialogo-inventario',
@@ -190,8 +191,18 @@ export class DialogoInventarioComponent implements OnInit {
       this.unidadesFiltradas = res;
     });
     this.catalogoService.getTiposInventario().subscribe(res => {
-      this.tiposInventario = res;
-      this.tiposFiltrados = res;
+      // Presentar una opción por clase, sin modificar el catálogo legado.
+      const opciones = new Map<string, CatalogoElemento>();
+      for (const tipo of res) {
+        const nombre = normalizarTipoInventario(tipo.nombre);
+        if (!nombre || opciones.has(nombre)) continue;
+        opciones.set(nombre, {
+          ...tipo,
+          nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1),
+        });
+      }
+      this.tiposInventario = [...opciones.values()];
+      this.tiposFiltrados = this.tiposInventario;
     });
     this.catalogoService.getGrupoMuscular().subscribe(res => {
       this.gruposMusculares = res;
