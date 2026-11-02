@@ -145,6 +145,7 @@ def _changes(lev):
             "NO APLICAR HASTA AUTORIZAR" if stage != "AUTORIZADO"
             else ("SIN REETIQUETADO" if action == "BAJA_EXISTENCIA"
                   else "VERIFICAR/COLOCAR ETIQUETA EN PISO"),
+            s.motivo if s else "",
             "",
         ])
     return rows
@@ -180,7 +181,8 @@ def generar_reporte_e4(levantamiento_id, tipo):
             "Código observado en corte/Excel", "Código propuesto/autorizado",
             "Código oficial actual", "Existencia oficial actual", "Estado de decisión",
             "Autorizó E3 (usuario)", "Fecha decisión E3 UTC",
-            "Instrucción para sucursal", "Etiqueta verificada físicamente (SI/NO)"
+            "Instrucción para sucursal", "Motivo de la solicitud E2",
+            "Etiqueta verificada físicamente (SI/NO)"
         ], _changes(lev), confirmacion=True)
     else:
         rows = db.session.execute(text("""
