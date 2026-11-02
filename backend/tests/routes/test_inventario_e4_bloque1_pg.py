@@ -1488,6 +1488,17 @@ def test_e4_hallazgo_codigo_duplicado_se_corrige_sin_duplicar_revision_y_exporta
     request_id = first.get_json()["correccion"]["solicitud_e2_id"]
     assert client.post(endpoint, headers=tokens[1], json=payload).status_code == 200
     assert client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["total"] == reviews["total"]
+    # Nueva versión del Excel ya corregida: reutilizar la revisión original.
+    book["HALLAZGOS"]["A8"] = "07NEW55"
+    fixed = BytesIO()
+    book.save(fixed)
+    new_version = client.post(f"{root}/{lev}/importaciones", headers=tokens[1], data={
+        "idempotency_key": str(uuid4()),
+        "file": (BytesIO(fixed.getvalue()), "etiqueta_corregida.xlsx"),
+    })
+    assert new_version.status_code == 201, new_version.get_json()
+    assert client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["total"] == reviews["total"]
+
     refreshed = client.get(f"{root}/{lev}/revisiones", headers=tokens[1]).get_json()["items"]
     assert next(r for r in refreshed if r["id"] == rev["id"])["estado"] == "AWAITING_E3"
     with app.app_context():
