@@ -12,6 +12,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { InventarioService } from '../../../services/inventario.service';
 import { mostrarAlertaToast } from 'src/app/utils/alertas';
 import { environment } from 'src/environments/environment';
+import { normalizarTipoInventario } from '../tipos-inventario.helper';
 
 interface FaltanteStockMovimiento {
   indice: number;
@@ -101,7 +102,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
       'todos',
       ...Array.from(new Set(
         this.inventariosDisponibles
-          .map(item => String(item.tipo || '').trim().toLowerCase())
+          .map(item => normalizarTipoInventario(item.tipo))
           .filter(Boolean),
       )).sort(),
     ];
@@ -129,7 +130,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
   }
 
   cambiarTipoFiltro(tipo: string): void {
-    this.tipoFiltro = tipo || 'todos';
+    this.tipoFiltro = normalizarTipoInventario(tipo) || 'todos';
     // El filtro sólo cambia opciones de búsqueda, no borra selecciones existentes.
     this.actualizarFiltrados();
   }
@@ -150,7 +151,7 @@ export class DialogoRegistrarMovimientoComponent implements OnInit {
     const texto = typeof valor === 'string' ? valor.trim().toLowerCase() : '';
     return this.inventariosDisponibles.filter(inv => {
       const tipoCorrecto = this.tipoFiltro === 'todos' ||
-        String(inv.tipo || '').trim().toLowerCase() === this.tipoFiltro;
+        normalizarTipoInventario(inv.tipo) === this.tipoFiltro;
       if (!tipoCorrecto) return false;
 
       const campos = [
