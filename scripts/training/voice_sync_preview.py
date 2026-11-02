@@ -122,7 +122,12 @@ def create_synced_preview() -> None:
     source, starts, end = validate_source()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     scenes: list[dict] = []
-    filter_terms: list[str] = []
+    # Una pista silenciosa de duración fija evita que amix recorte el audio
+    # cuando hay retrasos iniciales entre los cinco clips neuronales.
+    filter_terms: list[str] = [
+        f"anullsrc=channel_layout=stereo:sample_rate=48000,"
+        f"atrim=duration={end:.3f},asetpts=PTS-STARTPTS[bed]"
+    ]
     input_audio: list[str] = []
     subtitles = []
 
@@ -145,8 +150,7 @@ def create_synced_preview() -> None:
         # retrasos en milisegundos; atempo solo acelera si es imprescindible
         filter_terms.append(
             f"[{i+1}:a]atempo={tempo:.5f},"
-            f"adelay={round(start*1000)}:all=1,"
-            f"apad=whole_dur={end:.3f}[n{i}]"
+            f"aresample=48000,adelay={round(start*1000)}:all=1[n{i}]"
         )
         # El texto oficial no lleva ninguna sustitución fonética.
         subtitle_end = min(next_start - 0.08, start + spoken_duration + 0.18)
@@ -165,11 +169,10 @@ def create_synced_preview() -> None:
 
     out_srt = OUTPUT_DIR / "subtitulos.srt"
     out_srt.write_text("\n".join(subtitles) + "\n", encoding="utf-8")
-    mix = "".join(f"[n{i}]" for i in range(len(scenes)))
+    mix = "[bed]" + "".join(f"[n{i}]" for i in range(len(scenes)))
     filter_terms.append(
-        f"{mix}amix=inputs={len(scenes)}:duration=longest:normalize=0,"
-        f"atrim=duration={end:.3f},"
-        f"aresample=48000,volume=0.80,alimiter=limit=0.95[narracion]"
+        f"{mix}amix=inputs={len(scenes)+1}:duration=first:normalize=0,"
+        f"volume=0.80,alimiter=limit=0.95[narracion]"
     )
     mp4 = OUTPUT_DIR / "capacitacion-jorge-neural.mp4"
     args = [
@@ -184,8 +187,17 @@ def create_synced_preview() -> None:
     ]
     run(args)
     result_video_duration = probe_duration(mp4, "stream=duration")
-    if abs(result_video_duration - end) > 0.15:
-        raise ValueError("Regresión: el doblaje cambió la longitud del video.")
+    result_audio_duration = float(run([
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", str(mp4),
+    ]))
+    if (abs(result_video_duration - end) > 0.15
+            or abs(result_audio_duration - end) > 0.15):
+        raise ValueError(
+            "Regresión: audio/video no sincronizados "
+            f"({result_video_duration:.3f}s video / {result_audio_duration:.3f}s audio)."
+        )
 
     # Verificar audio y subtítulos realmente incorporados, no solo archivo no vacío.
     probe = json.loads(run([
@@ -207,6 +219,7 @@ def create_synced_preview() -> None:
         "pronunciation_alias": ALIAS_PRONUNCIACION,
         "source_video_seconds": round(end, 3),
         "result_video_seconds": round(result_video_duration, 3),
+        "result_audio_seconds": round(result_audio_duration, 3),
         "scenes": scenes,
         "files": [mp4.name, out_srt.name],
     }
