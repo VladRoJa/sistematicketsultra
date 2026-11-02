@@ -859,31 +859,6 @@ def _click_boton_generar(page: Any) -> None:
         raise GascaSingleReportRunnerError("No se pudo hacer clic en el botón 'Generar'.") from exc
 
 
-def _click_tab_membresia(page: Any) -> None:
-    textos_posibles = ["Membresía", "Membresia"]
-
-    for texto in textos_posibles:
-        try:
-            page.get_by_role("button", name=texto, exact=False).click()
-            return
-        except Exception:
-            pass
-
-        try:
-            page.locator(f"a:has-text('{texto}')").first.click()
-            return
-        except Exception:
-            pass
-
-        try:
-            page.get_by_text(texto, exact=False).first.click()
-            return
-        except Exception:
-            pass
-
-    raise GascaSingleReportRunnerError("No se encontró un tab clickeable 'Membresía/Membresia'.")
-
-
 def _resolver_opcion_excel_datatables(
     *,
     page: Any,
