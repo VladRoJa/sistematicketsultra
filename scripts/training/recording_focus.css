@@ -21,11 +21,20 @@
 }
 .cap-v1-target.cap-v1-visible { opacity: 1; }
 .cap-v1-cursor {
-  position: absolute; width: 24px; height: 30px;
+  position: absolute; width: 27px; height: 33px;
   left: -100px; top: -100px; transform: none;
-  background: #fefefe; border: 2px solid #111827;
-  clip-path: polygon(0 0, 0 78%, 24% 61%, 42% 100%, 58% 92%, 41% 56%, 75% 56%);
-  filter: drop-shadow(1px 2px 2px rgba(0,0,0,.5));
+  background: transparent; filter: drop-shadow(2px 3px 2px rgba(0,0,0,.45));
+}
+.cap-v1-cursor::before, .cap-v1-cursor::after {
+  content: ""; position: absolute; display: block;
+}
+.cap-v1-cursor::before {
+  inset: 0; background: #101827;
+  clip-path: polygon(0 0, 0 87%, 25% 66%, 43% 100%, 66% 89%, 44% 60%, 85% 55%);
+}
+.cap-v1-cursor::after {
+  inset: 3px 5px 6px 3px; background: #fff;
+  clip-path: polygon(0 0, 0 85%, 26% 65%, 44% 100%, 63% 91%, 42% 57%, 82% 55%);
 }
 .cap-v1-pulse {
   position: absolute; width: 44px; height: 44px;
@@ -61,6 +70,12 @@
 }
 .cap-v1-cue.cap-v1-cue-below::after {
   content: "↑"; top: auto; bottom: calc(100% + 1px);
+}
+.cap-v1-cue.cap-v1-cue-side-right::after {
+  content: "←"; top: 50%; left: -29px; transform: translateY(-50%);
+}
+.cap-v1-cue.cap-v1-cue-side-left::after {
+  content: "→"; top: 50%; left: calc(100% + 4px); transform: translateY(-50%);
 }
 
 @media (prefers-reduced-motion: reduce) {
