@@ -58,7 +58,7 @@ def test_update_status_no_jwt_is_401_even_with_grant_allow():
 def test_status_deny_403_before_ticket_lookup():
     from app.routes import permissions_catalog_routes as catalog
     api, auth = _client(enabled=True)
-    with patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
+    with api.application.app_context(), patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
          patch.object(catalog, "_simple_global_action_grant_override",
                       return_value=False) as decision, \
          patch.object(tickets.Ticket, "query", SimpleNamespace(get=Mock())) as ticket_query, \
@@ -75,7 +75,7 @@ def test_status_deny_403_before_ticket_lookup():
 def test_status_allow_cannot_bypass_lectora_global_role_decorator():
     from app.routes import permissions_catalog_routes as catalog
     api, auth = _client(enabled=True)
-    with patch.object(tickets.UserORM, "get_by_id",
+    with api.application.app_context(), patch.object(tickets.UserORM, "get_by_id",
                       return_value=_user("LECTOR_GLOBAL")), \
          patch.object(catalog, "_simple_global_action_grant_override") as decision, \
          patch.object(tickets.Ticket, "query", SimpleNamespace(get=Mock())) as ticket_query:
@@ -90,7 +90,7 @@ def test_status_allow_cannot_bypass_ticket_scope():
     from app.routes import permissions_catalog_routes as catalog
     api, auth = _client(enabled=True)
     current = _ticket()
-    with patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
+    with api.application.app_context(), patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
          patch.object(catalog, "_simple_global_action_grant_override", return_value=True), \
          patch.object(tickets.Ticket, "query", SimpleNamespace(get=lambda _: current)), \
          patch.object(tickets, "filtrar_tickets_por_usuario",
@@ -107,7 +107,7 @@ def test_status_allow_cannot_finalize_without_double_check():
     from app.routes import permissions_catalog_routes as catalog
     api, auth = _client(enabled=True)
     current = _ticket()
-    with patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
+    with api.application.app_context(), patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
          patch.object(catalog, "_simple_global_action_grant_override", return_value=True), \
          patch.object(tickets.Ticket, "query", SimpleNamespace(get=lambda _: current)), \
          patch.object(tickets, "filtrar_tickets_por_usuario",
@@ -124,7 +124,7 @@ def test_status_allow_cannot_finalize_without_double_check():
 def test_status_flag_off_keeps_legacy_and_avoids_grants():
     from app.routes import permissions_catalog_routes as catalog
     api, auth = _client(enabled=False)
-    with patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
+    with api.application.app_context(), patch.object(tickets.UserORM, "get_by_id", return_value=_user()), \
          patch.object(catalog, "_simple_global_action_grant_override") as decision, \
          patch.object(tickets.Ticket, "query", SimpleNamespace(get=lambda _: None)):
         response = api.put("/api/tickets/update/80", headers=auth,
