@@ -7,6 +7,8 @@ su aprobación exige un contrato de resolución separado (422).
 import hashlib
 import json
 from uuid import UUID
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text
 
@@ -199,12 +201,28 @@ def _resolution_for(row, resolutions):
         if type(data["stock_esperado"]) is not int or data["stock_esperado"] <= 0:
             raise DecisionError(422, "invalid_resolution", "Stock esperado debe ser positivo.")
     elif row.tipo == "UNREGISTERED_FIND":
-        if set(data) != {"accion", "inventario_id", "stock_esperado", "cantidad_fisica", "justificacion"} or data.get("accion") != "VINCULAR_EXISTENTE":
-            raise DecisionError(422, "invalid_resolution", "El hallazgo requiere vinculación explícita a una referencia existente.")
-        if not _positive_id(data["inventario_id"]) or (type(data["stock_esperado"]) is not int or data["stock_esperado"] < 0):
-            raise DecisionError(422, "invalid_resolution", "Identidad o stock de referencia inválidos.")
-        if type(data["cantidad_fisica"]) is not int or not data["stock_esperado"] < data["cantidad_fisica"] <= 100000:
-            raise DecisionError(422, "invalid_resolution", "La cantidad física debe incrementar el stock existente.")
+        if data.get("accion") == "CREAR_NUEVO":
+            campos = {"accion", "categoria", "marca", "descripcion", "familia_equipo_id", "justificacion"}
+            if set(data) != campos:
+                raise DecisionError(422, "invalid_resolution", "El alta requiere categoría, marca, descripción, familia y justificación.")
+            for campo, max_len in (("categoria", 100), ("marca", 100), ("descripcion", 2000)):
+                valor = data[campo]
+                if not isinstance(valor, str) or len(valor.strip()) > max_len:
+                    raise DecisionError(422, "invalid_resolution", f"{campo}: texto inválido.")
+            if not data["categoria"].strip():
+                raise DecisionError(422, "invalid_resolution", "La categoría es obligatoria.")
+            familia = data["familia_equipo_id"]
+            if familia is not None and not _positive_id(familia):
+                raise DecisionError(422, "invalid_resolution", "La familia de aparato es inválida.")
+        elif data.get("accion") == "VINCULAR_EXISTENTE":
+            if set(data) != {"accion", "inventario_id", "stock_esperado", "cantidad_fisica", "justificacion"}:
+                raise DecisionError(422, "invalid_resolution", "La vinculación exige referencia y conteo.")
+            if not _positive_id(data["inventario_id"]) or (type(data["stock_esperado"]) is not int or data["stock_esperado"] < 0):
+                raise DecisionError(422, "invalid_resolution", "Identidad o stock de referencia inválidos.")
+            if type(data["cantidad_fisica"]) is not int or not data["stock_esperado"] < data["cantidad_fisica"] <= 100000:
+                raise DecisionError(422, "invalid_resolution", "La cantidad física debe incrementar el stock existente.")
+        else:
+            raise DecisionError(422, "invalid_resolution", "El hallazgo requiere vinculación o alta autorizada.")
     else:
         raise DecisionError(422, "invalid_resolution", "Tipo de solicitud no admisible.")
     justification = data.get("justificacion")
@@ -219,6 +237,7 @@ def _resolution_targets(rows, resolutions):
         (resolutions[str(row.id)]["inventario_id"], row.sucursal_id)
         for row in rows
         if row.tipo == "UNREGISTERED_FIND"
+        and resolutions[str(row.id)]["accion"] == "VINCULAR_EXISTENTE"
     }
 
 def _lock_official(rows, extra_targets=None):
@@ -264,6 +283,73 @@ _MASTER_STR_LENGTHS = {
 
 
 def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution=None):
+    if row.tipo == "UNREGISTERED_FIND" and resolution["accion"] == "CREAR_NUEVO":
+        # Una solicitud E2 provisional jamás crea el maestro por sí sola.
+        # Esta ruta solo se ejecuta después de una decisión E3 autorizada,
+        # con advisory lock compartido con altas V1 y correcciones de código.
+        if row.inventario_id is not None or row.baseline_canonico != {
+                "inventario_id": None, "sucursal_id": row.sucursal_id}:
+            raise DecisionError(409, "invalid_find", "El origen provisional del hallazgo cambió.")
+        provisional = row.hallazgo_provisional
+        if not isinstance(provisional, dict):
+            raise DecisionError(409, "invalid_find", "No hay identidad física verificable.")
+        code = str(provisional.get("codigo_interno") or "").strip().upper()
+        name = str(provisional.get("nombre") or "").strip()
+        clase = normalizar_clase_inventario_e3(provisional.get("tipo"))
+        if (not code or len(code) > 50 or not name or len(name) > 255
+                or clase != "APARATOS"):
+            raise DecisionError(422, "invalid_find", "El alta exige nombre, tipo Aparatos y etiqueta verificable.")
+        rol = db.session.execute(text("SELECT rol FROM users WHERE id=:id"),
+                                {"id": actor_id}).scalar_one_or_none()
+        if str(rol or "").upper() not in {"ADMIN", "ADMINISTRADOR", "SUPER_ADMIN"}:
+            raise DecisionError(403, "corporate_required", "El alta maestra requiere autorizador corporativo.")
+        if 1 <= row.sucursal_id <= 99 and not code.startswith(f"{row.sucursal_id:02d}"):
+            raise DecisionError(422, "invalid_code", "La etiqueta no corresponde a la sucursal.")
+        duplicate = db.session.execute(select(InventarioGeneral.id).where(
+            func.upper(func.trim(InventarioGeneral.codigo_interno)) == code
+        ).limit(1)).scalar_one_or_none()
+        if duplicate is not None:
+            raise DecisionError(409, "duplicate_code", "La etiqueta física ya tiene un registro oficial.")
+        familia = resolution["familia_equipo_id"]
+        if familia is not None and db.session.execute(text(
+            "SELECT 1 FROM familia_equipo WHERE id=:id AND activo IS TRUE"
+        ), {"id": familia}).scalar_one_or_none() is None:
+            raise DecisionError(422, "invalid_family", "La familia de equipo no existe o está inactiva.")
+        master = InventarioGeneral(
+            tipo="Aparatos", nombre=name, codigo_interno=code,
+            marca=resolution["marca"].strip() or str(provisional.get("marca") or "").strip(),
+            descripcion=resolution["descripcion"].strip(),
+            categoria=resolution["categoria"].strip(), familia_equipo_id=familia,
+            factor_compra=1, unidad_medida="Pieza",
+            fecha_inventario=datetime.now(ZoneInfo("America/Tijuana")).date(),
+        )
+        db.session.add(master)
+        db.session.flush()
+        db.session.add(InventarioSucursal(
+            inventario_id=master.id, sucursal_id=row.sucursal_id, stock=1
+        ))
+        db.session.flush()
+        db.session.add(InventarioCorreccionAltaAuditORM(
+            decision_id=decision.id, solicitud_id=row.id,
+            inventario_id_resultante=master.id, sucursal_id=row.sucursal_id,
+            modalidad="CREACION", stock_anterior=0, stock_nuevo=1,
+            actor_usuario_id=actor_id, motivo=reason,
+        ))
+        db.session.add(InventarioCorreccionAjusteORM(
+            decision_id=decision.id, solicitud_id=row.id,
+            inventario_id=master.id, sucursal_id=row.sucursal_id,
+            stock_anterior=0, stock_nuevo=1, delta_firmada=1,
+            actor_usuario_id=actor_id, motivo=reason,
+        ))
+        decision.resolucion = resolution
+        decision.efecto_anterior = {"inventario_id": None, "stock": 0}
+        decision.efecto_posterior = {
+            "inventario_id": master.id, "codigo_interno": code, "stock": 1
+        }
+        return {"tipo": row.tipo, "accion": "CREAR_NUEVO",
+                "inventario_id": master.id, "codigo_interno": code,
+                "antes": 0, "despues": 1}
+
     if row.tipo == "UNREGISTERED_FIND":
         if row.inventario_id is not None or not isinstance(row.hallazgo_provisional, dict):
             raise DecisionError(409, "invalid_find", "Hallazgo no coincide con su origen provisional.")
@@ -485,7 +571,12 @@ def decidir_lote(*, actor_id, payload):
         for row in rows:
             _require_physical_evidence(row)
             _resolution_for(row, resolutions)
-    if action == "APPROVED" and any(row.tipo == "MASTER_FIELD" and row.campo == "codigo_interno" for row in rows):
+    if action == "APPROVED" and any(
+        (row.tipo == "MASTER_FIELD" and row.campo == "codigo_interno")
+        or (row.tipo == "UNREGISTERED_FIND"
+            and resolutions[str(row.id)]["accion"] == "CREAR_NUEVO")
+        for row in rows
+    ):
         db.session.execute(
             text("SELECT pg_advisory_xact_lock(:domain, :operation)"),
             {"domain": 51022, "operation": 11},
@@ -497,6 +588,8 @@ def decidir_lote(*, actor_id, payload):
                 ("quantity", row.inventario_id, row.sucursal_id)
                 if row.tipo in ("QUANTITY_DIFFERENCE", "NOT_LOCATED")
                 else ("quantity", resolutions[str(row.id)]["inventario_id"], row.sucursal_id)
+                if row.tipo == "UNREGISTERED_FIND" and resolutions[str(row.id)]["accion"] == "VINCULAR_EXISTENTE"
+                else ("new_code", str(row.hallazgo_provisional.get("codigo_interno") or "").strip().upper())
                 if row.tipo == "UNREGISTERED_FIND"
                 else ("master", row.inventario_id, row.campo)
             )
