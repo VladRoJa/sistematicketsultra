@@ -302,6 +302,9 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'warehouse.catalogs' &&
       row.module_key === 'warehouse' &&
       this.result?.warehouse_catalogs_grants_enabled === true
+    ) || (
+      row.module_key === 'planning' &&
+      this.result?.planning_grants_enabled?.[row.action_key] === true
     );
   }
 
@@ -311,7 +314,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs', 'planning.read', 'planning.edit', 'planning.submit', 'planning.approve', 'planning.publish', 'planning.configure_model'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -319,8 +322,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs'].includes(row.action_key)
-      ? (row.action_key === 'warehouse.upload'
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read', 'pm.execute', 'pm.validate', 'pm.configure', 'warehouse.archive', 'warehouse.view', 'warehouse.upload', 'warehouse.catalogs', 'planning.read', 'planning.edit', 'planning.submit', 'planning.approve', 'planning.publish', 'planning.configure_model'].includes(row.action_key)
+      ? (row.module_key === 'planning'
+          ? 'Veto global: un ALLOW no crea operador activo, no concede capacidades ni evita estados o validaciones de metas'
+          : row.action_key === 'warehouse.upload'
           ? 'Veto global: también abarca operaciones M6 y Agregadoras que usan can_upload; ALLOW no otorga capacidad'
           : row.action_key === 'warehouse.view'
           ? 'Veto global: también abarca consultas y revisiones que usan can_view; ALLOW no otorga capacidad'
@@ -348,12 +353,13 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' | 'warehouse' =
+    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' | 'warehouse' | 'planning' =
       row.action_key === 'track.read' ? 'track' :
       row.module_key === 'tickets' ? 'tickets' :
       row.module_key === 'inventory' ? 'inventory' :
       row.module_key === 'pm' ? 'pm' :
-      row.module_key === 'warehouse' ? 'warehouse' : 'openings';
+      row.module_key === 'warehouse' ? 'warehouse' :
+      row.module_key === 'planning' ? 'planning' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
