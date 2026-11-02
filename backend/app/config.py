@@ -158,6 +158,26 @@ class Config:
         "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Planeación Comercial: vetos globales, conserva operador activo y capacidades.
+    PERMISSIONS_PLANNING_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_EDIT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_SUBMIT_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_APPROVE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_PUBLISH_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PLANNING_CONFIGURE_MODEL_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
