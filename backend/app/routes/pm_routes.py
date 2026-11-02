@@ -1,7 +1,7 @@
 #backend\app\routes\pm_routes.py
 
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app, has_app_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
@@ -929,6 +929,34 @@ def _asignar_bitacoras_a_ocurrencias_con_ventana(
 # ────────────────────────────────────────────────────────────
 # POST /mobile/bitacoras
 # ────────────────────────────────────────────────────────────
+def pm_read_grants_enabled():
+    """Flag de lectura PM; no altera el permiso compartido can_pm_view()."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_PM_READ_GRANTS_ENABLED", False
+    ) is True
+
+
+def _pm_read_grant_veto(user):
+    # Ejecutar sólo después del gate de rol/ACL. ALLOW nunca concede sucursal.
+    if pm_read_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="pm.read"
+        )
+        if decision is False:
+            return {
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la consulta de PM.",
+            }, 403
+    return None
+
+
+def _require_pm_read_action(user):
+    # Conserva las excepciones COMPRAS/COORDINADOR y el gate legacy.
+    denied = require_pm_view(user)
+    return denied if denied else _pm_read_grant_veto(user)
+
+
 @pm_bp.route("/access", methods=["GET"])
 @jwt_required()
 def pm_read_access():
@@ -941,6 +969,10 @@ def pm_read_access():
     if _pm_user_role(user) in {"COMPRAS", "COORDINADOR_MANTENIMIENTO"}:
         # La excepción individual solo es útil con sucursales asignadas.
         allowed = allowed and bool(_pm_user_assigned_sucursales(user))
+
+    # /access conserva HTTP 200 de capabilities; el veto apaga SOLO la lectura.
+    if allowed and _pm_read_grant_veto(user) is not None:
+        allowed = False
 
     return jsonify({
         "allowed": bool(allowed),
@@ -1013,7 +1045,7 @@ def pm_obtener_bitacora_detalle(bitacora_pm_id):
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1046,7 +1078,7 @@ def pm_listar_bitacoras():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1162,7 +1194,7 @@ def pm_listar_configuraciones():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1294,7 +1326,7 @@ def pm_preventivo_dashboard():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
@@ -1510,7 +1542,7 @@ def pm_calendario():
     if user_err:
         return jsonify(user_err[0]), user_err[1]
 
-    denied_action = require_pm_view(user)
+    denied_action = _require_pm_read_action(user)
     if denied_action:
         return jsonify(denied_action[0]), denied_action[1]
 
