@@ -5,7 +5,7 @@ from io import BytesIO
 import io
 import os
 import tempfile
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_cors import CORS
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import pandas as pd
@@ -189,17 +189,36 @@ def _resolve_inventory_read_sucursal_ids(requested_sucursal_id=None):
     return allowed_sucursales, None
 
 
+def inventory_master_write_grants_enabled():
+    """Activa un veto global sin sustituir roles ni validaciones existentes."""
+    return current_app.config.get(
+        "PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED", False
+    ) is True
+
+
 def _require_inventory_global_write():
     user = _get_current_inventory_user()
     rol = str(getattr(user, "rol", "") or "").strip().upper() if user else ""
 
-    if rol in INVENTORY_GLOBAL_WRITE_ROLES:
-        return None
+    # ALLOW nunca eleva a un usuario fuera de los roles históricos.
+    if rol not in INVENTORY_GLOBAL_WRITE_ROLES:
+        return jsonify({
+            "error": "Forbidden",
+            "detail": "No tienes permiso para administrar el inventario maestro.",
+        }), 403
 
-    return jsonify({
-        "error": "Forbidden",
-        "detail": "No tienes permiso para administrar el inventario maestro.",
-    }), 403
+    if inventory_master_write_grants_enabled():
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        grant_decision = _simple_global_action_grant_override(
+            user=user, action_full_key="inventory.master_write"
+        )
+        if grant_decision is False:
+            return jsonify({
+                "error": "Forbidden",
+                "detail": "No tienes habilitada la administración del inventario maestro.",
+            }), 403
+
+    return None
 
 
 def _require_inventory_movement_write(sucursal_id):
