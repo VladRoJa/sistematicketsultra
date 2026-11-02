@@ -55,6 +55,7 @@ export interface VisualAuditResponse {
   inventory_read_grants_enabled: boolean;
   pm_read_grants_enabled: boolean;
   pm_execute_grants_enabled: boolean;
+  pm_validate_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
