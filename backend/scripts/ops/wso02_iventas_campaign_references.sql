@@ -1,6 +1,6 @@
 -- WSO-02: review non-FK campaign references. READ ONLY, aggregated only.
 \set ON_ERROR_STOP on
-SET LOCAL statement_timeout = '30s';
+SET statement_timeout = '30s';
 
 \echo '=== WSO-02 / Campaign and Contact Center logical pins ==='
 WITH superseded AS (
@@ -8,7 +8,6 @@ WITH superseded AS (
     FROM public.marketing_iventas_sync_runs r
     WHERE r.status = 'COMPLETED'
       AND r.is_canonical = false
-      AND r.payload_pruned_at IS NULL
       AND EXISTS (
           SELECT 1 FROM public.marketing_iventas_sync_runs newer
           WHERE newer.period_key = r.period_key
