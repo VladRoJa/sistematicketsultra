@@ -238,8 +238,9 @@ def identificar_corte_de_entrega(raw):
     """Identifica el corte existente sin pedir IDs ni CSV al operador.
 
     Nunca utiliza el inventario vivo como fallback. En las primeras plantillas
-    el folio quedó PENDIENTE; se acepta solo si hay un único ciclo abierto
-    para la sucursal. Si son varios, solicitar una nueva plantilla con folio.
+    el folio quedó PENDIENTE o PRELIMINAR · SIN FOLIO E4; se acepta solo
+    si hay un único ciclo abierto para la sucursal. Si hay varios, solicitar
+    una nueva plantilla con folio.
     """
     try:
         control = leer_identidad_entrega(raw)
@@ -264,7 +265,10 @@ def identificar_corte_de_entrega(raw):
         if lev.estado == "CLOSED":
             raise E4Error(409, "CORTE_CERRADO", "El ciclo del Excel ya está cerrado")
         return lev
-    if folio and "PENDIENTE" not in folio.upper():
+    # Marcador literal usado por la plantilla real v0.2 del 28/10/2026.
+    # No convertir folios arbitrarios en fallback al primer corte disponible.
+    marcador_preliminar = folio.upper() == "PRELIMINAR · SIN FOLIO E4"
+    if folio and "PENDIENTE" not in folio.upper() and not marcador_preliminar:
         raise E4Error(422, "FOLIO_NO_RECONOCIDO",
                       "El folio del Excel no es válido; no se puede asumir otro corte")
     candidatos = (Lev.query.filter(
