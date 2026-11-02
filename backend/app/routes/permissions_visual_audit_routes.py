@@ -20,6 +20,7 @@ from app.models.internal_documents import InternalDocumentORM
 from app.models.permiso_model import Permiso
 from app.routes import permissions_catalog_routes as catalog
 from app.routes.track_routes import track_read_grants_enabled
+from app.utils.planning_access import planning_action_grants_enabled
 from app.utils.warehouse_access import (
     warehouse_view_grants_enabled, warehouse_upload_grants_enabled,
     warehouse_catalogs_grants_enabled, warehouse_archive_grants_enabled,
@@ -276,7 +277,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs", "planning.read", "planning.edit", "planning.submit", "planning.approve", "planning.publish", "planning.configure_model"}
     }
     for grant in query.all():
         principal = (
@@ -653,6 +654,19 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_programacion_pm_preserva_scope_y_equipo"
             catalog_source = "pm_configure_grant_operativo"
             catalog_reason = "check_no_autoriza_configuracion_ni_sucursal"
+    if action.full_key in PLANNING_FLAGS and planning_action_grants_enabled(action.full_key):
+        # Veto sobre el guard específico. Un ALLOW no activa al operador ni
+        # habilita capacidades distintas. Estado/autoría del batch siguen vigentes.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy
+            legacy_source = "planning_access.require_planning_*+grant"
+            legacy_reason = "veto_global_preserva_operador_activo_y_capacidad"
+            catalog_source = "planning_grant_operativo"
+            catalog_reason = "check_no_autoriza_batch_ni_transicion"
     warehouse_flags = {
         "warehouse.view": warehouse_view_grants_enabled,
         "warehouse.upload": warehouse_upload_grants_enabled,
@@ -852,6 +866,10 @@ def visual_audit_matrix():
         "warehouse_view_grants_enabled": warehouse_view_grants_enabled(),
         "warehouse_upload_grants_enabled": warehouse_upload_grants_enabled(),
         "warehouse_catalogs_grants_enabled": warehouse_catalogs_grants_enabled(),
+        "planning_grants_enabled": {
+            action_key: planning_action_grants_enabled(action_key)
+            for action_key in PLANNING_FLAGS
+        },
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
