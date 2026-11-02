@@ -57,3 +57,18 @@ def test_corte_caja_manual_upload_returns_gone_before_storage(monkeypatch):
     assert code == 410
     assert response.get_json()["code"] == "WAREHOUSE_REPORT_RETIRED"
     assert writes == []
+
+
+def test_direct_warehouse_upload_service_rejects_retired_report_before_io():
+    from app.warehouse.services.warehouse_document_upload_service import (
+        WarehouseDocumentValidationError,
+        create_warehouse_document_upload,
+    )
+
+    with pytest.raises(WarehouseDocumentValidationError, match="retirado"):
+        create_warehouse_document_upload(
+            report_type_key="corte_caja",
+            original_filename="corte.xlsx",
+            file_bytes=b"not-an-xlsx",
+            uploaded_by_user_id=47,
+        )
