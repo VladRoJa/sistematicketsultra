@@ -323,6 +323,25 @@ export class LevantamientosComponent implements OnInit {
     });
   }
 
+  descargarReporte(tipo: 'cambios' | 'existencias'): void {
+    if (!this.seleccionado) return;
+    const lev = this.seleccionado;
+    this.e4.descargarReporte(lev.id, tipo).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'E4_sucursal_' + lev.sucursal_id + '_corte_' +
+          lev.id + '_' + tipo + '.xlsx';
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: err => {
+        this.error = this.errorHttp(err, 'No fue posible descargar el reporte E4.');
+      },
+    });
+  }
+
   cargarRevisiones(): void {
     if (!this.seleccionado) return;
     const id = this.seleccionado.id;
