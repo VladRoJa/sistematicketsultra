@@ -80,6 +80,11 @@ def _casos(lev, parsed, referencias):
                 "descripcion": norm(data.get("descripcion") or data.get("observaciones")),
             })
             blocked = "IDENTIDAD_FISICA_INSUFICIENTE"
+        if "CODIGO_HALLAZGO_EN_CORTE" in row["diagnosticos"]:
+            # La etiqueta pertenece a un aparato oficial del corte.
+            # Conservar el hallazgo como discrepancia accionable sin E2,
+            # aunque otra fila del mismo Excel sí pueda crear su solicitud.
+            blocked = "CODIGO_HALLAZGO_EN_CORTE"
         if k in usados:
             # Se conserva un incidente bloqueado para todo el grupo; no
             # se fusionan supuestos aparatos bajo una identidad oficial.
