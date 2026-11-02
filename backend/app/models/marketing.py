@@ -1977,6 +1977,10 @@ class MarketingIventasSyncRunORM(db.Model):
         default=False,
     )
 
+    # WSO-02: non-canonical superseded payload was removed;
+    # retain the run status and counters for operational history.
+    payload_pruned_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
