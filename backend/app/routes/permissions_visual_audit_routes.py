@@ -25,6 +25,7 @@ from app.routes.inventarios import (
     inventory_movement_write_grants_enabled,
     inventory_read_grants_enabled,
 )
+from app.routes.pm_routes import pm_read_grants_enabled
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
     tickets_update_status_grants_enabled,
@@ -266,7 +267,7 @@ def _bulk_grants(users, actions):
     latest = {}
     runtime_read_ids = {
         action.id for action in actions
-        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read"}
+        if action.full_key in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read"}
     }
     for grant in query.all():
         principal = (
@@ -570,6 +571,19 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_lectura_global_preserva_alcance_real"
             catalog_source = "inventory_read_grant_operativo"
             catalog_reason = "check_global_no_certifica_sucursal"
+    if action.full_key == "pm.read" and pm_read_grants_enabled():
+        # DENY es concluyente aun sin recurso. ALLOW no acredita sucursales
+        # ni reemplaza la excepción individual COMPRAS/COORDINADOR.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = legacy if branch_id is None else None
+            legacy_source = "pm_routes._require_pm_read_action+grant"
+            legacy_reason = "veto_lectura_pm_no_evade_acl_ni_sucursal"
+            catalog_source = "pm_read_grant_operativo"
+            catalog_reason = "check_global_no_autoriza_bitacora_ni_sucursal"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -752,6 +766,7 @@ def visual_audit_matrix():
         "inventory_master_write_grants_enabled": inventory_master_write_grants_enabled(),
         "inventory_movement_write_grants_enabled": inventory_movement_write_grants_enabled(),
         "inventory_read_grants_enabled": inventory_read_grants_enabled(),
+        "pm_read_grants_enabled": pm_read_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
