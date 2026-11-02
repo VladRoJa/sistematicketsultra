@@ -177,9 +177,10 @@ def test_heterogeneous_or_object_dependent_actions_remain_unknown(role, action):
 
 def test_inventory_movement_is_never_global_without_branch_even_for_admin():
     user = _user("ADMINISTRADOR")
-    row = _row(user, "inventory.movement_write")
-    assert row["legacy_allowed"] is None
-    assert row["scope"] == "requiere_contexto"
+    with Flask(__name__).app_context():
+        row = _row(user, "inventory.movement_write")
+        assert row["legacy_allowed"] is None
+        assert row["scope"] == "requiere_contexto"
 
 
 def test_pm_scoped_grant_without_assigned_branch_is_not_authorization():
