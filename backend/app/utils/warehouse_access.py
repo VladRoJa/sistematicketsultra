@@ -1,9 +1,9 @@
 # app/utils/warehouse_access.py
 
-from flask import jsonify
+from flask import jsonify, current_app, has_app_context
 from flask_jwt_extended import get_jwt_identity
 
-from app.models import WarehouseOperatorORM
+from app.models import WarehouseOperatorORM, UserORM
 
 
 def get_current_warehouse_operator() -> WarehouseOperatorORM | None:
@@ -83,10 +83,30 @@ def require_warehouse_upload():
     return None
 
 
+def warehouse_archive_grants_enabled():
+    """Veto opcional de archivar, además de la allowlist can_archive."""
+    return has_app_context() and current_app.config.get(
+        "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", False
+    ) is True
+
+
 def require_warehouse_archive():
     operator = get_current_warehouse_operator()
 
     if operator is None or not bool(operator.can_archive):
         return _forbidden_response("No autorizado para archivar documentos de Warehouse")
+
+    # La casilla es solo un veto; un ALLOW nunca crea operador ni can_archive.
+    # Con el flag OFF se conserva el guard legacy sin consultar grants.
+    if warehouse_archive_grants_enabled():
+        user = UserORM.get_by_id(int(get_jwt_identity()))
+        if user is None:
+            return _forbidden_response("No autorizado para archivar documentos de Warehouse")
+        from app.routes.permissions_catalog_routes import _simple_global_action_grant_override
+        decision = _simple_global_action_grant_override(
+            user=user, action_full_key="warehouse.archive"
+        )
+        if decision is False:
+            return _forbidden_response("No tienes habilitado archivar documentos de Warehouse")
 
     return None
