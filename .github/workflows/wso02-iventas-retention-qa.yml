@@ -1,0 +1,68 @@
+name: WSO-02 iVentas Retention QA
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/models/marketing.py'
+      - 'backend/app/services/marketing_iventas_run_counters_service.py'
+      - 'backend/scripts/ops/wso02_iventas_*'
+      - 'backend/migrations/versions/wso02ivnt110226_mark_pruned_iventas_run_payload.py'
+      - 'backend/tests/marketing/test_wso02_iventas_payload_prune_pg.py'
+      - '.github/workflows/wso02-iventas-retention-qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wso02-focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wso02_ci
+          POSTGRES_USER: wso02_ci
+          POSTGRES_PASSWORD: synthetic_wso02_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wso02_ci -d wso02_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      WSO02_TEST_POSTGRES_URL: 'postgresql+psycopg2://wso02_ci:synthetic_wso02_only@127.0.0.1:5432/wso02_ci'
+      SECRET_KEY: synthetic-wso02-only
+      JWT_SECRET_KEY: synthetic-wso02-only
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile WSO-02 changes
+        run: |
+          python -m py_compile \
+            app/models/marketing.py \
+            app/services/marketing_iventas_run_counters_service.py \
+            scripts/ops/wso02_iventas_payload_prune.py \
+            migrations/versions/wso02ivnt110226_mark_pruned_iventas_run_payload.py \
+            tests/marketing/test_wso02_iventas_payload_prune_pg.py
+      - name: Test transactional retention safety and iVentas counters
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/marketing/test_wso02_iventas_payload_prune_pg.py \
+            tests/services/test_marketing_iventas_run_counters_service.py \
+            tests/services/test_marketing_iventas_run_lifecycle_service.py
