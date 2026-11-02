@@ -269,8 +269,11 @@ def parse_xlsx_v01(raw, sucursal_id, expected, modalidad):
             codigo_hallazgo = norm(fila["codigo_declarado"])
             if codigo_hallazgo in ignorar_etiquetas or codigo_hallazgo not in codigos_base:
                 continue
+            # Es un bloqueo de identidad de este hallazgo, no un error
+            # estructural que deba descartar revisiones de otros aparatos.
+            # _casos() mantiene este hallazgo BLOCKED, sin solicitar alta E2.
             diagnostics.append({
-                "severidad": "ERROR", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
+                "severidad": "AVISO", "codigo": "CODIGO_HALLAZGO_EN_CORTE",
                 "hoja": "HALLAZGOS", "fila": fila["fila_excel"],
                 "codigo_declarado": fila["codigo_declarado"],
                 "inventario_ids_existentes": codigos_base[codigo_hallazgo],
