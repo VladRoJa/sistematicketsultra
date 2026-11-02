@@ -646,6 +646,29 @@ def tickets_update_status_grants_enabled() -> bool:
     return str(value).strip().lower() == "true"
 
 
+def tickets_update_grants_enabled() -> bool:
+    """Veto opcional de metadatos y compromisos; no autoriza cambiar estados."""
+    from flask import has_app_context
+    if not has_app_context():
+        return False
+    value = current_app.config.get("PERMISSIONS_TICKETS_UPDATE_GRANTS_ENABLED", False)
+    return str(value).strip().lower() == "true"
+
+
+def _ticket_update_metadata_requested(data) -> bool:
+    """Diferencia metadatos de la mera transición de estado en PUT /update."""
+    if not isinstance(data, dict):
+        return False
+    return (
+        bool(data.get("fecha_solucion"))
+        or bool(data.get("historial_fechas"))
+        or bool(data.get("motivo_cambio"))
+        or "necesita_refaccion" in data
+        or "descripcion_refaccion" in data
+        or "refaccion_definida_por_jefe" in data
+    )
+
+
 def tickets_notify_grants_enabled() -> bool:
     """Check de notificación; OFF mantiene el guard JWT y scope legacy."""
     from flask import has_app_context
@@ -1426,6 +1449,15 @@ def update_ticket_status(id):
             return jsonify({"mensaje": "No autorizado para actualizar este ticket"}), 403
 
         data = request.get_json() or {}
+        # /update mezcla cambio de estado y metadatos. Si vienen ambos,
+        # ambos checks pueden vetar; el allow nunca omite las reglas existentes.
+        if (
+            tickets_update_grants_enabled()
+            and _ticket_update_metadata_requested(data)
+            and _ticket_action_grant_denied(actor, "tickets.update")
+        ):
+            return jsonify({"mensaje": "No autorizado para actualizar datos de tickets."}), 403
+
         estado = data.get("estado")
         fecha_solucion = data.get("fecha_solucion")
         fecha_en_progreso = data.get("fecha_en_progreso")
@@ -2844,6 +2876,13 @@ def notify_ticket(ticket_id):
 @jwt_required()
 def set_compromiso(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    # Este endpoint modifica datos de compromiso/refacción, nunca el estado.
+    # El guard de roles/objeto y las restricciones PM siguen después.
+    if user and tickets_update_grants_enabled() and _ticket_action_grant_denied(
+        user, "tickets.update",
+    ):
+        return jsonify({"mensaje": "No autorizado para actualizar datos de tickets."}), 403
+
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje": "Ticket no encontrado"}), 404
