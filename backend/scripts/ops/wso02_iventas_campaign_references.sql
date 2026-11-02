@@ -32,10 +32,10 @@ pins AS (
            ) AS reactivation_pinned,
            EXISTS (
              SELECT 1 FROM public.marketing_campaign_v2_campaigns v
-             WHERE COALESCE(
-               v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id',
-               v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id'
-             ) = r.id::text
+             WHERE (
+               v.audience_definition_json -> 'source_metadata' ->> 'iventas_sync_run_id' = r.id::text
+               OR v.audience_definition_json -> 'sources' ->> 'iventas_sync_run_id' = r.id::text
+             )
            ) AS campaign_v2_pinned
     FROM superseded r
 )
