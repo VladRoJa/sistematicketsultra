@@ -385,6 +385,37 @@ export class LevantamientosComponent implements OnInit {
       this.motivoCodigoHallazgo.trim().length <= 1000;
   }
 
+  corregirHallazgo(): void {
+    if (!this.puedeCorregirHallazgo || !this.seleccionado ||
+        !this.correccionHallazgoActiva) return;
+    const lev = this.seleccionado.id;
+    const rev = this.correccionHallazgoActiva.id;
+    const key = this.correccionHallazgoKey || crypto.randomUUID();
+    this.correccionHallazgoKey = key;
+    this.procesando = true;
+    this.error = '';
+    this.e4.corregirHallazgo(lev, rev, {
+      nuevo_codigo: this.codigoCorregidoHallazgo.trim(),
+      motivo: this.motivoCodigoHallazgo.trim(),
+      idempotency_key: key,
+    }).subscribe({
+      next: data => {
+        this.procesando = false;
+        this.aviso = 'Hallazgo corregido. Solicitud E2 #' +
+          data.correccion.solicitud_e2_id +
+          ' pendiente de E3. Falta verificar la etiqueta física.';
+        this.correccionHallazgoActiva = null;
+        this.correccionHallazgoKey = null;
+        this.cargarRevisiones();
+        this.cargarTablero();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'No se pudo corregir el hallazgo.');
+      },
+    });
+  }
+
   abrirSustitucion(row: RevisionAutomaticaE4): void {
     if (this.procesando || this.seleccionado?.estado === 'CLOSED'
         || row.tipo !== 'MASTER_FIELD' || row.campo !== 'codigo_interno'
