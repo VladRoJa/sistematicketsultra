@@ -53,6 +53,7 @@ export interface VisualAuditResponse {
   inventory_master_write_grants_enabled: boolean;
   inventory_movement_write_grants_enabled: boolean;
   inventory_read_grants_enabled: boolean;
+  pm_read_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
