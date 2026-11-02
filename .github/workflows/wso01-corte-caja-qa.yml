@@ -19,12 +19,27 @@ jobs:
   wso01-focused:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wso01_ci
+          POSTGRES_USER: wso01_ci
+          POSTGRES_PASSWORD: synthetic_wso01_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wso01_ci -d wso01_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
     env:
       PYTHONPATH: .
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      WSO01_TEST_POSTGRES_URL: 'postgresql+psycopg2://wso01_ci:synthetic_wso01_only@127.0.0.1:5432/wso01_ci'
       SECRET_KEY: synthetic-wso01-only
       JWT_SECRET_KEY: synthetic-wso01-only
       SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
@@ -52,7 +67,8 @@ jobs:
             migrations/versions/wso01caja110226_retire_corte_caja.py \
             scripts/ops/wso01_corte_caja_files.py \
             tests/warehouse/test_wso01_corte_caja_retired.py \
-            tests/warehouse/test_wso01_corte_caja_files.py
+            tests/warehouse/test_wso01_corte_caja_files.py \
+            tests/warehouse/test_wso01_retirement_migration_pg.py
       - name: Run focused retirement and existing Warehouse/Gasca regression tests
         run: |
           python -m pytest -q --tb=short -o addopts= \
