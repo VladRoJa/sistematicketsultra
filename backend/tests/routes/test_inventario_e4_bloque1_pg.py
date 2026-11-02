@@ -1,6 +1,7 @@
 """E4 Bloque 1: compatibilidad v0.1/v0.2, evidencia histórica y no mutación V1."""
 import csv
 from hashlib import sha256
+from datetime import datetime
 from io import BytesIO, StringIO
 from uuid import uuid4
 import importlib.util
@@ -878,6 +879,9 @@ def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api, monkeypatch):
     assert created.status_code == 201, created.get_json()
     lev = created.get_json()["levantamiento"]["id"]
     book = load_workbook(BytesIO(workbook(first="SI", second="NO", found=False)))
+    # El Excel real usa una celda de fecha, no un texto AAAA-MM-DD.
+    book["CONTROL"]["C8"] = datetime(2026, 10, 30)
+    book["CONTROL"]["C8"].number_format = "mm-dd-yy"
     book["APARATOS"]["G9"] = "No fue localizado tras inspeccionar todo el club"
     payload = BytesIO()
     book.save(payload)
@@ -886,6 +890,7 @@ def test_auto_revisiones_e2_unica_por_ciclo_y_nueva_evidencia(api, monkeypatch):
         "idempotency_key": str(uuid4()), "file": (BytesIO(payload.getvalue()), "devuelto.xlsx"),
     })
     assert received.status_code == 201, received.get_json()
+    assert received.get_json()["importacion"]["control"]["fecha_recorrido"] == "2026-10-30"
     summary = received.get_json()["importacion"]["resumen"]["revisiones_auto"]
     assert summary == {"nuevas": 1, "reutilizadas": 0, "bloqueadas": 0, "e2_creadas": 1}
     state = client.get(f"{root}/{lev}/revisiones", headers=tokens[1])
