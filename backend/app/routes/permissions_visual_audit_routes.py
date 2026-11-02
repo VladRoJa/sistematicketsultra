@@ -23,6 +23,7 @@ from app.routes.track_routes import track_read_grants_enabled
 from app.routes.inventarios import (
     inventory_master_write_grants_enabled,
     inventory_movement_write_grants_enabled,
+    inventory_read_grants_enabled,
 )
 from app.routes.ticket_routes import (
     tickets_create_grants_enabled,
@@ -556,6 +557,19 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             legacy_reason = "veto_movimiento_sin_bypass_de_sucursal"
             catalog_source = "inventory_movement_write_grant_operativo"
             catalog_reason = "check_global_no_certifica_sucursal_ni_reversion"
+    if action.full_key == "inventory.read" and inventory_read_grants_enabled():
+        # Una prohibición global veta cualquier consulta aunque no haya sucursal.
+        # Un ALLOW no certifica una sucursal que la petición no ha validado.
+        if candidate is not None and catalog._is_simple_global_module_grant(candidate):
+            if candidate.effect == "deny":
+                legacy = False
+                catalog_allowed = False
+            else:
+                catalog_allowed = True if branch_id is None else None
+            legacy_source = "inventarios._resolve_inventory_read_sucursal_ids+grant"
+            legacy_reason = "veto_lectura_global_preserva_alcance_real"
+            catalog_source = "inventory_read_grant_operativo"
+            catalog_reason = "check_global_no_certifica_sucursal"
     if action.full_key == "internal_documents.view":
         # Ni la proyección genérica True ni un grant de entrada equivalen
         # a permiso sobre un documento concreto. Sin objeto también es
@@ -572,7 +586,7 @@ def evaluate_pair(user, action, context, grants=None, branch_id=None, document=N
             set(WAREHOUSE_FLAGS) | set(PLANNING_FLAGS) |
             {"warehouse.catalogs", "track.read", "track.run_daily_pipeline",
              "track.run_agregadoras", "internal_documents.manage", "internal_documents.view",
-             "inventory.master_write", "inventory.movement_write", "tickets.delete_all"}
+             "inventory.master_write", "inventory.movement_write", "inventory.read", "tickets.delete_all"}
         ):
             legacy, legacy_reason = None, "branch_guard_no_evaluable_sin_recurso"
         # Documentos mantienen sus propios controles, no heredados del filtro global.
@@ -737,6 +751,7 @@ def visual_audit_matrix():
         "tickets_close_grants_enabled": tickets_close_grants_enabled(),
         "inventory_master_write_grants_enabled": inventory_master_write_grants_enabled(),
         "inventory_movement_write_grants_enabled": inventory_movement_write_grants_enabled(),
+        "inventory_read_grants_enabled": inventory_read_grants_enabled(),
         "note": "Solo consulta. Legacy comprobado únicamente en predicados declarados; no reemplaza enforcement.",
         "view": perspective, "rows": page, "group_counts": group_counts,
         "sorting": {"sort_by": sort_by, "sort_dir": sort_dir, "group_by": group_by, "decision": decision},
