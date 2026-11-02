@@ -142,6 +142,17 @@ class Config:
         "PERMISSIONS_PM_CONFIGURE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Warehouse: vetos por acción, sin crear operadores ni superar capacidades.
+    PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_VIEW_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_UPLOAD_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+    PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_WAREHOUSE_CATALOGS_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Warehouse: veto global sobre archivar uploads, además de can_archive.
     PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED = os.getenv(
         "PERMISSIONS_WAREHOUSE_ARCHIVE_GRANTS_ENABLED", "false"
