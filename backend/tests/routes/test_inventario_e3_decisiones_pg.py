@@ -1036,3 +1036,67 @@ def test_e3_no_auth_y_claims_jwt_falsos_no_sustituyen_rol_de_db(env):
     assert client.get(base + "/revision/contexto",headers=headers).status_code == 403
     assert client.post(base + "/decisiones/lote",headers=headers,json=_payload([req])).status_code == 403
     assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+
+
+def test_e3_hallazgo_alta_nueva_auditada_sin_entrada_v1(env):
+    _grant(47)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    row = db.session.get(InventarioSolicitudCorreccionORM, req)
+    row.hallazgo_provisional = {
+        "nombre": "Prensa vertical", "tipo": "APARATOS",
+        "marca": "Prueba", "codigo_interno": "07PINUEVO55",
+    }
+    db.session.commit()
+    payload = _payload([req])
+    payload["resoluciones"] = {str(req): {
+        "accion": "CREAR_NUEVO",
+        "categoria": "Aparatos de fuerza", "marca": "Prueba",
+        "descripcion": "Aparato nuevo identificado durante levantamiento físico",
+        "familia_equipo_id": 1,
+        "justificacion": "Alta única verificada y autorizada por corporativo.",
+    }}
+    result = _post(env, 47, payload)
+    assert result.status_code == 201, result.get_json()
+    effect = result.get_json()["items"][0]["efecto"]
+    new_id = effect["inventario_id"]
+    assert effect["accion"] == "CREAR_NUEVO"
+    assert _sql("SELECT codigo_interno FROM inventario_general WHERE id=:id", {"id": new_id}) == "07PINUEVO55"
+    assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=:id AND sucursal_id=7",
+                {"id": new_id}) == 1
+    assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria "
+                "WHERE solicitud_id=:id AND modalidad='CREACION'", {"id": req}) == 1
+    assert _sql("SELECT count(*) FROM movimientos_inventario") == 0
+    assert _post(env, 47, payload).status_code == 200
+
+    conflict = _request("UNREGISTERED_FIND", inv=None)
+    row = db.session.get(InventarioSolicitudCorreccionORM, conflict)
+    row.hallazgo_provisional = {
+        "nombre": "Otro aparato", "tipo": "APARATOS",
+        "codigo_interno": "07PINUEVO55",
+    }
+    db.session.commit()
+    blocked = _payload([conflict])
+    blocked["resoluciones"] = {str(conflict): dict(payload["resoluciones"][str(req)])}
+    result = _post(env, 47, blocked)
+    assert result.status_code == 409, result.get_json()
+    assert _sql("SELECT count(*) FROM inventario_general WHERE codigo_interno='07PINUEVO55'") == 1
+
+
+def test_e3_hallazgo_alta_denegada_sin_facultad_corporativa(env):
+    _grant(91, scope="branch", branch=7)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    row = db.session.get(InventarioSolicitudCorreccionORM, req)
+    row.hallazgo_provisional = {
+        "nombre": "Prensa vertical", "tipo": "APARATOS",
+        "codigo_interno": "07PINUEVO56",
+    }
+    db.session.commit()
+    payload = _payload([req])
+    payload["resoluciones"] = {str(req): {
+        "accion": "CREAR_NUEVO", "categoria": "Fuerza",
+        "marca": "", "descripcion": "", "familia_equipo_id": None,
+        "justificacion": "Alta que solo puede autorizar corporativo.",
+    }}
+    result = _post(env, 91, payload)
+    assert result.status_code == 403, result.get_json()
+    assert _sql("SELECT count(*) FROM inventario_general WHERE codigo_interno='07PINUEVO56'") == 0

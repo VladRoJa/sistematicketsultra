@@ -202,7 +202,7 @@ def _efecto_e3_confirmado(lev, revision, solicitud):
             JOIN inventario_sucursal s
               ON s.inventario_id=i.id AND s.sucursal_id=a.sucursal_id
             WHERE a.solicitud_id=:solicitud AND a.sucursal_id=:branch
-              AND a.modalidad='VINCULACION' AND s.stock>0
+              AND a.modalidad IN ('VINCULACION','CREACION') AND s.stock>0
               AND upper(btrim(i.codigo_interno))=:codigo
             LIMIT 1
         """), {"solicitud": solicitud.id, "branch": lev.sucursal_id,

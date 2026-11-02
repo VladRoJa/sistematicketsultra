@@ -183,33 +183,75 @@
               </label>
             </ng-container>
             <ng-container *ngIf="solicitud.tipo === 'UNREGISTERED_FIND'">
-              <h3>#{{ solicitud.id }} · Vincular a una referencia existente</h3>
+              <h3>#{{ solicitud.id }} · Resolver hallazgo físico</h3>
               <p>Hallazgo: {{ textoValor(solicitud.hallazgo_provisional) }}.
-                Debe coincidir con el equipo oficial, incluido el código físico si lo tiene.
-                No se crearán artículos nuevos; la cantidad física es el total final, no un incremento.
-                La vinculación exige código oficial y etiqueta física coincidentes.</p>
+                La identidad y etiqueta del Excel son evidencia histórica.
+                Ningún alta se ejecuta hasta confirmar la autorización E3.</p>
               <p class="revision-error" *ngIf="faltaCodigoHallazgo(solicitud)">
-                No hay código físico declarado. Requiere un procedimiento de identificación adicional:
-                no puede autorizarse la vinculación en E3.
+                Falta código físico. Requiere identificación antes de autorizar.
               </p>
-              <div class="revision-resolucion__numeros">
-                <label>ID del inventario oficial
-                  <input type="number" min="1" step="1" name="e3Inventario{{ solicitud.id }}"
-                    [(ngModel)]="resoluciones[solicitud.id].inventario_id"
-                    (ngModelChange)="actualizado()" />
+              <label>Tipo de resolución
+                <select [(ngModel)]="resoluciones[solicitud.id].accion"
+                  name="e3AccionHallazgo{{ solicitud.id }}"
+                  (ngModelChange)="actualizado()">
+                  <option *ngIf="contexto?.corporativo" value="CREAR_NUEVO">Crear aparato oficial nuevo (1 unidad)</option>
+                  <option value="VINCULAR_EXISTENTE">Vincular con inventario oficial existente</option>
+                </select>
+              </label>
+              <ng-container *ngIf="resoluciones[solicitud.id].accion === 'CREAR_NUEVO'">
+                <p>Se creará un aparato con el nombre y código identificador del hallazgo,
+                  con existencia inicial de 1 en esta sucursal. El backend verificará
+                  que el código no exista y conservará toda la auditoría.</p>
+                <div class="revision-resolucion__numeros">
+                  <label>Categoría (obligatoria)
+                    <input type="text" maxlength="100"
+                      name="e3CategoriaAlta{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].categoria"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                  <label>Marca
+                    <input type="text" maxlength="100"
+                      name="e3MarcaAlta{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].marca"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                  <label>ID familia equipo (opcional, catálogo activo)
+                    <input type="number" min="1" step="1"
+                      name="e3FamiliaAlta{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].familia_equipo_id"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                </div>
+                <label>Descripción del aparato y evidencia
+                  <textarea rows="2" maxlength="2000"
+                    name="e3DescripcionAlta{{ solicitud.id }}"
+                    [(ngModel)]="resoluciones[solicitud.id].descripcion"
+                    (ngModelChange)="actualizado()"></textarea>
                 </label>
-                <label>Stock oficial esperado
-                  <input type="number" min="0" step="1" name="e3Stock{{ solicitud.id }}"
-                    [(ngModel)]="resoluciones[solicitud.id].stock_esperado"
-                    (ngModelChange)="actualizado()" />
-                </label>
-                <label>Cantidad física verificada
-                  <input type="number" min="1" step="1" name="e3Cantidad{{ solicitud.id }}"
-                    [(ngModel)]="resoluciones[solicitud.id].cantidad_fisica"
-                    (ngModelChange)="actualizado()" />
-                </label>
-              </div>
-              <label *ngIf="!aprobacionEspecialIndividual">Justificación de identidad y conteo (mínimo 20 caracteres)
+              </ng-container>
+              <ng-container *ngIf="resoluciones[solicitud.id].accion === 'VINCULAR_EXISTENTE'">
+                <p>El código oficial y la etiqueta física deben coincidir.
+                  Esta acción modifica la existencia final de una referencia existente,
+                  nunca crea un aparato adicional.</p>
+                <div class="revision-resolucion__numeros">
+                  <label>ID del inventario oficial
+                    <input type="number" min="1" step="1" name="e3Inventario{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].inventario_id"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                  <label>Stock oficial esperado
+                    <input type="number" min="0" step="1" name="e3Stock{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].stock_esperado"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                  <label>Cantidad física verificada
+                    <input type="number" min="1" step="1" name="e3Cantidad{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].cantidad_fisica"
+                      (ngModelChange)="actualizado()" />
+                  </label>
+                </div>
+              </ng-container>
+              <label *ngIf="!aprobacionEspecialIndividual">Justificación específica (mínimo 20 caracteres)
                 <textarea rows="2" maxlength="2000" name="e3Identidad{{ solicitud.id }}"
                   [(ngModel)]="resoluciones[solicitud.id].justificacion"
                   (ngModelChange)="actualizado()"></textarea>

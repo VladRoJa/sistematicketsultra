@@ -53,6 +53,10 @@ export class LevantamientosComponent implements OnInit {
   revisionesAutomaticas: ListaRevisionesE4 | null = null;
   paginaRevisiones = 1;
   sustitucionActiva: RevisionAutomaticaE4 | null = null;
+  correccionHallazgoActiva: RevisionAutomaticaE4 | null = null;
+  codigoCorregidoHallazgo = '';
+  motivoCodigoHallazgo = '';
+  private correccionHallazgoKey: string | null = null;
   codigoSustituto = '';
   motivoSustitucion = '';
   private sustitucionKey: string | null = null;
@@ -227,6 +231,7 @@ export class LevantamientosComponent implements OnInit {
     this.revisionesAutomaticas = null;
     this.paginaRevisiones = 1;
     this.casoActivo = null;
+    this.correccionHallazgoActiva = null;
     this.motivoCierre = '';
     this.confirmoCierre = false;
     this.e4.detalle(id).subscribe({
@@ -318,6 +323,25 @@ export class LevantamientosComponent implements OnInit {
     });
   }
 
+  descargarReporte(tipo: 'cambios' | 'existencias'): void {
+    if (!this.seleccionado) return;
+    const lev = this.seleccionado;
+    this.e4.descargarReporte(lev.id, tipo).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'E4_sucursal_' + lev.sucursal_id + '_corte_' +
+          lev.id + '_' + tipo + '.xlsx';
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: err => {
+        this.error = this.errorHttp(err, 'No fue posible descargar el reporte E4.');
+      },
+    });
+  }
+
   cargarRevisiones(): void {
     if (!this.seleccionado) return;
     const id = this.seleccionado.id;
@@ -328,6 +352,66 @@ export class LevantamientosComponent implements OnInit {
       },
       error: err => {
         this.error = this.errorHttp(err, 'No fue posible consultar las revisiones automáticas.');
+      },
+    });
+  }
+
+  abrirCorreccionHallazgo(row: RevisionAutomaticaE4): void {
+    if (this.procesando || this.seleccionado?.estado === 'CLOSED' ||
+        row.tipo !== 'UNREGISTERED_FIND' || row.estado !== 'BLOCKED' ||
+        row.solicitud_e2_id !== null) return;
+    this.correccionHallazgoActiva = row;
+    this.codigoCorregidoHallazgo = '';
+    this.motivoCodigoHallazgo = '';
+    this.correccionHallazgoKey = null;
+  }
+
+  cancelarCorreccionHallazgo(): void {
+    if (this.procesando) return;
+    this.correccionHallazgoActiva = null;
+    this.correccionHallazgoKey = null;
+  }
+
+  cambioCodigoHallazgo(): void {
+    this.correccionHallazgoKey = null;
+  }
+
+  get puedeCorregirHallazgo(): boolean {
+    return !this.procesando && !!this.seleccionado &&
+      this.seleccionado.estado !== 'CLOSED' && !!this.correccionHallazgoActiva &&
+      this.correccionHallazgoActiva.estado === 'BLOCKED' &&
+      /^[A-Z0-9][A-Z0-9-]{0,49}$/.test(this.codigoCorregidoHallazgo.trim()) &&
+      this.motivoCodigoHallazgo.trim().length >= 20 &&
+      this.motivoCodigoHallazgo.trim().length <= 1000;
+  }
+
+  corregirHallazgo(): void {
+    if (!this.puedeCorregirHallazgo || !this.seleccionado ||
+        !this.correccionHallazgoActiva) return;
+    const lev = this.seleccionado.id;
+    const rev = this.correccionHallazgoActiva.id;
+    const key = this.correccionHallazgoKey || crypto.randomUUID();
+    this.correccionHallazgoKey = key;
+    this.procesando = true;
+    this.error = '';
+    this.e4.corregirHallazgo(lev, rev, {
+      nuevo_codigo: this.codigoCorregidoHallazgo.trim(),
+      motivo: this.motivoCodigoHallazgo.trim(),
+      idempotency_key: key,
+    }).subscribe({
+      next: data => {
+        this.procesando = false;
+        this.aviso = 'Hallazgo corregido. Solicitud E2 #' +
+          data.correccion.solicitud_e2_id +
+          ' pendiente de E3. Falta verificar la etiqueta física.';
+        this.correccionHallazgoActiva = null;
+        this.correccionHallazgoKey = null;
+        this.cargarRevisiones();
+        this.cargarTablero();
+      },
+      error: err => {
+        this.procesando = false;
+        this.error = this.errorHttp(err, 'No se pudo corregir el hallazgo.');
       },
     });
   }

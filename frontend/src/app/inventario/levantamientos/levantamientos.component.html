@@ -105,6 +105,20 @@
           </div>
           <span class="estado">{{ lev.estado }}</span>
         </div>
+        <div class="panel-header" aria-label="Documentos para sucursal">
+          <div>
+            <h3>Documentos para sucursal</h3>
+            <p class="help">Descarga cambios para reetiquetar y existencias oficiales. Las revisiones pendientes no se consideran autorizadas.</p>
+          </div>
+          <div class="e4-report-actions">
+            <button type="button" class="quiet" (click)="descargarReporte('cambios')">
+              <mat-icon>download</mat-icon> Cambios y etiquetas
+            </button>
+            <button type="button" class="quiet" (click)="descargarReporte('existencias')">
+              <mat-icon>download</mat-icon> Inventario oficial
+            </button>
+          </div>
+        </div>
         <div class="facts">
           <span>Origen: <strong>{{ lev.origen_corte }}</strong></span>
           <span>Referencias: <strong>{{ lev.baseline_resumen.referencias_esperadas }}</strong></span>
@@ -226,6 +240,11 @@
                       [disabled]="procesando" (click)="abrirSustitucion(r)">
                       Sustituir propuesta
                     </button>
+                    <button type="button" class="quiet"
+                      *ngIf="r.tipo === 'UNREGISTERED_FIND' && r.estado === 'BLOCKED' && r.solicitud_e2_id === null"
+                      [disabled]="procesando" (click)="abrirCorreccionHallazgo(r)">
+                      Corregir código de hallazgo
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -250,6 +269,30 @@
             </div>
             <button type="button" class="primary" (click)="sustituirPropuesta()"
               [disabled]="!puedeSustituir">Crear nueva solicitud E2 pendiente</button>
+          </section>
+          <section class="panel" *ngIf="correccionHallazgoActiva as rev"
+            aria-label="Corregir etiqueta de hallazgo">
+            <div class="panel-header">
+              <h4>Corregir código de hallazgo · Revisión #{{ rev.id }}</h4>
+              <button type="button" class="quiet"
+                (click)="cancelarCorreccionHallazgo()" [disabled]="procesando">Cancelar</button>
+            </div>
+            <p class="help">Código declarado en Excel: {{ rev.codigo_observado }}.
+              La corrección conserva el Excel y crea una solicitud E2 para autorización E3.
+              No cambiará el inventario oficial hasta que E3 apruebe el alta.
+              La etiqueta física se verificará de forma independiente.</p>
+            <div class="fields">
+              <label>Nuevo código único
+                <input type="text" maxlength="50" placeholder="Ej. 06PLJW55"
+                  [(ngModel)]="codigoCorregidoHallazgo" (ngModelChange)="cambioCodigoHallazgo()">
+              </label>
+              <label>Justificación de identidad
+                <textarea rows="3" maxlength="1000"
+                  [(ngModel)]="motivoCodigoHallazgo" (ngModelChange)="cambioCodigoHallazgo()"></textarea>
+              </label>
+            </div>
+            <button type="button" class="primary" (click)="corregirHallazgo()"
+              [disabled]="!puedeCorregirHallazgo">Crear E2 con código corregido</button>
           </section>
           <div class="pagination" *ngIf="auto.total > 20">
             <button type="button" (click)="cambiarPaginaRevisiones(-1)" [disabled]="paginaRevisiones === 1">Anterior</button>
