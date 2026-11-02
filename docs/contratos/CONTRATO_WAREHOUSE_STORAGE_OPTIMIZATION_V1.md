@@ -85,3 +85,16 @@ docker compose run --rm --no-deps \\
 ```
 
 La ruta `private/wso01/` debe estar protegida del acceso público y excluida de Git. Revisar el resultado antes de usar `quarantine --apply`. Ejecutar preflight con root equivocado o archivos ausentes debe fallar; no cambiar el script para saltarse esa comprobación. La limpieza final `purge --apply --ack-irreversible` solo va **después** de la migración, las pruebas de recuperación y la aprobación explícita.
+
+## Gate físico — conteo y volumen confirmados (2026-11-02)
+
+Evidencia reportada desde el host productivo mediante `find uploads/warehouse -type f -path '*/corte_caja/*' -printf '%s\\n'` y suma de bytes:
+
+- **ARCHIVOS=2061**
+- **BYTES=5961032253**
+- **GB decimales=5.96**
+
+Coinciden exactamente con los registros y suma de `file_size_bytes` para `warehouse_uploads` con `report_type_key='corte_caja'`.
+
+Este conteo **no** prueba correspondencia individual entre cada ID y ruta, SHA-256, ausencia de hardlinks/colisiones entre tipos ni restaurabilidad del respaldo. Mantener bloqueada cuarentena/migración/purga hasta verificar esos gates.
+
