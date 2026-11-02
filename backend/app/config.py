@@ -122,6 +122,11 @@ class Config:
         "PERMISSIONS_INVENTORY_READ_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # PM lectura: veto adicional sobre las rutas GET, sin ampliar scopes ni rol.
+    PERMISSIONS_PM_READ_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_PM_READ_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
