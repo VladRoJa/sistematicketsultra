@@ -112,6 +112,11 @@ class Config:
         "PERMISSIONS_INVENTORY_MASTER_WRITE_GRANTS_ENABLED", "false"
     ).strip().lower() == "true"
 
+    # Movimiento de inventario: veto global; la sucursal sigue siendo obligatoria.
+    PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED = os.getenv(
+        "PERMISSIONS_INVENTORY_MOVEMENT_WRITE_GRANTS_ENABLED", "false"
+    ).strip().lower() == "true"
+
     # Base de datos
     SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
