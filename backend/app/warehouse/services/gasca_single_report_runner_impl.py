@@ -21,14 +21,12 @@ from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
-CORTE_CAJA_REPORT_TYPE_KEY = "corte_caja"
 CARGOS_RECURRENTES_REPORT_TYPE_KEY = "cargos_recurrentes"
 VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
 SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
 SOCIOS_ACTIVOS_REPORT_TYPE_KEY = "socios_activos"
 SUPPORTED_REPORT_TYPES = frozenset(
     {
-        CORTE_CAJA_REPORT_TYPE_KEY,
         CARGOS_RECURRENTES_REPORT_TYPE_KEY,
         VENTA_TOTAL_REPORT_TYPE_KEY,
         SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
@@ -80,8 +78,7 @@ def run_gasca_single_report(
     """
     Ejecuta un solo reporte Gasca y publica el artifact contractual en Warehouse.
 
-    En esta primera versión solo soporta:
-    - corte_caja
+    Ejecuta únicamente los reportes Gasca soportados.
     """
     _validate_inputs(
         report_type_key=report_type_key,
@@ -100,12 +97,7 @@ def run_gasca_single_report(
     )
 
     with _authenticated_page(runtime) as page:
-        if report_type_key == CORTE_CAJA_REPORT_TYPE_KEY:
-            artifact_path, extra_metadata = _run_corte_caja_report(
-                page=page,
-                runtime=runtime,
-            )
-        elif report_type_key == CARGOS_RECURRENTES_REPORT_TYPE_KEY:
+        if report_type_key == CARGOS_RECURRENTES_REPORT_TYPE_KEY:
             artifact_path, extra_metadata = _run_cargos_recurrentes_report(
                 page=page,
                 runtime=runtime,
@@ -276,51 +268,6 @@ def _hacer_login(*, page: Any, runtime: GascaRuntimeConfig) -> None:
     except Exception:
         pass
 
-
-def _run_corte_caja_report(
-    *,
-    page: Any,
-    runtime: GascaRuntimeConfig,
-) -> tuple[Path, dict[str, Any]]:
-    current_app.logger.info("Gasca single report runner: ejecutando corte_caja.")
-
-    page.goto(runtime.reportes_url, timeout=120_000)
-    page.wait_for_load_state("networkidle")
-
-    _seleccionar_tipo_reporte(page, "Reporte Corte De Caja")
-
-    hoy_local = datetime.now(pytz.timezone(runtime.timezone_name)).date()
-    inicio_mes = hoy_local.replace(day=1)
-
-    _rellenar_fechas_corte_caja(
-        page=page,
-        fecha_inicio=inicio_mes,
-        fecha_fin=hoy_local,
-    )
-
-    _click_boton_generar(page)
-
-    current_app.logger.info("Gasca single report runner: esperando carga de Corte de Caja.")
-    time.sleep(5)
-    page.wait_for_selector("button:has-text('Exportar')", timeout=120_000)
-
-    _click_tab_membresia(page)
-
-    artifact_path = _resolve_contractual_output_path(report_type_key=CORTE_CAJA_REPORT_TYPE_KEY)
-    _descargar_excel_desde_tabla(
-        page=page,
-        nombre_reporte="Reporte Corte De Caja (Membresia)",
-        destination_path=artifact_path,
-    )
-
-    _limpiar_excel_inplace(artifact_path)
-
-    metadata = {
-        "date_from": inicio_mes.isoformat(),
-        "date_to": hoy_local.isoformat(),
-        "snapshot_kind_hint": "daily",
-    }
-    return artifact_path, metadata
 
 def _run_venta_total_report(
     *,
@@ -787,7 +734,6 @@ def _resolve_contractual_output_path(*, report_type_key: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     filename_map = {
-        CORTE_CAJA_REPORT_TYPE_KEY: "corte_caja.xlsx",
         CARGOS_RECURRENTES_REPORT_TYPE_KEY: "cargos_recurrentes.xlsx",
         VENTA_TOTAL_REPORT_TYPE_KEY: "venta_total.xlsx",
         SOCIOS_VENCIDOS_REPORT_TYPE_KEY: "socios_vencidos.xlsx",
@@ -891,35 +837,6 @@ def _seleccionar_tipo_reporte(page: Any, texto_opcion: str) -> None:
     raise GascaSingleReportRunnerError(
         f"No se pudo seleccionar tipo de reporte {texto_opcion!r}. Último resultado: {ultimo_result}"
     )
-
-
-def _rellenar_fechas_corte_caja(
-    *,
-    page: Any,
-    fecha_inicio: date,
-    fecha_fin: date,
-) -> None:
-    fecha_inicio_str = fecha_inicio.strftime("%m/%d/%Y")
-    fecha_fin_str = fecha_fin.strftime("%m/%d/%Y")
-
-    inputs = page.locator("input[type='text']")
-    total = inputs.count()
-    if total < 2:
-        raise GascaSingleReportRunnerError(
-            f"Corte de Caja: esperaba al menos 2 inputs de texto para fechas, pero encontré {total}"
-        )
-
-    campo_inicio = inputs.nth(0)
-    campo_fin = inputs.nth(1)
-
-    for campo, valor in [
-        (campo_inicio, fecha_inicio_str),
-        (campo_fin, fecha_fin_str),
-    ]:
-        campo.click()
-        campo.fill("")
-        campo.type(valor, delay=50)
-        time.sleep(0.3)
 
 
 def _click_boton_generar(page: Any) -> None:
