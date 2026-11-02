@@ -965,8 +965,8 @@ def test_auto_e4_produccion_opt_in_genera_e2_pendiente_sin_autorizacion(api, mon
         db.session.remove()
 
     csv_corte = (
-        "sucursal_id,sucursal,inventario_id,codigo_interno,categoria,aparato,marca,stock_sistema_qa\\n"
-        "6,San Luis,604,06EL01,Cardio,Eliptica,Precor,1\\n"
+        "sucursal_id,sucursal,inventario_id,codigo_interno,categoria,aparato,marca,stock_sistema_qa\n"
+        "6,San Luis,604,06EL01,Cardio,Eliptica,Precor,1\n"
     ).encode()
     created = client.post(root, headers=tokens[1], data={
         "sucursal_id": "6", "origen_corte": "CSV_HISTORICO",
