@@ -1251,7 +1251,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify", "tickets.update", "tickets.close", "inventory.master_write", "inventory.movement_write", "inventory.read", "pm.read", "pm.execute", "pm.validate", "pm.configure", "warehouse.archive", "warehouse.view", "warehouse.upload", "warehouse.catalogs", "planning.read", "planning.edit", "planning.submit", "planning.approve", "planning.publish", "planning.configure_model"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1424,6 +1424,19 @@ def update_user_module_access(user_id: int):
                 return jsonify({
                     "error": "Conflict",
                     "detail": "El check de esta acción Warehouse no está habilitado en backend.",
+                    "module_key": module_key,
+                    "action_full_key": action_full_key,
+                }), 409
+
+        if module_key == "planning" and action_full_key in {
+            "planning.read", "planning.edit", "planning.submit",
+            "planning.approve", "planning.publish", "planning.configure_model",
+        }:
+            from app.utils.planning_access import planning_action_grants_enabled
+            if not planning_action_grants_enabled(action_full_key):
+                return jsonify({
+                    "error": "Conflict",
+                    "detail": "El check de esta acción de Planeación no está habilitado en backend.",
                     "module_key": module_key,
                     "action_full_key": action_full_key,
                 }), 409
