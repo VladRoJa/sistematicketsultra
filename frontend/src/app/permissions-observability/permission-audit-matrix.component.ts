@@ -267,6 +267,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
       row.action_key === 'inventory.read' &&
       row.module_key === 'inventory' &&
       this.result?.inventory_read_grants_enabled === true
+    ) || (
+      row.action_key === 'pm.read' &&
+      row.module_key === 'pm' &&
+      this.result?.pm_read_grants_enabled === true
     );
   }
 
@@ -276,7 +280,7 @@ export class PermissionAuditMatrixComponent implements OnInit {
     }
     // Sin contexto de ticket, tickets.update sólo certifica el veto global;
     // no inventar un allow de objeto para pintar el check.
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read'].includes(row.action_key)
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read'].includes(row.action_key)
       ? row.catalog_allowed : row.legacy_allowed;
   }
 
@@ -284,8 +288,10 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row)) {
       return 'Solo diagnóstico';
     }
-    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read'].includes(row.action_key)
-      ? (row.action_key === 'inventory.read'
+    return ['tickets.update', 'tickets.close', 'inventory.master_write', 'inventory.movement_write', 'inventory.read', 'pm.read'].includes(row.action_key)
+      ? (row.action_key === 'pm.read'
+          ? 'Veto global: un ALLOW no autoriza bitácoras ni sucursales fuera del alcance'
+          : row.action_key === 'inventory.read'
           ? 'Veto global: un ALLOW no autoriza sucursales ni amplía consultas'
           : row.action_key === 'inventory.movement_write'
           ? 'Veto global: un ALLOW no autoriza sucursales ni anulación de movimientos'
@@ -297,10 +303,11 @@ export class PermissionAuditMatrixComponent implements OnInit {
     if (!this.canEditAction(row) || this.savingActionUserId !== null) {
       return;
     }
-    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' =
+    const moduleKey: 'track' | 'openings' | 'tickets' | 'inventory' | 'pm' =
       row.action_key === 'track.read' ? 'track' :
       row.module_key === 'tickets' ? 'tickets' :
-      row.module_key === 'inventory' ? 'inventory' : 'openings';
+      row.module_key === 'inventory' ? 'inventory' :
+      row.module_key === 'pm' ? 'pm' : 'openings';
     this.saveError = '';
     this.savingActionUserId = row.user_id;
     this.catalog.setActionAccess(row.user_id, moduleKey, row.action_key, checked)
