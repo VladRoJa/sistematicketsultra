@@ -32,4 +32,15 @@ assert(
   'questionGroups debe calcularse una sola vez al cargar las preguntas.',
 );
 
+// Una cuenta GERENTE de ULTRA DEMO no recibe sucursales elegibles
+// en /branches: la ventana global debe liberarse en vez de bloquear Tickets.
+const noBranchGuard = source.indexOf('if (this.branches.length === 0) {');
+const preferredBranchSelection = source.indexOf('const preferredBranchId = Number(');
+assert(
+  noBranchGuard !== -1
+    && preferredBranchSelection > noBranchGuard
+    && /if \(this\.branches\.length === 0\) \{[\s\S]*?this\.setVisible\(false\);[\s\S]*?return;[\s\S]*?\}/.test(source),
+  'Sin sucursal elegible (incluida ULTRA DEMO), el checklist debe ocultarse y liberar navegación.',
+);
+
 console.log('system-daily-check no-freeze contract: PASS');
