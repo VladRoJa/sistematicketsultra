@@ -48,6 +48,7 @@ export interface VisualAuditResponse {
   tickets_create_grants_enabled: boolean;
   tickets_update_status_grants_enabled: boolean;
   tickets_notify_grants_enabled: boolean;
+  tickets_update_grants_enabled: boolean;
   note: string;
   view: AuditPerspective;
   rows: VisualAuditRow[];
