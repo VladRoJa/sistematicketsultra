@@ -1251,7 +1251,7 @@ def update_user_module_access(user_id: int):
         if action_full_key:
             # No aceptar un check que sólo escriba un grant diagnóstico.
             # Ampliar este conjunto únicamente al certificar su guard HTTP.
-            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status"}:
+            if action_full_key not in {"track.read", "openings.read", "openings.comment", "openings.manage", "tickets.create", "tickets.update_status", "tickets.notify"}:
                 return jsonify({
                     "error": "Conflict",
                     "detail": "Esta acción todavía no tiene un check con autorización HTTP certificada.",
@@ -1311,16 +1311,17 @@ def update_user_module_access(user_id: int):
                     "action_full_key": action_full_key or "openings.read",
                 }), 409
 
-        if module_key == "tickets" and action_full_key in {"tickets.create", "tickets.update_status"}:
+        if module_key == "tickets" and action_full_key in {"tickets.create", "tickets.update_status", "tickets.notify"}:
             from app.routes.ticket_routes import (
                 tickets_create_grants_enabled,
                 tickets_update_status_grants_enabled,
+                tickets_notify_grants_enabled,
             )
-            enabled = (
-                tickets_create_grants_enabled()
-                if action_full_key == "tickets.create"
-                else tickets_update_status_grants_enabled()
-            )
+            enabled = {
+                "tickets.create": tickets_create_grants_enabled,
+                "tickets.update_status": tickets_update_status_grants_enabled,
+                "tickets.notify": tickets_notify_grants_enabled,
+            }[action_full_key]()
             if not enabled:
                 return jsonify({
                     "error": "Conflict",
