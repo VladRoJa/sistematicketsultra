@@ -73,7 +73,12 @@ def main():
             page.wait_for_timeout(800)
             assert page.evaluate("getComputedStyle(document.querySelector('.cap-v1-spotlight')).opacity") == "1"
             assert page.evaluate("!!document.querySelector('.cap-v1-pulse.cap-v1-animate')")
-            assert page.evaluate("!!document.querySelector('.cap-v1-target.cap-v1-visible')")
+            if action == "close":
+                # Se ha ocultado el modal: no debe quedar un marco amarillo
+                # sobre el lugar donde ya desapareció el botón.
+                assert not page.evaluate("!!document.querySelector('.cap-v1-target.cap-v1-visible')")
+            else:
+                assert page.evaluate("!!document.querySelector('.cap-v1-target.cap-v1-visible')")
             # Ningún overlay puede interceptar clics ni capturar foco.
             assert page.evaluate("getComputedStyle(document.querySelector('#cap-v1-recording-overlay')).pointerEvents") == "none"
             assert page.evaluate("window.__capV1FocusRecorder.events().length") > 0
