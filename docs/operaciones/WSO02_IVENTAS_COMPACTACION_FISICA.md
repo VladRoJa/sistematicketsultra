@@ -112,3 +112,31 @@ FROM pg_stat_progress_cluster;
 - Autorizado por el propietario **preparar este plan**, no ejecutarlo todavía.
 - Requiere confirmación de respaldo reciente y restaurable y aprobación de **ejecución de VACUUM FULL** durante ventana (distinta de la autorización de 174 borrados, ya completados).
 - Sin merge ni despliegue de este documento sin revisión. Este runbook no instala servicios ni cambia esquemas.
+
+## Gate 0.A — Diagnóstico real del servidor (2026-11-02)
+
+El operador verificó:
+
+- `/dev/sda3`: 314 GB de sistema de archivos, 218 GB usados, **83 GB libres**. `lsblk` solo muestra el disco `sda` de 320 GB y particiones EFI/ext4; **no hay volumen independiente montado**.
+- `/root/base-backups`: siete archivos `base_2026-09-18_021501.tar.gz` a `base_2026-09-24_021501.tar.gz`, cada uno entre 8.85 y 9.43 GB decimales; suma aproximada **64 GB decimales (~59.6 GiB)**. Todos son anteriores a WSO-01/WSO-02.
+- Logs del cron oficial 2026-10-29 a 2026-11-02: **ERROR espacio insuficiente**, último `libre=70GB requerido=122GB`. El espacio de 83 GB es más reciente y refleja liberaciones ya realizadas; el requisito se recalcula y puede cambiar.
+- No se encontró respaldo local posterior al 24 de septiembre; **el inventario remoto aún no está comprobado**.
+
+### Ruta de recuperación sin disco nuevo — condicionada
+
+1. **Solo lectura:** inventariar copias remotas en el destino ya configurado por el script, `gdrive:sistematickets-backups/base`, con rclone y configuración actual. Nunca imprimir tokens/configuración.
+2. Si hay coincidencia por nombres y tamaños, ejecutar **`rclone check` en modo solo lectura** para comparar hashes/bytes cuando el proveedor los permita; exigir verificación exitosa de **cada** archivo local candidato a retirada. Si no se pueden verificar, no eliminarlos.
+3. Preparar propuesta explícita de retiro **solo de copias locales que ya están acreditadas en remoto**, preferiblemente manteniendo al menos la más reciente local mientras se crea una copia nueva. Se requiere consentimiento específico para retirar esos respaldos antiguos. Liberar seis de los siete podría recuperar alrededor de 50 GiB, pero está sujeto a los tamaños reales. Antes de autorizar, comprobar que se cuenta con margen suficiente para `pg_basebackup` + compresión + WAL, y que las siete copias remotas no dependan de los originales.
+4. Después de retirar copias **solo si autorizado y verificadas**, ejecutar preflight canónico con `BASE_DIR` local y luego backup nuevo `pg_basebackup`, `pg_verifybackup`, `rclone copy`. Registrar su éxito y evidencia; restauración de prueba preferible si se puede hacer en infraestructura separada.
+5. **Solución permanente:** modificar por otro paquete el destino de almacenamiento / retención para que las copias nuevas no vuelvan a bloquearse cada noche; priorizar disco separado o flujo remoto verificable. No bajar arbitrariamente el umbral ni dejar todas las copias exclusivamente en un disco sin redundancia.
+
+#### Verificación remota previa — sin modificar archivos
+
+```bash
+# Lista nombre/tamaño en el remoto; solo lectura.
+sudo rclone --config /home/adminrdp/.config/rclone/rclone.conf \
+  lsf gdrive:sistematickets-backups/base \
+  --files-only --format sp --include 'base_*.tar.gz' | sort -r | head -n 20
+```
+
+**Aún no ejecutar** `rclone delete`, `rm`, `pg_basebackup` ni `VACUUM FULL`. La comprobación de hash será el siguiente gate tras contrastar listado.
