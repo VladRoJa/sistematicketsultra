@@ -48,6 +48,28 @@ def main() -> None:
         if ticket.estado in ("finalizado", "cerrado", "por_validar"):
             raise RuntimeError("CAP-V1: ticket no debe quedar cerrado/por validar")
 
+    # CAP-V2: el master incluye cortes exactos por rol; sin cambio de cuentas grabado.
+    v2 = manifest.get("cap_v2_source") is True
+    if v2:
+        wanted_roles = {
+            "inicio": "mantenimiento", "ticket": "mantenimiento",
+            "parcial": "mantenimiento", "completo": "mantenimiento",
+            "cierre": "mantenimiento", "rechazo": "gerencia",
+            "reversion": "mantenimiento", "historial": "mantenimiento",
+            "fin": "mantenimiento",
+        }
+        segments = manifest.get("segmentos", [])
+        previous_end = 0
+        if len(segments) != len(wanted_roles):
+            raise RuntimeError("CAP-V2: faltan secciones de rol")
+        for marker, (key, role) in zip(segments, wanted_roles.items()):
+            if (marker.get("key") != key or marker.get("role") != role
+                    or marker["start"] < previous_end - .005
+                    or marker["end"] <= marker["start"]):
+                raise RuntimeError("CAP-V2: corte temporal o permiso/rol incorrecto")
+            previous_end = marker["end"]
+        if not (root / "navegacion.webm").is_file():
+            raise RuntimeError("CAP-V2: falta grabación maestra para edición")
     path = root / "capacitacion.mp4"
     report = json.loads(subprocess.check_output([
         "ffprobe", "-v", "error", "-show_format", "-show_streams",
@@ -56,7 +78,7 @@ def main() -> None:
     streams = {x["codec_type"]: x.get("codec_name") for x in report["streams"]}
     duration = float(report["format"]["duration"])
     if (streams.get("video") != "h264" or streams.get("subtitle") != "mov_text"
-            or duration < 60 or path.stat().st_size < 50000):
+            or duration < (25 if v2 else 60) or path.stat().st_size < 50000):
         raise RuntimeError("CAP-V1: MP4/subtítulos incompletos")
     if not (root / "subtitulos.srt").is_file():
         raise RuntimeError("CAP-V1: faltan subtítulos externos")
