@@ -202,15 +202,16 @@ def _resolution_for(row, resolutions):
             raise DecisionError(422, "invalid_resolution", "Stock esperado debe ser positivo.")
     elif row.tipo == "UNREGISTERED_FIND":
         if data.get("accion") == "CREAR_NUEVO":
-            campos = {"accion", "categoria", "marca", "descripcion", "familia_equipo_id", "justificacion"}
+            campos = {"accion", "categoria_inventario_id", "marca_id", "descripcion", "familia_equipo_id", "justificacion"}
             if set(data) != campos:
-                raise DecisionError(422, "invalid_resolution", "El alta requiere categoría, marca, descripción, familia y justificación.")
-            for campo, max_len in (("categoria", 100), ("marca", 100), ("descripcion", 2000)):
-                valor = data[campo]
-                if not isinstance(valor, str) or len(valor.strip()) > max_len:
-                    raise DecisionError(422, "invalid_resolution", f"{campo}: texto inválido.")
-            if not data["categoria"].strip():
-                raise DecisionError(422, "invalid_resolution", "La categoría es obligatoria.")
+                raise DecisionError(422, "invalid_resolution", "El alta requiere identificadores del catálogo, descripción, familia y justificación.")
+            if not _positive_id(data["categoria_inventario_id"]):
+                raise DecisionError(422, "invalid_resolution", "Selecciona una categoría del catálogo oficial.")
+            if data["marca_id"] is not None and not _positive_id(data["marca_id"]):
+                raise DecisionError(422, "invalid_resolution", "Selecciona una marca del catálogo oficial.")
+            if (not isinstance(data["descripcion"], str)
+                    or len(data["descripcion"].strip()) > 2000):
+                raise DecisionError(422, "invalid_resolution", "La descripción es inválida.")
             familia = data["familia_equipo_id"]
             if familia is not None and not _positive_id(familia):
                 raise DecisionError(422, "invalid_resolution", "La familia de aparato es inválida.")
@@ -315,11 +316,30 @@ def _apply_approved(row, decision, masters, stocks, actor_id, reason, resolution
             "SELECT 1 FROM familia_equipo WHERE id=:id AND activo IS TRUE"
         ), {"id": familia}).scalar_one_or_none() is None:
             raise DecisionError(422, "invalid_family", "La familia de equipo no existe o está inactiva.")
+        # El catálogo, no la cadena enviada por el cliente, determina los
+        # nombres canónicos. Impide categorías o marcas inventadas desde E3.
+        categoria = db.session.execute(text("""
+            SELECT id, nombre FROM catalogo_categoria_inventario
+            WHERE id=:id AND activo IS TRUE
+        """), {"id": resolution["categoria_inventario_id"]}).mappings().first()
+        if (not categoria or not categoria["nombre"]
+                or len(categoria["nombre"].strip()) > 100):
+            raise DecisionError(422, "invalid_category", "Selecciona una categoría oficial activa.")
+        marca_nombre = None
+        if resolution["marca_id"] is not None:
+            marca_nombre = db.session.execute(text("""
+                SELECT nombre FROM marcas WHERE id=:id
+            """), {"id": resolution["marca_id"]}).scalar_one_or_none()
+            if (not marca_nombre or not marca_nombre.strip()
+                    or len(marca_nombre.strip()) > 100):
+                raise DecisionError(422, "invalid_brand", "Selecciona una marca existente del catálogo.")
         master = InventarioGeneral(
             tipo="Aparatos", nombre=name, codigo_interno=code,
-            marca=resolution["marca"].strip() or str(provisional.get("marca") or "").strip(),
+            marca=marca_nombre.strip() if marca_nombre else None,
             descripcion=resolution["descripcion"].strip(),
-            categoria=resolution["categoria"].strip(), familia_equipo_id=familia,
+            categoria=categoria["nombre"].strip(),
+            categoria_inventario_id=categoria["id"],
+            familia_equipo_id=familia,
             factor_compra=1, unidad_medida="Pieza",
             fecha_inventario=datetime.now(ZoneInfo("America/Tijuana")).date(),
         )
