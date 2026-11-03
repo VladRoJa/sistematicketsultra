@@ -202,18 +202,32 @@
                 <p>Se creará un aparato con el nombre y código identificador del hallazgo,
                   con existencia inicial de 1 en esta sucursal. El backend verificará
                   que el código no exista y conservará toda la auditoría.</p>
+                <p *ngIf="cargandoCatalogos" class="revision-motivo-ayuda">Cargando catálogos oficiales…</p>
+                <div *ngIf="errorCatalogos" class="revision-error">
+                  {{ errorCatalogos }}
+                  <button type="button" class="revision-secondary"
+                    (click)="cargarCatalogosAlta()">Reintentar</button>
+                </div>
                 <div class="revision-resolucion__numeros">
-                  <label>Categoría (obligatoria)
-                    <input type="text" maxlength="100"
-                      name="e3CategoriaAlta{{ solicitud.id }}"
-                      [(ngModel)]="resoluciones[solicitud.id].categoria"
-                      (ngModelChange)="actualizado()" />
+                  <label>Categoría oficial (obligatoria)
+                    <select name="e3CategoriaAlta{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].categoria_inventario_id"
+                      [disabled]="!catalogosListos" (ngModelChange)="actualizado()">
+                      <option [ngValue]="null">Selecciona una categoría</option>
+                      <option *ngFor="let categoria of categoriasOficiales" [ngValue]="categoria.id">
+                        {{ categoria.nombre }}
+                      </option>
+                    </select>
                   </label>
-                  <label>Marca
-                    <input type="text" maxlength="100"
-                      name="e3MarcaAlta{{ solicitud.id }}"
-                      [(ngModel)]="resoluciones[solicitud.id].marca"
-                      (ngModelChange)="actualizado()" />
+                  <label>Marca del catálogo (opcional)
+                    <select name="e3MarcaAlta{{ solicitud.id }}"
+                      [(ngModel)]="resoluciones[solicitud.id].marca_id"
+                      [disabled]="!catalogosListos" (ngModelChange)="actualizado()">
+                      <option [ngValue]="null">Sin marca identificada</option>
+                      <option *ngFor="let marca of marcasOficiales" [ngValue]="marca.id">
+                        {{ marca.nombre }}
+                      </option>
+                    </select>
                   </label>
                   <label>ID familia equipo (opcional, catálogo activo)
                     <input type="number" min="1" step="1"
