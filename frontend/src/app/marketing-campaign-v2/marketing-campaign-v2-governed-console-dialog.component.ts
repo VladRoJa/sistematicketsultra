@@ -470,7 +470,13 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   loadCatalog(): void {
     this.api.listDispatchTemplatesAdmin().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
-        this.templates = data.rows.filter(row => row.provider === 'IVENTAS' && row.is_active);
+        this.templates = data.rows
+          .filter(row => row.provider === 'IVENTAS' && row.is_active)
+          .sort((a, b) => {
+            const createdA = a.created_at ? Date.parse(a.created_at) || 0 : 0;
+            const createdB = b.created_at ? Date.parse(b.created_at) || 0 : 0;
+            return createdB - createdA || b.id - a.id;
+          });
       },
       error: () => { this.error = 'No se pudo cargar el catálogo de plantillas.'; },
     });
