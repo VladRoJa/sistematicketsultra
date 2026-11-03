@@ -1,0 +1,153 @@
+name: CAP-V2 Tapizado · capacitaciones segmentadas por rol (aislado)
+
+on:
+  pull_request:
+    paths:
+      - "scripts/training/generate.py"
+      - "scripts/training/render_role_v2.py"
+      - "scripts/training/storyboards/tapizado_multiaparato.json"
+      - "backend/scripts/bootstrap_training_ci.py"
+      - "backend/scripts/verify_training_ci.py"
+      - ".github/workflows/cap-v2-tapizado-por-rol.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tapizado-ui-real-isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: suite_ultra_tickets_qa
+          POSTGRES_USER: cap_v1_ci
+          POSTGRES_PASSWORD: cap-v1-local-ci-password-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cap_v1_ci -d suite_ultra_tickets_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GITHUB_ACTIONS: "true"
+      CAP_V1_SYNTHETIC_CI: YES_TEMPORARY_DB
+      APP_ENV: local
+      SECRET_KEY: cap-v1-only-synthetic-flask-ci
+      JWT_SECRET_KEY: cap-v1-only-synthetic-jwt-ci
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://cap_v1_ci:cap-v1-local-ci-password-only@127.0.0.1:5432/suite_ultra_tickets_qa
+      SUITE_QA_SEED_ALLOWED: YES_CREATE_LOCAL_SYNTHETIC_TICKETS
+      SUITE_QA_TEST_PASSWORD: cap-v1-only-training-user-pass-2026
+      CAP_ACTOR_USER: QA_COORD_CIERRE
+      CAP_ACTOR_PASSWORD: cap-v1-only-training-user-pass-2026
+      CAP_REVIEWER_USER: QA_GERENTE_CIERRE
+      CAP_REVIEWER_PASSWORD: cap-v1-only-training-user-pass-2026
+      TICKETS_TAPIZADO_MULTI_ENABLED: "true"
+      TICKETS_TAPIZADO_RECEPCION_ENABLED: "true"
+      AUTH_REFRESH_ENABLED: "false"
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+      CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Dependencias para entorno aislado
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install edge-tts==7.3.1
+          python -m pip install -r backend/requirements.txt
+          python -m playwright install --with-deps chromium
+          cd frontend && npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Impedir configuración real y crear fixture sintético
+        working-directory: backend
+        run: |
+          test ! -f .env.local
+          test ! -f .env.docker
+          python -m scripts.bootstrap_training_ci
+      - name: Levantar Flask local y Angular real
+        run: |
+          (cd backend && gunicorn -w 1 -b 127.0.0.1:5000 --timeout 120 app.wsgi:app > ../cap-backend.log 2>&1) &
+          (cd frontend && npm start -- --host 127.0.0.1 --port 4200 > ../cap-angular.log 2>&1) &
+          python - <<'PY'
+          import time, urllib.request, urllib.error
+          for name, url in (
+              ("Flask", "http://127.0.0.1:5000/"),
+              ("Angular", "http://127.0.0.1:4200/"),
+          ):
+              for attempt in range(150):
+                  try:
+                      with urllib.request.urlopen(url, timeout=2) as response:
+                          if name == "Angular" and response.status != 200:
+                              raise RuntimeError("Angular status unexpectedly non-200")
+                      print(name + " ready")
+                      break
+                  except urllib.error.HTTPError as e:
+                      # Flask devuelve 404 normal en /; eso prueba que responde.
+                      if name == "Flask" and e.code == 404:
+                          print("Flask ready (404 expected on root)")
+                          break
+                      time.sleep(2)
+                  except Exception:
+                      time.sleep(2)
+              else:
+                  raise RuntimeError(name + " did not start")
+          PY
+      - name: Grabar master con secciones Mantenimiento y Gerencia (sin producción)
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          data = json.loads(Path("artifacts/capacitacion/tapizado-full/dataset.json").read_text())
+          assert data["mode"] == "EPHEMERAL_SYNTHETIC_UI"
+          subprocess.run([
+              "python", "-m", "scripts.training.generate",
+              "--base-url", "http://127.0.0.1:4200",
+              "--isolated-ack", "BD_DE_CAPACITACION_AISLADA",
+              "--ticket-id", str(data["ticket_id"]),
+              "--codes", *data["codes"],
+              "--output", "artifacts/capacitacion/tapizado-full",
+              "--voice", "none",
+              "--cap-v2",
+          ], check=True)
+          PY
+      - name: Verificar estado final en PostgreSQL aislado y FFprobe
+        working-directory: backend
+        run: python -m scripts.verify_training_ci
+      - name: Generar tres capacitaciones por rol con narración experimental
+        run: python -m scripts.training.render_role_v2
+      - name: Verificar y adjuntar tres videos sintéticos (no publicar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CAP-V2-Tapizado-Por-Rol-EXPERIMENT
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            artifacts/capacitacion/tapizado-full/manifiesto.json
+            artifacts/capacitacion/tapizado-full/dataset.json
+            artifacts/capacitacion/tapizado-v2/mantenimiento/tapizado-mantenimiento.mp4
+            artifacts/capacitacion/tapizado-v2/mantenimiento/subtitulos.srt
+            artifacts/capacitacion/tapizado-v2/mantenimiento/manifiesto.json
+            artifacts/capacitacion/tapizado-v2/gerencia/tapizado-gerencia.mp4
+            artifacts/capacitacion/tapizado-v2/gerencia/subtitulos.srt
+            artifacts/capacitacion/tapizado-v2/gerencia/manifiesto.json
+            artifacts/capacitacion/tapizado-v2/integral/tapizado-integral.mp4
+            artifacts/capacitacion/tapizado-v2/integral/subtitulos.srt
+            artifacts/capacitacion/tapizado-v2/integral/manifiesto.json
+      - name: Diagnóstico efímero de fallos (sin credenciales)
+        if: failure()
+        run: |
+          echo "---- Flask (últimas 35 líneas) ----"
+          tail -n 35 cap-backend.log 2>/dev/null || true
+          echo "---- Angular (últimas 35 líneas) ----"
+          tail -n 35 cap-angular.log 2>/dev/null || true
