@@ -370,7 +370,60 @@ def walkthrough(page, args, story: dict):
     history.get_by_text("Historial de solución").wait_for()
     scene("historial")
     end_segment()
-    begin_segment("fin", "mantenimiento")
+
+    if args.cap_v2:
+        # Un segundo intento del MISMO ticket sintético completa el circuito:
+        # gerente rechaza -> mantenimiento corrige -> reenvía -> gerente acepta.
+        # No se graban autenticaciones ni transiciones entre responsables.
+        guided_click(page, history.get_by_role("button", name="Cerrar").last)
+        begin_segment("subsanacion", "mantenimiento")
+        dlg = open_receipt(page, args.ticket_id)
+        ensure_progress(dlg, len(args.codes) - 1, len(args.codes))
+        batch_receive(page, dlg, [args.codes[-1]], True)
+        ensure_progress(dlg, len(args.codes), len(args.codes))
+        scene("subsanacion")
+        end_segment()
+
+        begin_segment("reenvio", "mantenimiento")
+        guided_click(page, dlg.get_by_role("button", name="Cerrar", exact=True))
+        row = find_ticket(page, args.ticket_id)
+        retry = row.get_by_role("button", name=re.compile("Solicitar cierre|Revisar cierre"))
+        retry.wait_for(timeout=20_000)
+        guided_click(page, retry)
+        finish = page.locator("mat-dialog-container").filter(has_text="Solicitud de conformidad")
+        finish.get_by_role("textbox", name="Notas de revisión (obligatorias)").fill(
+            "Equipo corregido y tres aparatos recibidos; solicitamos nueva revisión."
+        )
+        guided_click(page, finish.get_by_role("button", name="Solicitar conformidad"))
+        retry_status = observe_ticket_state(page, args.base_url, args.ticket_id)
+        if (retry_status.get("estado") != "por_validar"
+                or retry_status.get("estado_cierre") != "pendiente_creador"):
+            raise RuntimeError("CAP-V2: reenvío no creó conformidad pendiente: " + str(retry_status))
+        scene("reenvio")
+        end_segment()
+
+        switch_account(page, args.base_url, reviewer, reviewer_pass)
+        ticket_page(page, args.base_url)
+        begin_segment("aprobacion", "gerencia")
+        row = find_ticket(page, args.ticket_id)
+        guided_click(page, row.get_by_role("button", name="Aceptar cierre"))
+        confirmation = page.locator("mat-dialog-container").filter(has_text="Aceptar cierre")
+        confirmation.wait_for(timeout=15000)
+        guided_click(page, confirmation.get_by_role("button", name="Aceptar", exact=True))
+        # La petición Angular es asíncrona. Validar la respuesta persistida,
+        # sin sustituir el uso real de los controles por llamadas directas.
+        for _ in range(24):
+            final_status = observe_ticket_state(page, args.base_url, args.ticket_id)
+            if final_status.get("estado") == "finalizado":
+                break
+            page.wait_for_timeout(250)
+        else:
+            raise RuntimeError("CAP-V2: Gerencia no finalizó el ticket: " + str(final_status))
+        scene("aprobacion")
+        end_segment()
+        begin_segment("fin", "gerencia")
+    else:
+        begin_segment("fin", "mantenimiento")
     scene("fin")
     end_segment()
     return (scenes, segments) if args.cap_v2 else scenes
@@ -393,6 +446,10 @@ def main(argv=None):
         ap.error("ticket-id debe ser positivo")
     validate_codes(args.codes)
     story = load_storyboard(args.storyboard)
+    if args.cap_v2:
+        for key in ("subsanacion", "reenvio", "aprobacion"):
+            if not isinstance(story.get(key), str) or not story[key].strip():
+                ap.error(f"CAP-V2: storyboard sin narración de {key}")
     for name in ("CAP_ACTOR_USER", "CAP_ACTOR_PASSWORD", "CAP_REVIEWER_USER", "CAP_REVIEWER_PASSWORD"):
         if not os.environ.get(name):
             ap.error(f"Falta variable de entorno {name} (no introducir contraseñas en argumentos).")
@@ -453,7 +510,7 @@ def main(argv=None):
     if args.cap_v2:
         manifest["cap_v2_source"] = True
         manifest["segmentos"] = segments
-        manifest["artefactos"].append("navegacion.webm")
+        manifest["final_estado_esperado"] = "finalizado"
     (out / "manifiesto.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
                                           encoding="utf-8")
     print(f"CAP-V1 PASS: {mp4} ({mp4.stat().st_size:,} bytes)")
