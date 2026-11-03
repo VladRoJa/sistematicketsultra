@@ -53,9 +53,18 @@ def run(args: list[str]) -> str:
 
 
 def seconds(path: Path, stream: str = "v:0") -> float:
-    return float(run(["ffprobe", "-v", "error", "-select_streams", stream,
-                      "-show_entries", "stream=duration",
-                      "-of", "default=noprint_wrappers=1:nokey=1", str(path)]))
+    result = run(["ffprobe", "-v", "error", "-select_streams", stream,
+                  "-show_entries", "stream=duration",
+                  "-of", "default=noprint_wrappers=1:nokey=1", str(path)])
+    # Playwright graba WebM VP8, cuyo stream suele omitir duration.
+    if result and result != "N/A":
+        return float(result)
+    result = run(["ffprobe", "-v", "error", "-show_entries",
+                  "format=duration",
+                  "-of", "default=noprint_wrappers=1:nokey=1", str(path)])
+    if not result or result == "N/A":
+        raise ValueError(f"CAP-V2: sin duración verificable de {path.name}")
+    return float(result)
 
 
 def stamp(sec: float) -> str:
