@@ -69,8 +69,8 @@ export interface ResolucionHallazgo {
 
 export interface ResolucionAltaHallazgo {
   accion: 'CREAR_NUEVO';
-  categoria: string;
-  marca: string;
+  categoria_inventario_id: number;
+  marca_id: number | null;
   descripcion: string;
   familia_equipo_id: number | null;
   justificacion: string;
