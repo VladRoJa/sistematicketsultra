@@ -240,20 +240,52 @@ def observe_ticket_state(page, url: str, ticket_id: int) -> dict:
     }
 
 
-def walkthrough(page, args, story: dict) -> list[dict]:
+def walkthrough(page, args, story: dict):
     username, password = os.environ["CAP_ACTOR_USER"], os.environ["CAP_ACTOR_PASSWORD"]
     reviewer, reviewer_pass = os.environ["CAP_REVIEWER_USER"], os.environ["CAP_REVIEWER_PASSWORD"]
     scenes: list[dict] = []
+    segments: list[dict] = []
+    active_segment = None
     start = time.monotonic()
+
+    def begin_segment(key: str, role: str) -> None:
+        nonlocal active_segment
+        if not args.cap_v2:
+            return
+        if active_segment is not None or role not in ("mantenimiento", "gerencia"):
+            raise RuntimeError("CAP-V2: marcador de rol superpuesto o desconocido")
+        active_segment = {
+            "key": key, "role": role,
+            "start": round(time.monotonic() - start, 3)
+        }
+
+    def end_segment() -> None:
+        nonlocal active_segment
+        if not args.cap_v2:
+            return
+        if active_segment is None:
+            raise RuntimeError("CAP-V2: fin de sección sin inicio")
+        active_segment["end"] = round(time.monotonic() - start, 3)
+        if active_segment["end"] <= active_segment["start"]:
+            raise RuntimeError("CAP-V2: sección sin video")
+        segments.append(active_segment)
+        active_segment = None
 
     def scene(key: str):
         scenes.append({"key": key, "text": story[key], "at": round(time.monotonic() - start, 3)})
-        # Pausa de explicación suficiente para voz natural a ~155 palabras/minuto.
-        page.wait_for_timeout(max(3500, int(len(story[key].split()) / 2.5 * 1000)))
+        # V2 narra sobre acciones, sin retener una pantalla inmóvil por longitud del texto.
+        # V1 se conserva sin cambios para compatibilidad con su piloto.
+        if args.cap_v2:
+            page.wait_for_timeout(500)
+        else:
+            page.wait_for_timeout(max(3500, int(len(story[key].split()) / 2.5 * 1000)))
 
     login(page, args.base_url, username, password)
     ticket_page(page, args.base_url)
+    begin_segment("inicio", "mantenimiento")
     scene("inicio")
+    end_segment()
+    begin_segment("ticket", "mantenimiento")
     row = find_ticket(page, args.ticket_id)
     if "Tapizado" not in row.inner_text():
         raise RuntimeError("El ticket seleccionado no es de tapizado.")
@@ -261,14 +293,20 @@ def walkthrough(page, args, story: dict) -> list[dict]:
     page.locator("mat-dialog-container").filter(has_text=f"#{args.ticket_id}").wait_for()
     scene("ticket")
     guided_click(page, page.locator("mat-dialog-container").get_by_role("button", name="Cerrar").last)
+    end_segment()
+    begin_segment("parcial", "mantenimiento")
     dlg = open_receipt(page, args.ticket_id)
     ensure_progress(dlg, 0, len(args.codes))
     batch_receive(page, dlg, args.codes[:2], True)
     ensure_progress(dlg, 2, len(args.codes))
     scene("parcial")
+    end_segment()
+    begin_segment("completo", "mantenimiento")
     batch_receive(page, dlg, args.codes[2:], True)
     ensure_progress(dlg, len(args.codes), len(args.codes))
     scene("completo")
+    end_segment()
+    begin_segment("cierre", "mantenimiento")
     guided_click(page, dlg.get_by_role("button", name="Cerrar", exact=True))
 
     row = find_ticket(page, args.ticket_id)
@@ -287,9 +325,12 @@ def walkthrough(page, args, story: dict) -> list[dict]:
             "CAP-V1 QA: solicitud no creó pendiente de conformidad: "
             + str(after_request)
         )
+    end_segment()
 
+    # Las autenticaciones y cambios de pantalla NO entran en ningún video por rol.
     switch_account(page, args.base_url, reviewer, reviewer_pass)
     ticket_page(page, args.base_url)
+    begin_segment("rechazo", "gerencia")
     row = find_ticket(page, args.ticket_id)
     reviewer_status = observe_ticket_state(page, args.base_url, args.ticket_id)
     if reviewer_status and (reviewer_status["estado"] != "por_validar"
@@ -301,9 +342,11 @@ def walkthrough(page, args, story: dict) -> list[dict]:
     guided_click(page, page.locator(".swal2-confirm"))
     guided_click(page, page.locator("mat-dialog-container").filter(has_text="Rechazar cierre").get_by_role("button", name="Aceptar"))
     scene("rechazo")
+    end_segment()
 
     switch_account(page, args.base_url, username, password)
     ticket_page(page, args.base_url)
+    begin_segment("reversion", "mantenimiento")
     dlg = open_receipt(page, args.ticket_id)
     ensure_progress(dlg, len(args.codes), len(args.codes))
     batch_receive(page, dlg, [args.codes[-1]], False, "Corrección didáctica: equipo no listo.")
@@ -320,12 +363,17 @@ def walkthrough(page, args, story: dict) -> list[dict]:
         "button", name=re.compile("Solicitar cierre|Revisar cierre|Finalizar|Cierre gerente")
     ).count():
         raise RuntimeError("REGRESIÓN: se ofrece cierre con recepción incompleta.")
+    end_segment()
+    begin_segment("historial", "mantenimiento")
     guided_click(page, row.get_by_role("button", name="Ver Historial"))
     history = page.locator("mat-dialog-container").filter(has_text="Historial de solución")
     history.get_by_text("Historial de solución").wait_for()
     scene("historial")
+    end_segment()
+    begin_segment("fin", "mantenimiento")
     scene("fin")
-    return scenes
+    end_segment()
+    return (scenes, segments) if args.cap_v2 else scenes
 
 
 def main(argv=None):
@@ -337,6 +385,8 @@ def main(argv=None):
     ap.add_argument("--storyboard", type=Path, default=ROOT / "storyboards/tapizado_multiaparato.json")
     ap.add_argument("--output", type=Path, default=Path("artifacts/capacitacion/tapizado"))
     ap.add_argument("--voice", choices=("espeak", "none"), default="espeak")
+    ap.add_argument("--cap-v2", action="store_true",
+                    help="Marcar secciones por rol sin pausas narrativas; no publica nada")
     args = ap.parse_args(argv)
     args.base_url = validate_target(args.base_url, args.isolated_ack)
     if args.ticket_id <= 0:
@@ -351,6 +401,7 @@ def main(argv=None):
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     scenes = []
+    segments = []
     source = out / "navegacion.webm"
     error = None
     with sync_playwright() as playwright:
@@ -370,7 +421,11 @@ def main(argv=None):
         page = context.new_page()
         video = page.video
         try:
-            scenes = walkthrough(page, args, story)
+            result = walkthrough(page, args, story)
+            if args.cap_v2:
+                scenes, segments = result
+            else:
+                scenes = result
         except Exception as exc:
             error = str(exc)
             page.screenshot(path=str(out / "fallo.png"))
@@ -383,7 +438,8 @@ def main(argv=None):
         (out / "fallo.txt").write_text(error + "\n", encoding="utf-8")
         raise RuntimeError(f"Recorrido incompleto: {error}. Ver fallo.png; NO publicar.")
     # El video de Playwright empieza al crear la página; el último intervalo se conserva.
-    duration = scenes[-1]["at"] + max(3.5, len(scenes[-1]["text"].split()) / 2.5)
+    duration = (segments[-1]["end"] if args.cap_v2 else
+                scenes[-1]["at"] + max(3.5, len(scenes[-1]["text"].split()) / 2.5))
     make_srt(scenes, duration, out / "subtitulos.srt")
     mp4 = export_video(source, out, scenes, args.voice)
     manifest = {
@@ -394,6 +450,10 @@ def main(argv=None):
         "artefactos": ["navegacion.webm", "capacitacion.mp4", "subtitulos.srt"],
         "publicacion_nube": "BLOQUEADA: MP4 no admitido en extensiones actuales",
     }
+    if args.cap_v2:
+        manifest["cap_v2_source"] = True
+        manifest["segmentos"] = segments
+        manifest["artefactos"].append("navegacion.webm")
     (out / "manifiesto.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
                                           encoding="utf-8")
     print(f"CAP-V1 PASS: {mp4} ({mp4.stat().st_size:,} bytes)")
