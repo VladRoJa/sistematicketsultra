@@ -32,13 +32,13 @@ PROFILES = {
 # Locuciones deliberadamente breves: se explican las acciones MIENTRAS ocurren.
 # El material del gerente demuestra RECHAZO, no aprobación (aún no grabada).
 NARRATION = {
-    "ticket": "Abre el ticket de tapizado y revisa los aparatos relacionados.",
+    "ticket": "Consulta los aparatos del ticket.",
     "parcial": "Marca los equipos recibidos y guarda los cambios. La recepción queda parcial.",
-    "completo": "Registra el aparato restante. Con todos recibidos, se permite solicitar conformidad.",
+    "completo": "Marca el último equipo y guarda la recepción completa.",
     "cierre": "Escribe las notas y solicita conformidad. La gerencia revisará la solicitud.",
     "rechazo": "En la vista de gerencia, revisa la solicitud. Si no procede, rechaza e indica el motivo.",
     "reversion": "Si el cierre fue rechazado, mantenimiento corrige la recepción, captura el motivo y guarda.",
-    "historial": "En Ver Historial consulta responsables, fechas y motivos registrados.",
+    "historial": "Consulta aquí el historial del ticket.",
 }
 EXPECTED_ORDER = ("inicio", "ticket", "parcial", "completo", "cierre", "rechazo",
                   "reversion", "historial", "fin")
