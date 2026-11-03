@@ -23,14 +23,19 @@ SCENE_ROLES = {
     "rechazo": "gerencia",
     "reversion": "mantenimiento",
     "historial": "mantenimiento",
+    "subsanacion": "mantenimiento",
+    "reenvio": "mantenimiento",
+    "aprobacion": "gerencia",
 }
 PROFILES = {
-    "mantenimiento": ("ticket", "parcial", "completo", "cierre", "reversion", "historial"),
-    "gerencia": ("rechazo",),
-    "integral": ("ticket", "parcial", "completo", "cierre", "rechazo", "reversion", "historial"),
+    "mantenimiento": ("ticket", "parcial", "completo", "cierre",
+                      "reversion", "historial", "subsanacion", "reenvio"),
+    "gerencia": ("rechazo", "aprobacion"),
+    "integral": ("ticket", "parcial", "completo", "cierre", "rechazo",
+                 "reversion", "historial", "subsanacion", "reenvio", "aprobacion"),
 }
 # Locuciones deliberadamente breves: se explican las acciones MIENTRAS ocurren.
-# El material del gerente demuestra RECHAZO, no aprobación (aún no grabada).
+# Gerencia ve dos decisiones de cierre, sobre el mismo ticket sintético en dos intentos.
 NARRATION = {
     "ticket": "Consulta los aparatos del ticket.",
     "parcial": "Marca los equipos recibidos y guarda los cambios. La recepción queda parcial.",
@@ -39,9 +44,12 @@ NARRATION = {
     "rechazo": "En la vista de gerencia, revisa la solicitud. Si no procede, rechaza e indica el motivo.",
     "reversion": "Si el cierre fue rechazado, mantenimiento corrige la recepción, captura el motivo y guarda.",
     "historial": "Consulta aquí el historial del ticket.",
+    "subsanacion": "Marca recibido el equipo corregido y guarda.",
+    "reenvio": "Solicita otra vez la conformidad del gerente.",
+    "aprobacion": "Verifica la solicitud y acepta el cierre del ticket.",
 }
 EXPECTED_ORDER = ("inicio", "ticket", "parcial", "completo", "cierre", "rechazo",
-                  "reversion", "historial", "fin")
+                  "reversion", "historial", "subsanacion", "reenvio", "aprobacion", "fin")
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 MAX_SPEECH_TEMPO = 1.35
 
@@ -98,7 +106,7 @@ def load_source():
     result = {}
     for seg in segments:
         key = seg["key"]
-        expected_role = "gerencia" if key == "rechazo" else "mantenimiento"
+        expected_role = "gerencia" if key in ("rechazo", "aprobacion", "fin") else "mantenimiento"
         start, end = float(seg["start"]), float(seg["end"])
         if (seg["role"] != expected_role or start < previous - 0.005
                 or end <= start or end > video_seconds + 1.0):
@@ -210,8 +218,9 @@ def render_profile(profile: str, keys: tuple, assets: dict):
         "scenes": report_scenes,
         "duration": round(duration, 3),
         "audio_duration": round(audio_duration, 3),
-        "coverage": ("Demuestra rechazo, NO aprobación" if profile == "gerencia"
-                     else "Recorrido sintético de recepción y cierre"),
+        "coverage": ("Demuestra rechazo y aceptación en intentos distintos"
+                     if profile == "gerencia" else
+                     "Recorrido sintético de recepción, devolución y cierre"),
     }
     (folder / "manifiesto.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
