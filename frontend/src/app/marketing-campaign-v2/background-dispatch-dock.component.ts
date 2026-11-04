@@ -83,8 +83,12 @@ export class BackgroundDispatchDockComponent implements OnInit {
           return;
         }
         this.stale = false;
-        this.jobs = visibleBackgroundJobs(response.jobs, Date.now())
-          .filter(job => !this.dismissedJobIds.has(job.job_id));
+        // Exclude previously dismissed jobs before the presentation cap, so
+        // a new dispatch is never hidden behind 20 old dismissed entries.
+        this.jobs = visibleBackgroundJobs(
+          response.jobs.filter(job => !this.dismissedJobIds.has(job.job_id)),
+          Date.now(),
+        );
       },
       error: (error: HttpErrorResponse) => {
         if ([401, 403, 404].includes(error.status)) {
