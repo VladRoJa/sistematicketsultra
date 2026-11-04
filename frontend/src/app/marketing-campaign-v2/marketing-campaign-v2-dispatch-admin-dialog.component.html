@@ -131,16 +131,17 @@
       <ng-container *ngIf="showChannels">
         <div class="catalog-table">
           <table>
-            <thead><tr><th>Sucursal</th><th>ID del canal</th><th>Estado</th><th>Predeterminado</th><th></th></tr></thead>
+            <thead><tr><th>Sucursal origen</th><th>ID del canal propio</th><th>Emite por</th><th>Estado</th><th>Predeterminado</th><th></th></tr></thead>
             <tbody>
               <tr *ngFor="let binding of bindings">
                 <td>{{ binding.sucursal_canon }}</td>
                 <td><small>{{ binding.provider_channel_id }}</small></td>
+                <td>{{ senderForBinding(binding) }}</td>
                 <td>{{ binding.is_active ? 'Activo' : 'Inactivo' }}</td>
                 <td>{{ binding.is_default ? 'Sí' : 'No' }}</td>
                 <td><button mat-button type="button" (click)="editBinding(binding)">Editar</button></td>
               </tr>
-              <tr *ngIf="!bindings.length"><td colspan="5">No hay canales configurados.</td></tr>
+              <tr *ngIf="!bindings.length"><td colspan="6">No hay canales configurados.</td></tr>
             </tbody>
           </table>
         </div>
@@ -161,6 +162,16 @@
               <input matInput [formControl]="bindingChannelId" maxlength="255">
             </mat-form-field>
           </div>
+          <mat-form-field appearance="fill" *ngIf="isIndependenciaBinding">
+            <mat-label>Enviar contactos de Independencia por</mat-label>
+            <mat-select [formControl]="bindingRouteViaBindingId">
+              <mat-option [value]="null">Su canal propio (límite 250)</mat-option>
+              <mat-option *ngFor="let sender of availableSenderBindings" [value]="sender.id">
+                {{ sender.sucursal_canon }} · {{ sender.provider_channel_id }}
+              </mat-option>
+            </mat-select>
+            <mat-hint>Origen comercial: INDEPENDENCIA. Emisor: canal seleccionado. Solo campañas congeladas después de configurar esta ruta.</mat-hint>
+          </mat-form-field>
           <div class="binding-flags">
             <mat-checkbox [formControl]="bindingActive">Activo</mat-checkbox>
             <mat-checkbox [formControl]="bindingDefault">Predeterminado</mat-checkbox>

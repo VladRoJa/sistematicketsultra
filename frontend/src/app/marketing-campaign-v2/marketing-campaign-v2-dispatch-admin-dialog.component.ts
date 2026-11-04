@@ -99,6 +99,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   readonly bindingChannelId = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] });
   readonly bindingActive = new FormControl(true, { nonNullable: true });
   readonly bindingDefault = new FormControl(true, { nonNullable: true });
+  readonly bindingRouteViaBindingId = new FormControl<number | null>(null);
   private bindingMetadata: Record<string, unknown> = {};
 
   ngOnInit(): void {
@@ -148,8 +149,29 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       });
   }
 
+  get isIndependenciaBinding(): boolean {
+    return this.branches.some(branch =>
+      branch.sucursal_id === this.bindingBranchId.value &&
+      branch.sucursal_canon === 'INDEPENDENCIA');
+  }
+
+  get availableSenderBindings(): CampaignV2ChannelBinding[] {
+    return this.bindings.filter(binding => binding.is_active && binding.is_default &&
+      binding.sucursal_canon === 'TEC_MXL');
+  }
+
+  senderForBinding(binding: CampaignV2ChannelBinding): string {
+    const route = binding.metadata?.['dispatch_via_binding_id'];
+    if (typeof route !== 'number') { return 'Canal propio'; }
+    return this.bindings.find(row => row.id === route)?.sucursal_canon ?? 'Emisor inválido';
+  }
+
   get canSaveBinding(): boolean {
-    return !this.savingBinding && this.bindingBranchId.valid && this.bindingChannelId.valid;
+    return !this.savingBinding && this.bindingBranchId.valid && this.bindingChannelId.valid
+      && (this.bindingRouteViaBindingId.value === null || (
+        this.isIndependenciaBinding &&
+        this.availableSenderBindings.some(row => row.id === this.bindingRouteViaBindingId.value)
+      ));
   }
 
   reload(): void {
@@ -339,6 +361,8 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     this.bindingActive.setValue(binding.is_active);
     this.bindingDefault.setValue(binding.is_default);
     this.bindingMetadata = { ...binding.metadata };
+    const route = binding.metadata?.['dispatch_via_binding_id'];
+    this.bindingRouteViaBindingId.setValue(typeof route === 'number' ? route : null);
     this.notice = '';
     this.error = '';
     this.showChannels = true;
@@ -351,6 +375,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     this.bindingActive.setValue(true);
     this.bindingDefault.setValue(true);
     this.bindingMetadata = {};
+    this.bindingRouteViaBindingId.setValue(null);
   }
 
   saveBinding(): void {
@@ -358,13 +383,19 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       this.error = 'Selecciona una sucursal y captura el ID exacto del canal.';
       return;
     }
+    const metadata = { ...this.bindingMetadata };
+    if (this.isIndependenciaBinding && this.bindingRouteViaBindingId.value !== null) {
+      metadata['dispatch_via_binding_id'] = this.bindingRouteViaBindingId.value;
+    } else {
+      delete metadata['dispatch_via_binding_id'];
+    }
     const payload: CampaignV2ChannelBindingRequest = {
       provider: 'IVENTAS',
       sucursal_id: this.bindingBranchId.value,
       provider_channel_id: this.bindingChannelId.value.trim(),
       is_active: this.bindingActive.value,
       is_default: this.bindingActive.value && this.bindingDefault.value,
-      metadata: { ...this.bindingMetadata },
+      metadata,
     };
     this.savingBinding = true;
     this.error = '';

@@ -48,6 +48,17 @@ def restricted_branch(value: Any, channel_id: Any = None) -> bool:
             str(channel_id or "").strip() in RESTRICTED_CHANNEL_IDS)
 
 
+def restricted_batch(batch: Any) -> bool:
+    """Limit follows verified frozen sender, not a commercial-origin label.
+
+    The preflight is the only producer of send_via_sucursal_canon: it checks
+    existing source+sender bindings and the immutable frozen route. A direct
+    binding reassignment without that snapshot remains capped at 250.
+    """
+    outbound = getattr(batch, "send_via_sucursal_canon", None)
+    return restricted_branch(outbound or batch.sucursal_canon, batch.provider_channel_id)
+
+
 def assess_branch_exception_capacity(
     *, plan: Any, session: Any, now: datetime,
     ignore_campaign_id: int | None = None,
@@ -62,7 +73,7 @@ def assess_branch_exception_capacity(
     limited_channels = {
         str(batch.provider_channel_id)
         for batch in plan.batches
-        if restricted_branch(batch.sucursal_canon, batch.provider_channel_id) and batch.provider_channel_id
+        if restricted_batch(batch) and batch.provider_channel_id
     }
     attempted = defaultdict(int)
     reserved = defaultdict(int)
@@ -115,7 +126,7 @@ def assess_branch_exception_capacity(
 
     demand = defaultdict(int)
     for batch in plan.batches:
-        if restricted_branch(batch.sucursal_canon, batch.provider_channel_id) and batch.provider_channel_id:
+        if restricted_batch(batch) and batch.provider_channel_id:
             demand[str(batch.provider_channel_id)] += len(batch.recipients)
 
     rows = []
@@ -123,7 +134,7 @@ def assess_branch_exception_capacity(
     for batch in plan.batches:
         channel = str(batch.provider_channel_id or "")
         count = len(batch.recipients)
-        restricted = restricted_branch(batch.sucursal_canon, batch.provider_channel_id)
+        restricted = restricted_batch(batch)
         reason = None
         if not channel:
             reason = "MISSING_CHANNEL"

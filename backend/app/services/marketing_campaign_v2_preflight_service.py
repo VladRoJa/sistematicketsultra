@@ -9,6 +9,9 @@ from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, resolve_sender_binding,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
 )
@@ -65,6 +68,7 @@ class CampaignV2DispatchBatchPlan:
     recipients: tuple[CampaignV2DispatchRecipientPlan, ...]
     blocked_reasons: tuple[str, ...]
     file_url: str | None = None
+    send_via_sucursal_canon: str | None = None
 
     @property
     def ready(self) -> bool:
@@ -121,6 +125,7 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     campaign = projection["campaign"]
+    routing_snapshot = (campaign.get("audience_definition") or {}).get(ROUTING_SNAPSHOT_KEY)
     if campaign.get("source") == FOLLOWUP_DERIVED_SOURCE:
         # Freeze only: follow-up recontact needs a separate governed
         # admission/approval policy. No standard D2a/D2b/D2c bypass.
@@ -226,6 +231,7 @@ def build_campaign_v2_preflight(
             {
                 "branch": branch,
                 "binding": None,
+                "send_via_sucursal_canon": None,
                 "recipients": [],
                 "missing_channel": False,
                 "template_channel_mismatch": False,
@@ -240,7 +246,12 @@ def build_campaign_v2_preflight(
             if binding is None:
                 group["missing_channel"] = True
             else:
+                binding, send_via_branch = resolve_sender_binding(
+                    snapshot=routing_snapshot, source_binding=binding,
+                    branch=branch, session=active_session,
+                )
                 group["binding"] = binding
+                group["send_via_sucursal_canon"] = send_via_branch
                 if not template_allows_channel(
                     template,
                     str(binding.provider_channel_id),
@@ -315,6 +326,7 @@ def build_campaign_v2_preflight(
                 ),
                 blocked_reasons=tuple(sorted(set(reasons))),
                 file_url=file_url,
+                send_via_sucursal_canon=group["send_via_sucursal_canon"],
             )
         )
 
@@ -394,6 +406,9 @@ def serialize_campaign_v2_preflight(
                 "track_label": batch.track_label,
                 "channel_binding_id": batch.channel_binding_id,
                 "provider_channel_id": batch.provider_channel_id,
+                "send_via_sucursal_canon": (
+                    batch.send_via_sucursal_canon or batch.sucursal_canon
+                ),
                 "template_id": batch.template_id,
                 "template_name": batch.template_name,
                 "file_url": batch.file_url,
@@ -511,6 +526,8 @@ def _dispatch_fingerprint(
                 "template_id": batch.template_id,
                 "template_name": batch.template_name,
                 "file_url": batch.file_url,
+                **({"send_via_sucursal_canon": batch.send_via_sucursal_canon}
+                   if batch.send_via_sucursal_canon else {}),
                 "blocked_reasons": list(batch.blocked_reasons),
                 "recipients": [
                     {
