@@ -953,7 +953,7 @@ def _serialize_row_result(
         error_code=row.error_code,
         support_ref=row.support_ref,
         send_via_sucursal_canon=(
-            dict(row.template_snapshot_json or {}).get("send_via_sucursal_canon")
+            dict(getattr(row, "template_snapshot_json", None) or {}).get("send_via_sucursal_canon")
             or str(row.sucursal_canon)
         ),
     )
