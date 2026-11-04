@@ -44,7 +44,7 @@ def _ensure_date(value: Any, *, field_name: str) -> date:
 
 def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     normalized = str(raw_branch_name or "").strip().upper()
-    return normalized in {"BECA", "LA VIGA", "LA_VIGA"}
+    return normalized in {"BECA", "GIMNASIO PRUEBA", "LA VIGA", "LA_VIGA"}
 
 def build_track_source_desempeno_daily_for_date(
     *,
