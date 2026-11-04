@@ -3,6 +3,8 @@
 All provider HTTP is disabled; mocks represent durable children only.
 """
 from datetime import datetime, timezone
+import hashlib
+import json
 from types import SimpleNamespace as NS
 from unittest.mock import MagicMock
 
@@ -235,7 +237,12 @@ def test_worker_continues_between_two_confirmed_failures_without_replay(monkeypa
         "PROVIDER_ERROR", "SUBMITTED",
     ]
     ids = [11, 12, 13, 14, 15]
-    job = NS(pending_child_ids=ids, initial_pending_count=len(ids))
+    job = NS(
+        pending_child_ids=ids, initial_pending_count=len(ids),
+        pending_children_digest=hashlib.sha256(
+            json.dumps(ids, separators=(",", ":")).encode("ascii"),
+        ).hexdigest(),
+    )
     session = NS(rollback=MagicMock(), expire_all=MagicMock())
     provider_calls = []
     completions = []
@@ -270,7 +277,12 @@ def test_worker_continues_between_two_confirmed_failures_without_replay(monkeypa
 
 def test_worker_stops_on_ambiguous_result_before_next_provider_call(monkeypatch):
     ids = [11, 12, 13]
-    job = NS(pending_child_ids=ids, initial_pending_count=3)
+    job = NS(
+        pending_child_ids=ids, initial_pending_count=len(ids),
+        pending_children_digest=hashlib.sha256(
+            json.dumps(ids, separators=(",", ":")).encode("ascii"),
+        ).hexdigest(),
+    )
     session = NS(rollback=MagicMock(), expire_all=MagicMock())
     provider_calls = []
     quarantined = []
