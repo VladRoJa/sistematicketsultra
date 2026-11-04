@@ -143,6 +143,12 @@ def test_governed_recovery_commits_before_provider_and_blocks_replay(monkeypatch
                 return original_get(self, entity, ident, *args, **kwargs)
 
             monkeypatch.setattr(Session, "get", get_entity)
+            monkeypatch.setattr(svc, "has_app_context", lambda: True)
+            monkeypatch.setattr(
+                svc, "current_app",
+                NS(config={"CAMPAIGN_V2_PROVIDER_SEND_ENABLED": True,
+                           "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED": True}),
+            )
             monkeypatch.setattr(
                 svc, "resolve_marketing_access",
                 lambda actor: NS(is_global=True, can_send_campaigns=True,
