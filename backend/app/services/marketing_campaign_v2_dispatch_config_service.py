@@ -9,6 +9,9 @@ from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    METADATA_KEY as SENDER_ROUTE_METADATA_KEY, validate_binding_route_metadata,
+)
 from app.models.marketing import (
     MarketingCampaignV2ChannelBindingORM,
     MarketingCampaignV2ProviderCampaignORM,
@@ -129,6 +132,21 @@ def save_channel_binding(
             raise MarketingCampaignV2DispatchConfigNotFoundError(
                 "Channel binding Campaign V2 no encontrado."
             )
+
+    # A cross-branch sender is an explicit, audited routing choice, never a
+    # replacement of the canonical provider_channel_id. Only an existing,
+    # active, default source binding can be configured to use TEC_MXL.
+    if SENDER_ROUTE_METADATA_KEY in normalized_metadata:
+        if (row is None or not normalized_is_active or not normalized_is_default or
+                str(row.provider) != normalized_provider or
+                int(row.sucursal_id) != normalized_sucursal_id or
+                str(row.provider_channel_id) != normalized_channel_id):
+            raise MarketingCampaignV2DispatchConfigValidationError(
+                "Configura la ruta de envío sobre el binding original activo, sin cambiar identidad."
+            )
+        validate_binding_route_metadata(
+            source=row, metadata=normalized_metadata, session=active_session,
+        )
 
     if require_immutable_history and row is not None:
         historical = (
