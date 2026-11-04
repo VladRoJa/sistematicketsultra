@@ -449,7 +449,27 @@ submitUpload(): void {
 
   this.warehouseUploadsService.createUpload(payload).subscribe({
     next: (response) => {
-      if (response.report_type_key === 'google_ads_ad_group_daily') {
+      if (response.report_type_key === 'kpi_desempeno') {
+        const ingestion = response.manual_structured_result;
+        const snapshot = ingestion?.structured_result;
+        if (
+          !snapshot ||
+          !['ingested', 'already_ingested'].includes(ingestion?.ingestion_status || '')
+        ) {
+          this.uploadErrorMessage =
+            'El archivo RAW se guardó, pero la ingesta estructurada de KPI Desempeño no terminó. Revisa el upload antes de continuar.';
+          this.loadUploads();
+          return;
+        }
+        if (snapshot.is_canonical !== true) {
+          this.uploadErrorMessage =
+            `KPI Desempeño procesado (snapshot ${snapshot.snapshot_id}), pero no quedó canónico. Revisa la selección de fuente antes de reconstruir Track.`;
+          this.loadUploads();
+          return;
+        }
+        this.uploadSuccessMessage =
+          `KPI Desempeño ${snapshot.business_date}: snapshot canónico ${snapshot.snapshot_id}, ${snapshot.row_count_valid} sucursales procesadas. Track aún requiere reconstrucción.`;
+      } else if (response.report_type_key === 'google_ads_ad_group_daily') {
         const ingestion = response.manual_structured_result;
         const detail = ingestion?.structured_result;
         if (ingestion?.ingestion_status !== 'ingested' || !detail) {
