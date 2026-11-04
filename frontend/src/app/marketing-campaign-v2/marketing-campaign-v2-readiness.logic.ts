@@ -56,7 +56,7 @@ export function campaignV2BuildReadinessRows(
     byBranch.set(row.sucursal_canon, (byBranch.get(row.sucursal_canon) ?? 0) + 1);
   }
   return active.map(binding => {
-    const routeId = binding.metadata['dispatch_via_binding_id'];
+    const routeId = binding.metadata?.['dispatch_via_binding_id'];
     const routed = typeof routeId === 'number';
     const sender = routed ? active.find(row => row.id === routeId) : binding;
     const approvedRoute = !routed || (binding.sucursal_canon === 'INDEPENDENCIA'
@@ -87,6 +87,8 @@ export function campaignV2BuildReadinessRows(
       portfolioVerified: false as const,
       accountAlias: policy?.account_key || null,
       operationalChannelCap: (
+        (['INDEPENDENCIA', 'INSURGENTES'].includes(binding.sucursal_canon.trim().toUpperCase())
+          && !(routed && approvedRoute)) ||
         ['INDEPENDENCIA', 'INSURGENTES'].includes((sender?.sucursal_canon ?? binding.sucursal_canon).trim().toUpperCase()) ||
         ['6a29c8ffe83fa20008b5a789', '6a2aff2d555186000912586d'].includes(channelId)
       ) ? 250 : null,
