@@ -538,6 +538,12 @@ def _prepare_provider_campaign_rows(
                 "template_name": batch.template_name,
                 "file_url": batch.file_url,
                 "dispatch_fingerprint_version": DISPATCH_FINGERPRINT_VERSION,
+                **({
+                    "origin_sucursal_canon": batch.sucursal_canon,
+                    "send_via_sucursal_canon": batch.send_via_sucursal_canon,
+                    "send_via_channel_binding_id": batch.channel_binding_id,
+                    "send_via_provider_channel_id": batch.provider_channel_id,
+                } if batch.send_via_sucursal_canon else {}),
             },
             recipient_count=len(batch.recipients),
             dispatch_fingerprint=plan.dispatch_fingerprint,
@@ -802,6 +808,8 @@ def _provider_campaign_name(
     batch: CampaignV2DispatchBatchPlan,
 ) -> str:
     suffix = f" · {batch.sucursal_canon}"
+    if batch.send_via_sucursal_canon:
+        suffix += f" (via {batch.send_via_sucursal_canon})"
     base = " ".join(str(plan.campaign_name or "").split()) or (
         f"Campaign V2 #{plan.campaign_id}"
     )
