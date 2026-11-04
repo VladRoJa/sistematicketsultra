@@ -101,7 +101,7 @@ def _seed(session):
             channel_binding_id=101, provider_channel_id="synthetic-channel",
             template_id=2, template_name="synthetic-template",
             recipient_count=1, dispatch_fingerprint=FINGERPRINT,
-            idempotency_key=KEY, status=status,
+            idempotency_key=f"{child_id:064x}", status=status,
             request_snapshot_json={"synthetic": True},
             provider_response_json=(
                 {"http_status": 400} if child_id == 255 else {}),
