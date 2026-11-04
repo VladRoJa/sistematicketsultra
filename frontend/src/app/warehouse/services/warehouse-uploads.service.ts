@@ -142,9 +142,13 @@ export interface WarehouseCreateUploadResponse {
     structured_result?: {
       campaign_day_rows?: number;
       group_day_rows?: number;
-      created_rows: number;
-      unchanged_rows: number;
-      total_cost_in_file: string;
+      created_rows?: number;
+      unchanged_rows?: number;
+      total_cost_in_file?: string;
+      snapshot_id?: number;
+      is_canonical?: boolean;
+      business_date?: string;
+      row_count_valid?: number;
       passes_ads?: string;
       web_purchases_ads?: string;
     };

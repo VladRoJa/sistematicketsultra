@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+import re
 
 import pandas as pd
 
@@ -59,6 +61,7 @@ class KpiDesempenoParseResult:
     row_count: int = 0
     header_columns: tuple[str, ...] = field(default_factory=tuple)
     skipped_rows: int = 0
+    report_cutoff_date: str | None = None
 
 
 def parse_kpi_desempeno_xlsx(
@@ -66,7 +69,7 @@ def parse_kpi_desempeno_xlsx(
     file_path: str | None = None,
     file_bytes: bytes | None = None,
 ) -> KpiDesempenoParseResult:
-    df = _read_kpi_desempeno_dataframe(
+    df, report_cutoff_date = _read_kpi_desempeno_dataframe(
         file_path=file_path,
         file_bytes=file_bytes,
     )
@@ -84,7 +87,7 @@ def parse_kpi_desempeno_xlsx(
             skipped_rows += 1
             continue
 
-        if _is_totales_row(sucursal):
+        if _is_totales_row(sucursal) or sucursal.casefold().startswith("reporte generado:"):
             skipped_rows += 1
             continue
 
@@ -149,6 +152,7 @@ def parse_kpi_desempeno_xlsx(
         row_count=len(parsed_rows),
         header_columns=tuple(str(col) for col in df.columns.tolist()),
         skipped_rows=skipped_rows,
+        report_cutoff_date=report_cutoff_date,
     )
 
 
@@ -156,16 +160,15 @@ def _read_kpi_desempeno_dataframe(
     *,
     file_path: str | None,
     file_bytes: bytes | None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, str | None]:
     if not file_path and file_bytes is None:
         raise KpiDesempenoParserError(
             "Se requiere 'file_path' o 'file_bytes' para parsear KPI Desempeño."
         )
 
     try:
-        source = BytesIO(file_bytes) if file_bytes is not None else Path(file_path)  # type: ignore[arg-type]
+        source = BytesIO(file_bytes) if file_bytes is not None else Path(file_path)
         excel_file = pd.ExcelFile(source)
-
         preferred_sheet_name = next(
             (
                 sheet_name
@@ -174,12 +177,58 @@ def _read_kpi_desempeno_dataframe(
             ),
             excel_file.sheet_names[0],
         )
+        # Gasca exports may place the cutoff title above the real header.
+        raw = pd.read_excel(excel_file, sheet_name=preferred_sheet_name, header=None)
+        header_row_index = next(
+            (
+                idx
+                for idx in range(min(len(raw), 6))
+                if tuple(
+                    str(value).strip() if pd.notna(value) else ""
+                    for value in raw.iloc[idx].tolist()
+                ) == EXPECTED_KPI_DESEMPENO_COLUMNS
+            ),
+            None,
+        )
+        if header_row_index is None:
+            raise KpiDesempenoLayoutError(
+                "No se encontró el encabezado esperado de KPI Desempeño."
+            )
 
-        return pd.read_excel(excel_file, sheet_name=preferred_sheet_name)
+        report_cutoff_date = None
+        if header_row_index > 0:
+            title = str(raw.iat[0, 0] or "")
+            cutoff_match = re.search(
+                r"Corte:\s*(\d{2}/\d{2}/\d{4})", title, re.IGNORECASE
+            )
+            if not cutoff_match:
+                raise KpiDesempenoLayoutError(
+                    "El archivo KPI con título debe indicar la fecha de corte."
+                )
+            try:
+                report_cutoff_date = datetime.strptime(
+                    cutoff_match.group(1), "%d/%m/%Y"
+                ).date().isoformat()
+            except ValueError as exc:
+                raise KpiDesempenoLayoutError(
+                    "Fecha de corte inválida en el título de KPI Desempeño."
+                ) from exc
+
+        return (
+            pd.read_excel(
+                excel_file,
+                sheet_name=preferred_sheet_name,
+                header=header_row_index,
+            ),
+            report_cutoff_date,
+        )
+    except KpiDesempenoParserError:
+        raise
     except Exception as exc:
         raise KpiDesempenoLayoutError(
             "No se pudo leer el archivo XLSX de KPI Desempeño."
         ) from exc
+
 
 def _validate_expected_columns(df: pd.DataFrame) -> None:
     actual_columns = tuple(str(col).strip() for col in df.columns.tolist())
