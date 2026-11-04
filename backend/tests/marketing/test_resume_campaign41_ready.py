@@ -244,8 +244,6 @@ def test_governed_claim_is_durable_before_synthetic_provider(monkeypatch):
 
 
 def test_ambiguous_provider_result_is_persisted_and_stops(monkeypatch):
-    from app.services.marketing_campaign_v2_provider import CampaignProviderAmbiguousError
-    from inspect import signature
     # Reject unknown results exactly like governed D2c: never treat as accepted.
     def claim(**_kwargs):
         return NS()
