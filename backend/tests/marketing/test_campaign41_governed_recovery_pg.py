@@ -124,3 +124,132 @@ def _seed(session):
         created_at=NOW, updated_at=NOW,
     ))
     session.commit()
+
+
+
+def test_governed_recovery_commits_before_provider_and_blocks_replay(monkeypatch):
+    engine = _engine()
+    metadata = _schema()
+    metadata.create_all(engine)
+    try:
+        with Session(engine) as session:
+            _seed(session)
+            original_get = Session.get
+
+            def get_entity(self, entity, ident, *args, **kwargs):
+                if entity is UserORM:
+                    return NS(id=int(ident))
+                return original_get(self, entity, ident, *args, **kwargs)
+
+            monkeypatch.setattr(Session, "get", get_entity)
+            monkeypatch.setattr(
+                svc, "resolve_marketing_access",
+                lambda actor: NS(is_global=True, can_send_campaigns=True,
+                                 can_manage_dispatch_config=True),
+            )
+            batches = tuple(NS(
+                sucursal_canon=f"TEST_{child_id}",
+                sucursal_id=1, channel_binding_id=101,
+                provider_channel_id="synthetic-channel", template_id=2,
+                template_name="synthetic-template", recipients=(child_id,),
+            ) for child_id in (253, 255, 256, 257))
+            plan = NS(campaign_id=41, mode="IMMEDIATE", provider="IVENTAS",
+                      ready=True, dispatch_fingerprint=FINGERPRINT,
+                      batches=batches)
+            manifest = {batch.sucursal_canon: {"planned_status": "READY"}
+                        for batch in batches}
+            review = NS(
+                approval_id=9, execution_id=41, digest=DIGEST,
+                quota_basis="SUITE_BRANCH_EXCEPTION_CAPS_V1",
+                accepted_original=((253, "original-253"),),
+                plan_review=NS(
+                    plan=plan, ready_children=(
+                        NS(child_id=256, batch=batches[2]),
+                        NS(child_id=257, batch=batches[3]),
+                    ),
+                ),
+            )
+            monkeypatch.setattr(
+                svc, "build_campaign_v2_preflight", lambda **_: plan)
+            monkeypatch.setattr(
+                svc, "budget_for_existing_approval", lambda **_: {})
+            monkeypatch.setattr(
+                svc, "_assert_manifest", lambda *args: manifest)
+            monkeypatch.setattr(
+                svc, "build_provider_campaign_idempotency_key",
+                lambda *, batch, **_: f"{int(batch.sucursal_canon.rsplit('_', 1)[1]):064x}")
+            monkeypatch.setattr(
+                svc, "build_campaign_v2_provider_dispatch_batch",
+                lambda **_: NS())
+            monkeypatch.setattr(
+                svc, "serialize_campaign_v2_provider_request_snapshot",
+                lambda _outbound: {"synthetic": True})
+            monkeypatch.setattr(
+                svc, "_assess_scopes",
+                lambda *args, **kwargs: (
+                    {"status": "REVIEWABLE"},
+                    {("CHANNEL", "synthetic-channel"): 1},
+                    {("CHANNEL", "synthetic-channel"): None},
+                    {},
+                ),
+            )
+            admissions = []
+            monkeypatch.setattr(
+                svc, "verify_outbound_contact_admission",
+                lambda *, child, session: admissions.append(child.id),
+            )
+            class Provider:
+                calls = 0
+                def create_campaign(self, _dispatch):
+                    self.calls += 1
+                    child_id = (256 if self.calls == 1 else 257)
+                    # A second connection proves the transaction was already
+                    # committed before the provider callback begins.
+                    with engine.connect() as other:
+                        status = other.scalar(sa.text(
+                            "SELECT status FROM marketing_campaign_v2_provider_campaigns "
+                            "WHERE id = :id"), {"id": child_id})
+                        old = other.scalar(sa.text(
+                            "SELECT status FROM marketing_campaign_v2_provider_campaigns "
+                            "WHERE id = 255"))
+                        state = other.scalar(sa.text(
+                            "SELECT status FROM marketing_campaign_v2_governed_executions "
+                            "WHERE id = 41"))
+                    assert (status, old, state) == (
+                        "SUBMITTING", "PROVIDER_ERROR", "REVIEW_REQUIRED")
+                    return NS(
+                        provider_campaign_id=f"synthetic-accepted-{child_id}",
+                        deduplicated=False, response_metadata={},
+                        http_status=200,
+                    )
+            provider = Provider()
+            first = svc.send_next(
+                review=review, child=review.plan_review.ready_children[0],
+                actor_user_id=7, completed=(), session=session, provider=provider,
+            )
+            assert first == ("TEST_256", "SUBMITTED", "synthetic-accepted-256")
+            assert session.get(Child, 256).status == "SUBMITTED"
+
+            # Replaying the same child after one acceptance cannot POST.
+            with pytest.raises(svc.GovernedRecoveryBlocked):
+                svc.send_next(
+                    review=review, child=review.plan_review.ready_children[0],
+                    actor_user_id=7, completed=(), session=session, provider=provider,
+                )
+            assert provider.calls == 1
+
+            second = svc.send_next(
+                review=review, child=review.plan_review.ready_children[1],
+                actor_user_id=7, completed=((256, "synthetic-accepted-256"),),
+                session=session, provider=provider,
+            )
+            assert second == ("TEST_257", "SUBMITTED", "synthetic-accepted-257")
+            assert provider.calls == 2
+            assert admissions == [256, 257]
+            assert session.get(Child, 255).status == "PROVIDER_ERROR"
+            assert session.get(Child, 253).provider_campaign_id == "original-253"
+            assert session.get(Execution, 41).status == "REVIEW_REQUIRED"
+            assert session.get(BackgroundJob, 5).status == "REVIEW_REQUIRED"
+    finally:
+        metadata.drop_all(engine)
+        engine.dispose()
