@@ -26,6 +26,7 @@ from app.services.marketing_campaign_v2_contact_gate_service import (
     CampaignV2ContactGateConflict,
     acquire_campaign_v2_contact_gate,
 )
+from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
     _check_child_identities, _locked_review, manifest_digest,
 )
@@ -102,15 +103,15 @@ def _snapshot(session: Any, job: Job) -> dict:
         MarketingCampaignV2ProviderCampaignORM.campaign_v2_id == job.campaign_v2_id,
     ).all()
     child_by_id = {int(child.id): child for child in children}
-    accepted = 0
-    if len(child_by_id) == len(child_ids):
-        for child_id in child_ids:
-            child = child_by_id[child_id]
-            if (child.status == "SUBMITTED" and child.provider_campaign_id
-                    and child.submitted_at is not None):
-                accepted += 1
-            else:
-                break
+    accepted = sum(
+        bool(row.status == "SUBMITTED" and row.provider_campaign_id and
+             row.submitted_at is not None)
+        for row in child_by_id.values()
+    ) if len(child_by_id) == len(child_ids) else 0
+    failed = sum(confirmed_rejected_child(row) for row in child_by_id.values())
+    uncertain = sum(row.status in {"RECONCILIATION_REQUIRED", "SUBMITTING"}
+                    for row in child_by_id.values())
+    untouched = sum(row.status == "READY" for row in child_by_id.values())
     return {
         "job_id": int(job.id),
         "campaign_id": int(job.campaign_v2_id),
@@ -118,6 +119,9 @@ def _snapshot(session: Any, job: Job) -> dict:
         "status": str(job.status),
         "total_pending_at_start": int(job.initial_pending_count),
         "accepted_by_provider": accepted,
+        "confirmed_rejected": failed,
+        "uncertain_results": uncertain,
+        "unattempted": untouched,
         "current_child_id": int(job.current_child_id) if job.current_child_id is not None else None,
         "stop_requested": job.status == "STOP_REQUESTED",
         "reason_code": job.stop_reason_code,
@@ -211,19 +215,18 @@ def enqueue_background_job(
         by_branch = {child.sucursal_canon: child for child in children}
         ready = [by_branch[batch.sucursal_canon] for batch in plan.batches
                  if manifest[batch.sucursal_canon]["planned_status"] == "READY"]
-        accepted_count = sum(child.status == "SUBMITTED" for child in ready)
-        if [child.status for child in ready] != (
-            ["SUBMITTED"] * accepted_count + ["READY"] * (len(ready) - accepted_count)
-        ):
-            raise BackgroundJobConflict("Prefijo de envíos no conciliado.")
-        if accepted_count:
-            if (execution.last_child_id != ready[accepted_count - 1].id
-                    or any(child.submitted_at is None or not child.provider_campaign_id
-                           for child in ready[:accepted_count])):
-                raise BackgroundJobConflict("El prefijo aceptado no coincide con la ejecución.")
-        elif execution.last_child_id is not None:
-            raise BackgroundJobConflict("Estado inicial inconsistente.")
-        suffix = [int(child.id) for child in ready[accepted_count:]]
+        # All previous attempts must be an ordered, immutable prefix. Confirmed
+        # template rejections are terminal; uncertain children block enqueue.
+        from app.services.marketing_campaign_v2_governed_dispatch_service import (
+            _verified_prefix_and_suffix,
+        )
+        try:
+            prior, untouched = _verified_prefix_and_suffix(
+                ready=ready, execution=execution,
+            )
+        except GovernedDispatchConflict as exc:
+            raise BackgroundJobConflict(str(exc)) from exc
+        suffix = [int(child.id) for child in untouched]
         if not suffix or suffix != pending_ids:
             raise BackgroundJobConflict("Los lotes pendientes cambiaron.")
         if (_utc(None) if now is None else at) >= expires_at:
