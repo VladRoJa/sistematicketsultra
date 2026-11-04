@@ -954,6 +954,42 @@ class MarketingCampaignV2ORM(db.Model):
     )
 
 
+class MarketingCampaignV2FailedRecoveryORM(db.Model):
+    """Idempotent, append-only link from confirmed nonaccepted batches to a new frozen campaign."""
+
+    __tablename__ = "marketing_campaign_v2_failed_recoveries"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    source_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    derived_campaign_id = db.Column(
+        db.BigInteger, db.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+        nullable=False, unique=True,
+    )
+    failed_fingerprint = db.Column(db.String(64), nullable=False)
+    source_child_ids_json = db.Column(db.JSON, nullable=False)
+    recipient_count = db.Column(db.Integer, nullable=False)
+    created_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=db.text("CURRENT_TIMESTAMP"),
+    )
+    __table_args__ = (
+        db.UniqueConstraint(
+            "source_campaign_id", "failed_fingerprint",
+            name="uq_mkt_v2_failed_recoveries_source_fingerprint",
+        ),
+        db.CheckConstraint("recipient_count > 0", name="ck_mkt_v2_failed_recoveries_count"),
+        db.CheckConstraint(
+            "length(failed_fingerprint) = 64", name="ck_mkt_v2_failed_recoveries_digest",
+        ),
+    )
+
+
 class MarketingCampaignV2CommercialResultORM(db.Model):
     """One scheduler-maintained commercial reconciliation per frozen campaign."""
 
