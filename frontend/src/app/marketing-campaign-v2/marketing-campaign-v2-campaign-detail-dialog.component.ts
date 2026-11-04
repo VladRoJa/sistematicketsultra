@@ -26,6 +26,9 @@ import {
   CampaignV2PreflightResponse,
   CampaignV2Purpose,
   CampaignV2SubmitResponse,
+  CampaignV2SubmitState,
+  CampaignV2FailedRecoveryPreview,
+  CampaignV2FailedRecoveryFrozen,
   CampaignV2RecipientSummary,
   CampaignV2RecipientStatusSummary,
   CampaignV2RecipientProviderStatusCode,
@@ -168,6 +171,12 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
   dispatchTemplates: CampaignV2DispatchTemplate[] = [];
   preflight: CampaignV2PreflightResponse | null = null;
   submitResult: CampaignV2SubmitResponse | null = null;
+  dispatchState: CampaignV2SubmitState | null = null;
+  dispatchStateError = '';
+  failedRecoveryPreview: CampaignV2FailedRecoveryPreview | null = null;
+  failedRecoveryResult: CampaignV2FailedRecoveryFrozen | null = null;
+  failedRecoveryLoading = false;
+  failedRecoveryError = '';
   recipients: CampaignV2RecipientSummary[] = [];
   recipientStatusSummary: CampaignV2RecipientStatusSummary | null = null;
   recipientStatusView: CampaignV2RecipientStatusPresentation | null = null;
@@ -255,6 +264,10 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
     this.followupFreezing = false;
     this.followupFreezeError = '';
     this.followupFreezeResult = null;
+    this.dispatchState = null;
+    this.failedRecoveryPreview = null;
+    this.failedRecoveryResult = null;
+    this.failedRecoveryError = '';
     this.loadingCampaignDetail = true;
     this.recipientStatusSummary = null;
     this.recipientStatusView = null;
@@ -271,6 +284,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           );
           this.purposeControl.setValue(campaign.purpose, { emitEvent: false });
           this.loadRecipients(1);
+          this.loadDispatchState();
           this.loadDispatchTemplates(campaign.purpose);
           this.loadCommercialAttribution();
         },
@@ -484,6 +498,70 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       });
   }
 
+  loadDispatchState(): void {
+    if (!this.data.canManageDispatchConfig) { return; }
+    this.dispatchStateError = '';
+    this.service.getDispatchBatchState(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: state => { this.dispatchState = state; },
+        error: (error: HttpErrorResponse) => {
+          this.dispatchStateError = this.errorMessage(
+            error, 'No se pudieron consultar los lotes de iVentas.',
+          );
+        },
+      });
+  }
+
+  reviewFailedRecovery(): void {
+    if (!this.data.canManageDispatchConfig || this.failedRecoveryLoading ||
+        !this.dispatchState?.summary?.can_create_failed_recovery) { return; }
+    this.failedRecoveryLoading = true;
+    this.failedRecoveryError = '';
+    this.failedRecoveryPreview = null;
+    this.service.previewFailedRecovery(this.data.campaignId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: preview => {
+          this.failedRecoveryLoading = false;
+          this.failedRecoveryPreview = preview;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.failedRecoveryLoading = false;
+          this.failedRecoveryError = this.errorMessage(
+            error, 'No fue posible validar la cohorte fallida.',
+          );
+          this.loadDispatchState();
+        },
+      });
+  }
+
+  createFailedRecovery(): void {
+    if (!this.data.canManageDispatchConfig || this.failedRecoveryLoading ||
+        !this.failedRecoveryPreview || this.failedRecoveryResult) { return; }
+    const preview = this.failedRecoveryPreview;
+    this.failedRecoveryLoading = true;
+    this.failedRecoveryError = '';
+    this.service.freezeFailedRecovery(this.data.campaignId, preview)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.failedRecoveryLoading = false;
+          this.failedRecoveryResult = result;
+          this.failedRecoveryPreview = null;
+          this.loadDispatchState();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.failedRecoveryLoading = false;
+          this.failedRecoveryPreview = null;
+          this.failedRecoveryError = this.errorMessage(
+            error, 'No se pudo congelar la nueva campaña. No se enviaron mensajes.',
+          );
+          this.loadDispatchState();
+        },
+      });
+  }
+
   openGovernedConsole(): void {
     if (!this.data.canManageDispatchConfig || !this.campaign) { return; }
     const ref = this.dialog.open(MarketingCampaignV2GovernedConsoleDialogComponent, {
@@ -664,6 +742,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
           this.submitting = false;
           this.submitResult = result;
           this.submitSuccess = 'Submit aceptado y auditado por Suite.';
+          this.loadDispatchState();
           this.reviewDispatch();
         },
         error: (error: HttpErrorResponse) => {
@@ -672,6 +751,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
             error,
             'El submit no terminó completamente. Revisa el estado de los provider campaigns antes de cualquier otra acción.',
           );
+          this.loadDispatchState();
           this.reviewDispatch();
         },
       });
