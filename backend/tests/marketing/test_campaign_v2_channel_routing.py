@@ -96,6 +96,7 @@ def test_no_config_or_no_independencia_keeps_legacy_contract():
     lambda source, target, snap: setattr(target, "is_active", False),
     lambda source, target, snap: setattr(target, "is_default", False),
     lambda source, target, snap: setattr(source, "is_active", False),
+    lambda source, target, snap: source.metadata_json.clear(),
     lambda source, target, snap: snap["routes"]["INDEPENDENCIA"].update({"source_binding_id": 999}),
     lambda source, target, snap: snap["routes"]["INDEPENDENCIA"].update({"outbound_binding_id": 1000}),
     lambda source, target, snap: snap.update({"version": "unexpected"}),
@@ -160,3 +161,30 @@ def test_provider_name_discloses_origin_and_real_sender():
     title = _provider_campaign_name(
         NS(campaign_name="Winback noviembre"), outgoing)
     assert title == "Winback noviembre · INDEPENDENCIA (via TEC_MXL)"
+
+
+def test_child_status_keeps_source_and_sender_after_provider_submission():
+    from app.services.marketing_campaign_v2_submit_service import (
+        _serialize_row_result_dict,
+    )
+    row = NS(
+        id=900, sucursal_id=3, sucursal_canon="INDEPENDENCIA",
+        provider_channel_id=TECH_CHANNEL, template_name="promos_noviembre_v",
+        template_snapshot_json={
+            "origin_sucursal_canon": "INDEPENDENCIA",
+            "send_via_sucursal_canon": "TEC_MXL",
+            "send_via_provider_channel_id": TECH_CHANNEL,
+        },
+        recipient_count=12, status="SUBMITTED", provider_campaign_id="synthetic-900",
+        provider_deduplicated=False, scheduled_timezone=None, scheduled_local_at=None,
+        scheduled_for=None, provider_send_at=None,
+        reconciliation_resolution=None, reconciliation_note=None,
+        reconciled_by_user_id=None, reconciled_at=None, retry_attempt_count=0,
+        retry_last_attempt_at=None, retry_next_allowed_at=None,
+        retry_last_by_user_id=None, error_code=None, support_ref=None,
+    )
+    result = _serialize_row_result_dict(row)
+    assert result["sucursal_canon"] == "INDEPENDENCIA"
+    assert result["send_via_sucursal_canon"] == "TEC_MXL"
+    assert result["provider_channel_id"] == TECH_CHANNEL
+    assert result["provider_campaign_id"] == "synthetic-900"
