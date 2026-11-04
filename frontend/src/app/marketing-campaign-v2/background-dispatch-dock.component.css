@@ -4,6 +4,8 @@
 .dispatch-dock__heading { justify-content: flex-start; font-size: 13px; padding-bottom: 9px; border-bottom: 1px solid #d6dee8; }
 .dispatch-dock__heading mat-icon { font-size: 19px; width: 19px; height: 19px; }
 .dispatch-dock__heading small { margin-left: auto; color: #a45c00; font-size: 11px; }
+.dispatch-dock__close { margin-left: auto; flex: 0 0 auto; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+.dispatch-dock__heading .dispatch-dock__close mat-icon { font-size: 18px; width: 18px; height: 18px; }
 .dispatch-dock__job { padding: 10px 0 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
 .dispatch-dock__job:last-child { border-bottom: none; padding-bottom: 0; }
 .dispatch-dock__review { color: #b91c1c; font-weight: 700; }

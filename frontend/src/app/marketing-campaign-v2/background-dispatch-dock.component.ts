@@ -34,6 +34,7 @@ export class BackgroundDispatchDockComponent implements OnInit {
 
   jobs: BackgroundDispatchJob[] = [];
   stale = false;
+  dismissed = false;
   readonly label = backgroundDispatchLabel;
   readonly progress = backgroundDispatchProgress;
 
@@ -47,6 +48,12 @@ export class BackgroundDispatchDockComponent implements OnInit {
     interval(10000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.activity.changes$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.destroyRef.onDestroy(() => this.request?.unsubscribe());
+  }
+
+  dismissDock(): void {
+    // Visual-only dismissal: never stop or alter a background dispatch job.
+    // Refresh continues tracking jobs without reopening the dock on each poll.
+    this.dismissed = true;
   }
 
   private currentIdentity(): string {

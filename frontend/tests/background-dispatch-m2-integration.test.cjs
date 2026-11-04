@@ -43,6 +43,19 @@ test('el indicador global solo consulta, nunca envía ni detiene', () => {
   assert.doesNotMatch(dockHtml, /contraseña|teléfono|destinatarios|operator_password/);
 });
 
+test('el dock tiene cierre visual accesible que no interrumpe el envío ni se revierte con polling', () => {
+  assert.match(dockHtml, /\*ngIf="jobs.length && !dismissed"/);
+  assert.match(dockHtml, /aria-label="Cerrar seguimiento de envíos"/);
+  assert.match(dockHtml, /\(click\)="dismissDock\(\)"/);
+  const dismissMethod = dock.slice(
+    dock.indexOf('  dismissDock(): void {'),
+    dock.indexOf('  private currentIdentity(): string {')
+  );
+  assert.match(dismissMethod, /this.dismissed = true;/);
+  assert.doesNotMatch(dismissMethod, /stopBackgroundJob|startBackgroundJob|this.jobs = \[\]/);
+  assert.doesNotMatch(dock.slice(dock.indexOf('  refresh(): void {')), /this.dismissed = false;/);
+});
+
 test('el dock consulta permiso backend sin lista estática de roles', () => {
   assert.doesNotMatch(dock, /account\?\.rol|includes\(role\)/);
   assert.match(dock, /if \(!this\.initialIdentity\) return;/);
