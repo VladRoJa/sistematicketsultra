@@ -8,6 +8,9 @@ on:
       - 'backend/app/warehouse/services/kpi_desempeno_repository.py'
       - 'backend/app/warehouse/services/kpi_desempeno_semantic_diff.py'
       - 'backend/app/warehouse/services/kpi_desempeno_parser.py'
+      - 'backend/app/warehouse/services/kpi_desempeno_ingestion_service.py'
+      - 'backend/app/warehouse/services/warehouse_manual_ingestion_dispatcher.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_historical_manual_upload.py'
       - '.github/workflows/kpi-desempeno-staging-m3a.yml'
   workflow_dispatch:
 
@@ -59,9 +62,14 @@ jobs:
           python -m py_compile \
             app/warehouse/services/kpi_desempeno_staging_service.py \
             tests/warehouse/test_kpi_desempeno_staging_m3a_postgres.py \
-            app/warehouse/services/kpi_desempeno_semantic_diff.py
+            app/warehouse/services/kpi_desempeno_semantic_diff.py \
+            app/warehouse/services/kpi_desempeno_parser.py \
+            app/warehouse/services/kpi_desempeno_ingestion_service.py \
+            app/warehouse/services/warehouse_manual_ingestion_dispatcher.py \
+            tests/warehouse/test_kpi_desempeno_historical_manual_upload.py
       - name: Synthetic PostgreSQL + M1 semantic regression
         run: |
           python -m pytest -q --tb=short -o addopts= \
             tests/warehouse/test_kpi_desempeno_staging_m3a_postgres.py \
-            tests/warehouse/test_kpi_desempeno_semantic_diff.py
+            tests/warehouse/test_kpi_desempeno_semantic_diff.py \
+            tests/warehouse/test_kpi_desempeno_historical_manual_upload.py
