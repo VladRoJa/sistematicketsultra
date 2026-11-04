@@ -439,37 +439,78 @@
             {{ submitSuccess }}
           </div>
 
-          <div class="provider-submit-state" *ngIf="plan.submission.has_provider_campaigns">
-            <div class="section-heading compact-heading">
-              <div>
-                <h4>Resultado de los lotes enviados</h4>
-                <p>{{ plan.submission.status }}</p>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Sucursal</th>
-                    <th>Destinatarios</th>
-                    <th>Estado</th>
-                    <th>Referencia iVentas</th>
-                    <th>Referencia</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let child of plan.submission.batches">
-                    <td>{{ child.sucursal_canon }}</td>
-                    <td>{{ child.recipient_count | number }}</td>
-                    <td>{{ child.status }}</td>
-                    <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
-                    <td class="mono">{{ child.support_ref || child.error_code || '—' }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+        </ng-container>
+      </section>
+
+      <section class="provider-submit-state" *ngIf="data.canManageDispatchConfig"
+               aria-label="Resultados de lotes iVentas">
+        <div class="section-heading compact-heading">
+          <div>
+            <h3>Resultados de lotes y recuperación</h3>
+            <p>Aceptado por iVentas no significa entregado. Los errores inciertos nunca se reenvían automáticamente.</p>
+          </div>
+          <button mat-stroked-button type="button" (click)="loadDispatchState()">
+            Actualizar resultados
+          </button>
+        </div>
+        <p *ngIf="dispatchStateError" class="inline-error" role="alert">{{ dispatchStateError }}</p>
+        <ng-container *ngIf="dispatchState as state">
+          <div *ngIf="state.summary as summary" class="preflight-summary-grid">
+            <div><span>Aceptados por iVentas</span><strong>{{ summary.accepted_batches | number }} lotes · {{ summary.accepted_recipients | number }} destinatarios</strong></div>
+            <div><span>Rechazos definitivos</span><strong>{{ summary.confirmed_rejected_batches | number }} lotes · {{ summary.confirmed_rejected_recipients | number }} destinatarios</strong></div>
+            <div><span>Resultados inciertos</span><strong>{{ summary.uncertain_batches | number }} lotes · {{ summary.uncertain_recipients | number }} destinatarios</strong></div>
+            <div><span>Sin intentar</span><strong>{{ summary.unattempted_batches | number }} lotes · {{ summary.unattempted_recipients | number }} destinatarios</strong></div>
+          </div>
+          <div class="table-wrap" *ngIf="state.has_provider_campaigns">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal comercial</th>
+                  <th>Canal iVentas</th>
+                  <th>Plantilla</th>
+                  <th>Destinatarios</th>
+                  <th>Estado</th>
+                  <th>ID iVentas</th>
+                  <th>Error / referencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let child of state.batches">
+                  <td>{{ child.sucursal_canon }}</td>
+                  <td class="mono">{{ child.provider_channel_id }}</td>
+                  <td>{{ child.template_name }}</td>
+                  <td>{{ child.recipient_count | number }}</td>
+                  <td>{{ child.status }}</td>
+                  <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
+                  <td class="mono">{{ child.error_code || '—' }} {{ child.support_ref || '' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div *ngIf="state.summary?.can_create_failed_recovery && !failedRecoveryResult">
+            <button mat-stroked-button type="button"
+                    (click)="reviewFailedRecovery()" [disabled]="failedRecoveryLoading">
+              Crear campaña con fallidas
+            </button>
+            <p class="muted">Solo rechazos definitivamente no aceptados. No incluye aceptados ni resultados inciertos.</p>
           </div>
         </ng-container>
+        <div *ngIf="failedRecoveryPreview as preview">
+          <p><strong>Confirmar cohorte:</strong>
+             {{ preview.branches.length }} sucursales ·
+             {{ preview.recipient_count | number }} destinatarios congelados.</p>
+          <p class="muted">Plantilla iVentas: NO VERIFICADA. Crear esta campaña no realiza ningún envío ni reserva cuota.</p>
+          <button mat-flat-button type="button" (click)="createFailedRecovery()"
+                  [disabled]="failedRecoveryLoading">
+            Confirmar creación sin enviar
+          </button>
+        </div>
+        <p *ngIf="failedRecoveryLoading" class="muted">Validando destinatarios originales…</p>
+        <p *ngIf="failedRecoveryError" class="inline-error" role="alert">{{ failedRecoveryError }}</p>
+        <div *ngIf="failedRecoveryResult as result" class="inline-success" role="status">
+          Campaña #{{ result.derived_campaign_id }} {{ result.created ? 'creada' : 'ya existente' }}
+          con {{ result.recipient_count | number }} destinatarios. No se enviaron mensajes.
+        </div>
       </section>
 
       <section class="followup-preview-section" aria-labelledby="followup-preview-title">
