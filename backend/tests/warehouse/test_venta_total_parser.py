@@ -193,3 +193,24 @@ def test_parse_still_requires_the_historical_25_column_prefix():
                 ),
             )
         )
+
+
+def test_parse_omits_cancelled_la_viga_without_dropping_other_sales():
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(list(EXPECTED_VENTA_TOTAL_RAW_COLUMNS))
+    worksheet.append(list(BASE_ROW_VALUES))
+    cancelled = list(BASE_ROW_VALUES)
+    cancelled[2] = "LA VIGA"
+    cancelled[3] = "FOLIO-CANCELLED-002"
+    worksheet.append(cancelled)
+
+    stream = BytesIO()
+    workbook.save(stream)
+    workbook.close()
+
+    result = parse_venta_total_xlsx(file_bytes=stream.getvalue())
+
+    assert result.row_count == 1
+    assert result.skipped_rows == 1
+    assert result.rows[0].sucursal == "SUCURSAL SINTETICA"
