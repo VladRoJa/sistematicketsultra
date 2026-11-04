@@ -9,6 +9,9 @@ from datetime import date, datetime
 from typing import Any
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_failed_cohort_service import (
+    FAILED_RECOVERY_SOURCE, validate_failed_recovery_preflight,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
 )
@@ -121,6 +124,14 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     campaign = projection["campaign"]
+    if campaign.get("source") == FAILED_RECOVERY_SOURCE:
+        derived = active_session.get(MarketingCampaignV2ORM, campaign_id)
+        validate_failed_recovery_preflight(
+            campaign_id=campaign_id, campaign=derived,
+            frozen_recipients=list(projection["frozen_recipients"]),
+            sendable_recipients=list(projection["sendable_recipients"]),
+            session=active_session,
+        )
     if campaign.get("source") == FOLLOWUP_DERIVED_SOURCE:
         # Freeze only: follow-up recontact needs a separate governed
         # admission/approval policy. No standard D2a/D2b/D2c bypass.
@@ -288,6 +299,11 @@ def build_campaign_v2_preflight(
         if group["template_channel_mismatch"]:
             reasons.append("TEMPLATE_CHANNEL_MISMATCH")
             template_channel_mismatch.update(batch_recipient_ids)
+
+        if campaign.get("source") == FAILED_RECOVERY_SOURCE:
+            # No verified provider catalog-read contract exists yet. The local
+            # JSON inventory does not attest real template availability.
+            reasons.append("PROVIDER_TEMPLATE_UNVERIFIED")
 
         if batch_recipient_ids & missing_variable:
             reasons.append("MISSING_REQUIRED_VARIABLE")
