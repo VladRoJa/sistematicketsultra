@@ -1070,6 +1070,7 @@ export interface CampaignV2SubmitBatch {
   child_id: number;
   sucursal_id: number;
   sucursal_canon: string;
+  send_via_sucursal_canon?: string | null;
   provider_channel_id: string;
   template_name: string;
   recipient_count: number;
