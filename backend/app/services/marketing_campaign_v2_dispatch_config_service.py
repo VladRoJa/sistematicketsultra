@@ -262,9 +262,11 @@ def list_templates(
     )
     if active_only:
         query = query.filter(MarketingCampaignV2TemplateORM.is_active.is_(True))
+    # Keep the catalog in the same newest-first order as the dispatch selector.
+    # ID is the deterministic tie-breaker for bulk-created templates.
     rows = query.order_by(
-        MarketingCampaignV2TemplateORM.label.asc(),
-        MarketingCampaignV2TemplateORM.id.asc(),
+        MarketingCampaignV2TemplateORM.created_at.desc(),
+        MarketingCampaignV2TemplateORM.id.desc(),
     ).all()
     return [_serialize_template(row) for row in rows]
 
