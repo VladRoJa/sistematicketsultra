@@ -23,9 +23,14 @@ manifiesto ni cambia el estado del lote rechazado. Evita que cualquier
 - Compara *todos* los lotes contra el manifiesto aprobado, los snapshots
   exactos y las claves de idempotencia con el servicio existente de
   continuación parcial. Verifica la identidad del canal.
-- Verifica cuotas actuales de todos los pendientes y después de cada lote
-  antes de cualquier POST, y reutiliza el claim durable
-  `READY -> SUBMITTING`, gate de contactos y persistencia de resultados.
+- Verifica cuotas actuales de todos los pendientes en el dry-run y, durante
+  `--apply`, en una transacción nueva para cada lote bajo los locks de
+  contactos, campaña, aprobación, ejecución, job y cuotas. Registra
+  `READY -> SUBMITTING` y confirma la transacción ANTES de contactar a iVentas.
+- La continuación **gobernada** utiliza
+  `marketing_campaign_v2_governed_recovery_service.py`; no utiliza la
+  transición heredada `continue_ready_children()`, que el backend prohíbe
+  correctamente para las campañas con aprobación gobernada.
 - Se detiene ante cualquier error, cuota vencida, resultado ambiguo,
   divergencia de estado o de proveedor.
 - No reautoriza ni reintenta el #255; la ejecución original continúa
@@ -38,6 +43,7 @@ manifiesto ni cambia el estado del lote rechazado. Evita que cualquier
 ```bash
 cd backend
 pytest -q tests/marketing/test_resume_campaign41_ready.py
+# La prueba PostgreSQL sintética corre únicamente en CI (quota_ci).
 ```
 
 CI integral antes de merge. No considerar una ejecución de CI como
@@ -89,3 +95,27 @@ iVentas la aceptación por canal; `SUBMITTED` no equivale a entregado.
 5. Cada aceptación y error conserva trazabilidad; en caso de resultado
    incierto, se suspende la continuación.
 6. No hay cambios de esquema, merge ni despliegue implícitos.
+
+
+## Incidente #1211 y corrección PR #1212
+
+El intento de envío después del PR #1210 se detuvo en
+`_transition_ready_to_submitting`, con el mensaje
+`Transición heredada bloqueada para aprobación gobernada`.
+Fue un rechazo local *antes de HTTP*; se consultó PostgreSQL y se verificó
+que #256–#268 permanecieron READY, sin timestamps ni provider IDs.
+
+La corrección usa un mecanismo de recuperación gobernada explícito con
+permisos globales vigentes, kill switches activados **solo en el proceso
+de envío**, controles de la ejecución y mandato originales en
+`REVIEW_REQUIRED`, validación de snapshots y cupo actual bajo advisory
+locks, claim durable antes del provider y rechazo de cualquier replay.
+
+La ejecución #41 y el mandato background original permanecen
+`REVIEW_REQUIRED` (se conserva el error #255). El progreso correcto
+de recuperación se verifica por los provider children y sus
+`provider_campaign_id`, no por la etiqueta de la ejecución original.
+
+La recuperación se prueba con PostgreSQL sintético e iVentas simulado;
+no es evidencia de entrega. Si un nuevo envío falla o se interrumpe,
+**no repetir `--apply`**. Revisar primero el lote y conciliación externa.
