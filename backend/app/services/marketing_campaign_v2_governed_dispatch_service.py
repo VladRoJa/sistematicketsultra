@@ -518,7 +518,7 @@ def execute_governed_child(
             claim=background_claim, now=claim_time,
         )
         if _database_date(execution.expires_at) <= claim_time:
-            if not any(c.submit_started_at is not None and
+            if not any(getattr(c, "submit_started_at", None) is not None and
                        (c.status == "SUBMITTED" or confirmed_rejected_child(c))
                        for c in children):
                 raise GovernedDispatchConflict("Autorización vencida sin inicio verificable.")
