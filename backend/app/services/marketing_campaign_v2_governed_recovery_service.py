@@ -91,15 +91,19 @@ def verify_suffix(
             and failed.provider_campaign_id is None
             and failed.submitted_at is None,
             "El lote omitido #255 cambió.")
-    second = by_id.get(SECOND_FAILED_ID)
-    require(second is not None and second.status == "PROVIDER_ERROR"
-            and second.error_code == SECOND_FAILED_ERROR
-            and second.support_ref == SECOND_FAILED_REF
-            and second.provider_campaign_id is None
-            and second.submitted_at is None,
-            "Sendero Culiacán #261 ya no conserva el rechazo original.")
-    require(all(i > SECOND_FAILED_ID for i in ready_ids),
-            "El nuevo sufijo incluye lotes aceptados o rechazados.")
+    # Historical tests also exercise the original #256–#268 recovery.
+    # A continuation starting after #261 must verify its second fixed error.
+    if ready_ids and min(ready_ids) > SECOND_FAILED_ID:
+        second = by_id.get(SECOND_FAILED_ID)
+        require(second is not None and second.status == "PROVIDER_ERROR"
+                and second.error_code == SECOND_FAILED_ERROR
+                and second.support_ref == SECOND_FAILED_REF
+                and second.provider_campaign_id is None
+                and second.submitted_at is None,
+                "Sendero Culiacán #261 ya no conserva el rechazo original.")
+    else:
+        require(all(i < SECOND_FAILED_ID for i in ready_ids),
+                "El sufijo combina lotes a ambos lados del rechazo #261.")
     for position, child_id in enumerate(ready_ids):
         row = by_id.get(child_id)
         require(row is not None, "Falta un lote del manifiesto.")
