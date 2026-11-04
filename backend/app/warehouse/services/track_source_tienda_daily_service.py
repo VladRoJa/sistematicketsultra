@@ -134,7 +134,7 @@ def _is_out_of_scope_track_branch(raw_branch_name: Any) -> bool:
     if not normalized:
         return True
 
-    if normalized in {"beca", "corporativo"}:
+    if normalized in {"beca", "corporativo", "la viga", "la_viga"}:
         return True
 
     if "prueba" in normalized:
