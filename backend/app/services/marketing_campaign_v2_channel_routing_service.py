@@ -129,6 +129,10 @@ def resolve_sender_binding(
     target_id = _required_binding(route.get("outbound_binding_id"), "outbound_binding_id")
     target = session.get(Binding, target_id)
     validate_sender_route(source_binding, target)
+    if (dict(source_binding.metadata_json or {}).get(METADATA_KEY) != target_id):
+        raise CampaignV2SenderRoutingConflict(
+            "La configuración de ruta fue revocada después del freeze."
+        )
     if (str(target.sucursal_canon) != route.get("outbound_sucursal_canon") or
             str(target.provider_channel_id) != route.get("outbound_channel_id")):
         raise CampaignV2SenderRoutingConflict("Cambió la identidad del canal TEC_MXL.")
