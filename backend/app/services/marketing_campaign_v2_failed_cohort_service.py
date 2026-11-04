@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models.marketing import (
@@ -104,17 +105,31 @@ def _evaluate(*, source_campaign_id: int, session: Any, lock: bool) -> dict:
     if any(child.status == "PROVIDER_ERROR" and child not in failed
            for child in children):
         raise FailedCohortConflict("Hay rechazos sin evidencia definitiva; revisar.")
-    all_source = session.query(Recipient).filter(
-        Recipient.campaign_id == source_campaign_id,
-    ).all()
-    by_phone = {str(row.phone_mx10): row for row in all_source}
-    if len(by_phone) != len(all_source):
-        raise FailedCohortConflict("Destinatarios congelados duplicados.")
+    eligible_phones = {}
+    for child in failed:
+        eligible_phones[int(child.id)] = _request_phones(child)
+    requested = [phone for phones in eligible_phones.values() for phone in phones]
+    if len(requested) != len(set(requested)):
+        raise FailedCohortConflict("Los lotes fallidos solapan destinatarios.")
+    # Read only the failed cohort, with its evidence prefetched, instead of
+    # loading all original campaign recipients or making N+1 evidence queries.
+    source_rows = []
+    for offset in range(0, len(requested), 3000):
+        chunk = requested[offset:offset + 3000]
+        source_rows.extend(
+            session.query(Recipient)
+            .options(selectinload(Recipient.evidence_rows))
+            .filter(Recipient.campaign_id == source_campaign_id,
+                    Recipient.phone_mx10.in_(chunk)).all()
+        )
+    by_phone = {str(row.phone_mx10): row for row in source_rows}
+    if len(by_phone) != len(requested):
+        raise FailedCohortConflict("La cohorte original ya no coincide exactamente.")
     selected = {}
     selected_by_child = {}
     resolver = CampaignV2DispatchBranchResolver(session=session)
     for child in failed:
-        phones = _request_phones(child)
+        phones = eligible_phones[int(child.id)]
         members = []
         for phone in phones:
             row = by_phone.get(phone)
