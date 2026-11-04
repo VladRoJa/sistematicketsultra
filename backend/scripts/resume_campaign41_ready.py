@@ -32,8 +32,9 @@ from app.services.marketing_campaign_v2_manifest_service import (
     _assert_manifest, budget_for_existing_approval,
 )
 from app.services.marketing_campaign_v2_partial_resume_service import (
-    PartialResumeReview, continue_ready_children, review_partial_resume,
+    PartialResumeReview, review_partial_resume,
 )
+from app.services.marketing_campaign_v2_governed_recovery_service import send_next
 from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
 from app.services.marketing_campaign_v2_submit_service import _load_campaign_rows
 
@@ -62,6 +63,7 @@ class RecoveryReview:
     submitted: int
     submitted_recipients: int
     held: int
+    accepted_original: tuple[tuple[int, str], ...]
 
 
 def _require(condition: bool, message: str) -> None:
@@ -273,6 +275,10 @@ def _review() -> RecoveryReview:
         submitted=len(expected_submitted),
         submitted_recipients=sum(x[0] for x in expected_submitted.values()),
         held=len(expected_held),
+        accepted_original=tuple(
+            (int(row.id), str(row.provider_campaign_id))
+            for row in planned_ready if row.status == "SUBMITTED"
+        ),
     )
 
 
@@ -340,14 +346,18 @@ def main() -> int:
             results = []
             for child in pending:
                 try:
-                    _check_current_capacity(review, (child.batch,))
-                    # The helper durably rechecks READY and the contact gate,
-                    # commits SUBMITTING before HTTP, and stops on ambiguity.
-                    outcome = continue_ready_children(
-                        review=replace(review.plan_review, ready_children=(child,)),
-                        actor_user_id=int(actor.id), provider=provider,
-                        send_enabled=True, session=db.session,
-                    )[0]
+                    # The original execution and background mandate remain
+                    # REVIEW_REQUIRED. The recovery path audits an independent
+                    # locked claim and skips the forbidden legacy transition.
+                    outcome = send_next(
+                        review=review, child=child, actor_user_id=int(actor.id),
+                        completed=tuple(
+                            (previous.child_id, provider_id)
+                            for previous, (branch, status, provider_id)
+                            in zip(pending, results)
+                        ),
+                        provider=provider, session=db.session,
+                    )
                 except Exception:
                     db.session.rollback()
                     print("DETENIDO = revisión obligatoria; NO REEJECUTAR --apply",
