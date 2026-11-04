@@ -9,6 +9,9 @@ from typing import Any, Iterable
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, capture_sender_routes,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientEvidenceORM,
@@ -168,6 +171,12 @@ def freeze_campaign_v2(
             "El Preview Campaign V2 cambió; vuelve a generar Preview antes de congelar."
         )
 
+    # Routing belongs to this new frozen cohort, never the source binding
+    # identity or any previously approved campaign.
+    sender_routes = capture_sender_routes(
+        session=active_session,
+        recipient_origins=(row.sucursal for row in plan.recipients),
+    )
     campaign = MarketingCampaignV2ORM(
         name=normalized_name,
         purpose=normalized_purpose,
@@ -176,6 +185,7 @@ def freeze_campaign_v2(
             plan=plan,
             preview=preview,
             fingerprint=actual_fingerprint,
+            sender_routes=sender_routes,
         ),
         created_by_user_id=normalized_created_by_user_id,
         frozen_at=frozen_at,
@@ -281,8 +291,9 @@ def _build_audience_definition(
     plan: Any,
     preview: dict[str, Any],
     fingerprint: str,
+    sender_routes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    definition = {
         "schema_version": 1,
         "filters": _canonical_value(plan.filters),
         "source_metadata": _canonical_value(plan.source_metadata),
@@ -292,6 +303,9 @@ def _build_audience_definition(
             "summary": _preview_summary(preview),
         },
     }
+    if sender_routes is not None:
+        definition[ROUTING_SNAPSHOT_KEY] = sender_routes
+    return definition
 
 
 def _preview_summary(preview: dict[str, Any]) -> dict[str, Any]:
