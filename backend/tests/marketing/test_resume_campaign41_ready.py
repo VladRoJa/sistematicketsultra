@@ -326,6 +326,7 @@ def test_governed_suffix_rejects_modified_second_error():
         _governed_row(262, "READY"),
         _governed_row(263, "READY"),
     ]
+    rows[2].error_code = "TEMPLATE_NOT_FOUND"
     rows[2].support_ref = "bc-mw2eakos-r7lxsj"
     governed_recovery.verify_suffix(
         rows=rows, accepted_original=((253, "old-253"),),
