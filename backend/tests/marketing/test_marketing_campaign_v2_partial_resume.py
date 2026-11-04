@@ -278,3 +278,42 @@ def test_manifest_is_disjoint_and_exact():
     assert len(module.READY) == 14
     assert sum(module.READY.values()) == 7979
     assert 5850 + 170 + 7979 == 13999
+
+
+def test_ambiguous_child_can_be_quarantined_without_entering_ready_suffix(monkeypatch):
+    rows, _, expected = _setup(monkeypatch)
+    ambiguous = rows[1]
+    ambiguous.status = "RECONCILIATION_REQUIRED"
+    ambiguous.error_code = "TRANSPORT_CONNECTIONERROR"
+    ambiguous.support_ref = None
+    ambiguous.submit_started_at = datetime.now(timezone.utc)
+    ambiguous.reconciliation_resolution = None
+    ambiguous.provider_response_json = {"http_status": None}
+    expected["expected_failed"] = {}
+    expected["expected_ambiguous"] = {"B": (1, "TRANSPORT_CONNECTIONERROR")}
+    reviewed = resume.review_partial_resume(**expected)
+    assert [x.child_id for x in reviewed.ready_children] == [103]
+    assert ambiguous.status == "RECONCILIATION_REQUIRED"
+
+
+@pytest.mark.parametrize("change", [
+    lambda row: setattr(row, "status", "PROVIDER_ERROR"),
+    lambda row: setattr(row, "provider_campaign_id", "found-campaign"),
+    lambda row: setattr(row, "submit_started_at", None),
+    lambda row: setattr(row, "reconciliation_resolution", "NOT_CREATED_CONFIRMED"),
+    lambda row: setattr(row, "provider_response_json", {"http_status": 400}),
+])
+def test_quarantined_ambiguous_child_must_not_be_modified(monkeypatch, change):
+    rows, _, expected = _setup(monkeypatch)
+    ambiguous = rows[1]
+    ambiguous.status = "RECONCILIATION_REQUIRED"
+    ambiguous.error_code = "TRANSPORT_CONNECTIONERROR"
+    ambiguous.support_ref = None
+    ambiguous.submit_started_at = datetime.now(timezone.utc)
+    ambiguous.reconciliation_resolution = None
+    ambiguous.provider_response_json = {"http_status": None}
+    expected["expected_failed"] = {}
+    expected["expected_ambiguous"] = {"B": (1, "TRANSPORT_CONNECTIONERROR")}
+    change(ambiguous)
+    with pytest.raises(MarketingCampaignV2SubmitPreconditionError):
+        resume.review_partial_resume(**expected)
