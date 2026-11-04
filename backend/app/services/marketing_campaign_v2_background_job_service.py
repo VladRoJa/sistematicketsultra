@@ -28,6 +28,7 @@ from app.services.marketing_campaign_v2_contact_gate_service import (
 )
 from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
+    GovernedDispatchConflict, _verified_prefix_and_suffix,
     _check_child_identities, _locked_review, manifest_digest,
 )
 
@@ -217,9 +218,6 @@ def enqueue_background_job(
                  if manifest[batch.sucursal_canon]["planned_status"] == "READY"]
         # All previous attempts must be an ordered, immutable prefix. Confirmed
         # template rejections are terminal; uncertain children block enqueue.
-        from app.services.marketing_campaign_v2_governed_dispatch_service import (
-            _verified_prefix_and_suffix,
-        )
         try:
             prior, untouched = _verified_prefix_and_suffix(
                 ready=ready, execution=execution,
