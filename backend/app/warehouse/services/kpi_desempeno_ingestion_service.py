@@ -437,6 +437,18 @@ def ingest_kpi_desempeno_upload(
 
     parsed_snapshot = _parse_upload_document(upload_doc=upload_doc)
 
+    # A manually uploaded historical file must not be published under a
+    # different business date from the cutoff embedded by Gasca.
+    report_cutoff_date = parsed_snapshot.get("report_cutoff_date")
+    if report_cutoff_date is not None:
+        upload_cutoff_date = _ensure_date(upload_doc.cutoff_date)
+        if _ensure_date(report_cutoff_date) != upload_cutoff_date:
+            raise KpiDesempenoIngestionError(
+                "La fecha de corte del Excel KPI Desempeño "
+                f"({report_cutoff_date}) no coincide con cutoff_date "
+                f"del upload ({upload_cutoff_date.isoformat()})."
+            )
+
     repository = _resolve_repository()
     canonicality_resolver = _resolve_optional_canonicality_resolver()
     advisory_lock_key = _resolve_optional_advisory_lock_key(
