@@ -303,3 +303,43 @@ def freeze_failed_cohort(*, source_campaign_id: int,
     except (IntegrityError, SQLAlchemyError) as exc:
         active.rollback()
         raise FailedCohortConflict("Conflicto persistiendo recuperación fallida.") from exc
+
+
+def validate_failed_recovery_preflight(
+    *, campaign_id: int, campaign: Any, frozen_recipients: list,
+    sendable_recipients: list, session: Any,
+) -> None:
+    """Recheck immutable source provenance whenever authorization builds a plan.
+
+    Does not claim that the template exists in iVentas. That is a separate
+    provider-verification gate, deliberately not inferred from local JSON.
+    """
+    if campaign.source != FAILED_RECOVERY_SOURCE:
+        return
+    definition = campaign.audience_definition_json or {}
+    recovery = definition.get("failed_recovery")
+    if not isinstance(recovery, dict) or recovery.get("version") != FAILED_RECOVERY_VERSION:
+        raise FailedCohortConflict("Campaña derivada sin contrato de recuperación.")
+    source_id = recovery.get("source_campaign_id")
+    if type(source_id) is not int or source_id <= 0:
+        raise FailedCohortConflict("Origen de recuperación inválido.")
+    link = session.query(FailedRecovery).filter(
+        FailedRecovery.derived_campaign_id == campaign_id,
+        FailedRecovery.source_campaign_id == source_id,
+    ).one_or_none()
+    if link is None:
+        raise FailedCohortConflict("Origen de recuperación sin vínculo auditado.")
+    original = _evaluate(source_campaign_id=source_id, session=session, lock=False)
+    if (link.failed_fingerprint != original["fingerprint"] or
+            recovery.get("candidate_fingerprint") != original["fingerprint"] or
+            recovery.get("source_child_ids") != original["source_child_ids"] or
+            link.source_child_ids_json != original["source_child_ids"] or
+            link.recipient_count != original["recipient_count"] or
+            recovery.get("recipient_count") != original["recipient_count"]):
+        raise FailedCohortConflict("Cambió la evidencia definitiva de rechazo.")
+    frozen_phones = {r.phone_mx10 for r in frozen_recipients}
+    source_phones = {r.phone_mx10 for r in original["recipients"]}
+    if (frozen_phones != source_phones or
+            len(frozen_phones) != len(frozen_recipients) or
+            len(sendable_recipients) != len(frozen_recipients)):
+        raise FailedCohortConflict("La cohorte congelada perdió o ganó destinatarios.")
