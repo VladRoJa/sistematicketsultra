@@ -257,7 +257,7 @@ def _accepted(session: Any, job_id: int, worker_id: str, generation: int,
 
 def _rejected(session: Any, job_id: int, worker_id: str, generation: int,
               child_id: int, at: datetime) -> bool:
-    """Persist durable progress past a provably unaccepted child, never retry."""
+    """Persist durable progress past a provably unaccepted child, no replay."""
     job = _owned(session, job_id, worker_id, generation, at)
     if job.current_child_id != child_id:
         raise BackgroundWorkerReview("CURRENT_CHILD_CHANGED")
