@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
+from flask import current_app, has_app_context
 from sqlalchemy import text
 
 from app.models.marketing import (
@@ -110,6 +111,12 @@ def claim_next(
     completed: tuple[tuple[int, str], ...], session: Any,
 ) -> Any:
     """Commit READY->SUBMITTING only after governance and capacity checks."""
+    require(
+        has_app_context() and
+        current_app.config.get("CAMPAIGN_V2_PROVIDER_SEND_ENABLED") is True and
+        current_app.config.get("CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED") is True,
+        "La recuperación gobernada no está habilitada en este proceso.",
+    )
     require(session.get_bind().dialect.name == "postgresql", "Se requiere PostgreSQL.")
     try:
         # Same shared lock hierarchy as the governed dispatcher.
