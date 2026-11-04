@@ -266,7 +266,7 @@ def test_worker_continues_between_two_confirmed_failures_without_replay(monkeypa
                         lambda *_args: pytest.fail("confirmed rejections must not quarantine"))
     worker.process_claimed_job(
         session=session, job_id=7, worker_id="worker", generation=1,
-        config=NS(), provider_factory=lambda: NS(),
+        config={flag: True for flag in worker.FLAGS}, provider_factory=lambda: NS(),
     )
     assert provider_calls == ids
     assert completions == [
@@ -306,7 +306,7 @@ def test_worker_stops_on_ambiguous_result_before_next_provider_call(monkeypatch)
                         lambda _s, _j, _w, _g, reason: quarantined.append(reason))
     worker.process_claimed_job(
         session=session, job_id=7, worker_id="worker", generation=1,
-        config=NS(), provider_factory=lambda: NS(),
+        config={flag: True for flag in worker.FLAGS}, provider_factory=lambda: NS(),
     )
     assert provider_calls == [11, 12]
     assert quarantined == ["PROVIDER_RESULT_REVIEW_REQUIRED"]
