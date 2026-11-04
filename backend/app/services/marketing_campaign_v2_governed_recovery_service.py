@@ -246,3 +246,59 @@ def claim_next(
     except Exception:
         session.rollback()
         raise
+
+
+def send_next(
+    *, review: Any, child: Any, actor_user_id: int,
+    completed: tuple[tuple[int, str], ...],
+    provider: Any, session: Any,
+) -> tuple[str, str, str | None]:
+    """Exactly one provider HTTP after a committed governed claim.
+
+    A crash after the claim leaves SUBMITTING for reconciliation, never replay.
+    """
+    dispatch = claim_next(
+        review=review, child=child, actor_user_id=actor_user_id,
+        completed=completed, session=session,
+    )
+    started = perf_counter()
+    try:
+        outcome = provider.create_campaign(dispatch)
+    except CampaignProviderDeterministicError as exc:
+        status, code, http, ref = (
+            "PROVIDER_ERROR", exc.code, exc.http_status, exc.support_ref)
+    except CampaignProviderAmbiguousError as exc:
+        status, code, http, ref = (
+            "RECONCILIATION_REQUIRED", exc.code, exc.http_status, exc.support_ref)
+    except CampaignProviderConfigurationError:
+        status, code, http, ref = (
+            "PROVIDER_ERROR", "PROVIDER_CONFIGURATION", None, None)
+    except Exception:
+        status, code, http, ref = (
+            "RECONCILIATION_REQUIRED", "UNEXPECTED_PROVIDER_RESULT", None, None)
+    else:
+        _persist_provider_success(
+            row_id=child.child_id,
+            provider_campaign_id=outcome.provider_campaign_id,
+            deduplicated=outcome.deduplicated,
+            response_metadata=outcome.response_metadata,
+            accepted_status="SUBMITTED", actor_user_id=actor_user_id,
+            session=session, now=datetime.now(timezone.utc),
+        )
+        logger.warning(
+            "CAMPAIGN41_GOVERNED_RECOVERY_ACCEPTED child=%s provider_id=%s elapsed_ms=%.1f",
+            child.child_id, outcome.provider_campaign_id,
+            (perf_counter() - started) * 1000,
+        )
+        return child.batch.sucursal_canon, "SUBMITTED", outcome.provider_campaign_id
+
+    _persist_provider_failure(
+        row_id=child.child_id, status=status, error_code=code,
+        support_ref=ref, http_status=http, actor_user_id=actor_user_id,
+        session=session, now=datetime.now(timezone.utc),
+    )
+    logger.error(
+        "CAMPAIGN41_GOVERNED_RECOVERY_STOP child=%s status=%s error=%s ref=%s elapsed_ms=%.1f",
+        child.child_id, status, code, ref, (perf_counter() - started) * 1000,
+    )
+    return child.batch.sucursal_canon, status, code
