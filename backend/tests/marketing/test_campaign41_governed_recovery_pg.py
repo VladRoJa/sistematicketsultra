@@ -83,12 +83,6 @@ def _seed(session):
         expires_at=NOW + timedelta(minutes=10), revision_no=1,
     ))
     session.flush()
-    session.add(Execution(
-        id=41, approval_id=9, manifest_digest=DIGEST,
-        confirmed_by_user_id=7, confirmed_at=NOW + timedelta(minutes=1),
-        expires_at=NOW + timedelta(minutes=10),
-        status="REVIEW_REQUIRED", last_child_id=255, updated_at=NOW,
-    ))
     for child_id, status, provider_id in [
         (253, "SUBMITTED", "original-253"),
         (255, "PROVIDER_ERROR", None),
@@ -113,6 +107,13 @@ def _seed(session):
             submitted_by_user_id=7 if status == "SUBMITTED" else None,
             created_by_user_id=7, created_at=NOW, updated_at=NOW,
         ))
+    session.flush()
+    session.add(Execution(
+        id=41, approval_id=9, manifest_digest=DIGEST,
+        confirmed_by_user_id=7, confirmed_at=NOW + timedelta(minutes=1),
+        expires_at=NOW + timedelta(minutes=10),
+        status="REVIEW_REQUIRED", last_child_id=255, updated_at=NOW,
+    ))
     session.flush()
     session.add(BackgroundJob(
         id=5, campaign_v2_id=41, approval_id=9, execution_id=41,
