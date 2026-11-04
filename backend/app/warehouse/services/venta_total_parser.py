@@ -155,7 +155,8 @@ def parse_venta_total_xlsx(
             continue
 
         # LA VIGA is cancelled; keep the mixed RAW file, not this structured row.
-        if str(row.get("Sucursal") or "").strip().upper().replace("_", " ") == "LA VIGA":
+        raw_branch = str(row.get("Sucursal") or "").strip().upper()
+        if raw_branch.replace("_", " ") == "LA VIGA":
             skipped_rows += 1
             continue
         
