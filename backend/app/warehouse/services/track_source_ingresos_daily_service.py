@@ -71,7 +71,7 @@ def _to_decimal(value: Any) -> Decimal:
 
 def _is_out_of_scope_track_branch(raw_branch_name: str) -> bool:
     normalized = str(raw_branch_name or "").strip().upper()
-    return normalized in {"BECA", "CORPORATIVO"}
+    return normalized in {"BECA", "CORPORATIVO", "GIMNASIO PRUEBA", "LA VIGA", "LA_VIGA"}
 
 
 def _normalize_venta_total_status(

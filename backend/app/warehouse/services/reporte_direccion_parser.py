@@ -541,6 +541,16 @@ def parse_reporte_direccion_snapshot(
     )
 
     for idx, row in detail_rows:
+        if _normalize_text(row[0]).strip().upper().replace("_", " ") == "LA VIGA":
+            issues.append(
+                ParsedRowIssue(
+                    level="warning",
+                    row_index=idx,
+                    column_name="sucursal",
+                    message="Sucursal cancelada omitida de datos estructurados.",
+                )
+            )
+            continue
         try:
             parsed_row = _parse_detail_row(
                 row,

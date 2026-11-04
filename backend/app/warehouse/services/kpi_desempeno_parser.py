@@ -88,6 +88,10 @@ def parse_kpi_desempeno_xlsx(
             skipped_rows += 1
             continue
 
+        if sucursal.strip().upper().replace("_", " ") == "LA VIGA":
+            skipped_rows += 1
+            continue
+
         parsed_rows.append(
             KpiDesempenoParsedRow(
                 row_index=int(row_index),
