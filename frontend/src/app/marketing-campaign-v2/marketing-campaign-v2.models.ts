@@ -1045,6 +1045,7 @@ export interface CampaignV2PreflightBatch {
   track_label: string;
   channel_binding_id: number | null;
   provider_channel_id: string | null;
+  send_via_sucursal_canon?: string;
   template_id: number;
   template_name: string;
   recipient_count: number;
