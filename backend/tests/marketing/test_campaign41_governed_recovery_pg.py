@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
 from types import SimpleNamespace as NS
 
 import pytest
@@ -33,6 +34,16 @@ DIGEST = hashlib.sha256(
     json.dumps(MANIFEST, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     .encode("utf-8")
 ).hexdigest()
+
+
+@dataclass(frozen=True)
+class FakePlan:
+    campaign_id: int
+    mode: str
+    provider: str
+    ready: bool
+    dispatch_fingerprint: str
+    batches: tuple
 
 
 def _engine():
@@ -160,7 +171,7 @@ def test_governed_recovery_commits_before_provider_and_blocks_replay(monkeypatch
                 provider_channel_id="synthetic-channel", template_id=2,
                 template_name="synthetic-template", recipients=(child_id,),
             ) for child_id in (253, 255, 256, 257))
-            plan = NS(campaign_id=41, mode="IMMEDIATE", provider="IVENTAS",
+            plan = FakePlan(campaign_id=41, mode="IMMEDIATE", provider="IVENTAS",
                       ready=True, dispatch_fingerprint=FINGERPRINT,
                       batches=batches)
             manifest = {batch.sucursal_canon: {"planned_status": "READY"}
