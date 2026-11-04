@@ -74,6 +74,9 @@ import {
   CampaignV2FollowupStatus,
   CampaignV2ReportingFilters,
   CampaignV2SubmitResponse,
+  CampaignV2SubmitState,
+  CampaignV2FailedRecoveryPreview,
+  CampaignV2FailedRecoveryFrozen,
   CampaignV2TariffClassificationRequest,
   CampaignV2TariffClassificationResult,
   CampaignV2UnclassifiedTariffsResponse,
@@ -424,6 +427,30 @@ export class MarketingCampaignV2Service {
   getGovernedMonitor(campaignId: number): Observable<CampaignV2GovernedMonitor> {
     return this.http.get<CampaignV2GovernedMonitor>(
       `${this.apiUrl}/${campaignId}/dispatch/monitor`,
+    );
+  }
+
+  getDispatchBatchState(campaignId: number): Observable<CampaignV2SubmitState> {
+    return this.http.get<CampaignV2SubmitState>(
+      `${this.apiUrl}/${campaignId}/dispatch/batches`,
+    );
+  }
+
+  previewFailedRecovery(campaignId: number): Observable<CampaignV2FailedRecoveryPreview> {
+    return this.http.get<CampaignV2FailedRecoveryPreview>(
+      `${this.apiUrl}/${campaignId}/dispatch/failed/preview`,
+    );
+  }
+
+  freezeFailedRecovery(
+    campaignId: number, preview: CampaignV2FailedRecoveryPreview,
+  ): Observable<CampaignV2FailedRecoveryFrozen> {
+    return this.http.post<CampaignV2FailedRecoveryFrozen>(
+      `${this.apiUrl}/${campaignId}/dispatch/failed/freeze`,
+      {
+        expected_candidate_fingerprint: preview.candidate_fingerprint,
+        expected_recipient_count: preview.recipient_count,
+      },
     );
   }
 
