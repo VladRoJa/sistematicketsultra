@@ -59,6 +59,11 @@ def test_base_ingresos_uses_activo_facturado_and_keeps_negatives(
                 estatus="ACTIVO",
                 total=Decimal("50.00"),
             ),
+            SimpleNamespace(
+                sucursal="LA VIGA",
+                estatus="ACTIVO",
+                total=Decimal("900.00"),
+            ),
         ]
     )
 
@@ -237,3 +242,22 @@ def test_explicit_venta_total_snapshot_can_be_non_canonical(
             "source_report_type_key": "venta_total",
         }
     }
+
+@pytest.mark.parametrize(
+    "module_path",
+    [
+        "track_source_ingresos_daily_service",
+        "track_source_desempeno_daily_service",
+        "track_source_nuevos_daily_service",
+        "track_source_domiciliados_efectivos_daily_service",
+        "track_source_tienda_daily_service",
+    ],
+)
+@pytest.mark.parametrize("raw_branch", ["LA VIGA", "la_viga", " La Viga "])
+def test_cancelled_la_viga_is_always_out_of_scope(module_path, raw_branch):
+    import importlib
+
+    service_module = importlib.import_module(
+        f"app.warehouse.services.{module_path}"
+    )
+    assert service_module._is_out_of_scope_track_branch(raw_branch)
