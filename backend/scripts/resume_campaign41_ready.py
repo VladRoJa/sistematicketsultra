@@ -1,4 +1,4 @@
-"""One-off governed Campaign #41 continuation after two deterministic template rejections.
+"""One-off governed Campaign #41 continuation isolating ambiguous TEC_MXL #265.
 
 Default is a read-only dry run. --apply makes REAL iVentas requests only for
 untouched READY children after the failed child. Neither the original error
@@ -57,7 +57,17 @@ RECOVERY_ACCEPTED = {
     259: ("SAN_LUIS", "6aeb6bd3b5e53c00082fcf17"),
     260: ("SEND_CHIH", "6aeb6c12b5e53c00082fd33a"),
 }
-CONFIRMATION = "CONTINUAR_41_SIN_255_261"
+THIRD_ACCEPTED = {
+    262: ("SEND_MXL", "6aeb742601d5f90009b03954"),
+    263: ("SEND_SALTILLO", "6aeb746901d5f90009b03dbb"),
+    264: ("STA_CATARINA", "6aeb74abd85a8f00082012fa"),
+}
+AMBIGUOUS_ID = 265
+AMBIGUOUS_BRANCH = "TEC_MXL"
+AMBIGUOUS_CHANNEL = "6a86010a24aa9a00076c9800"
+AMBIGUOUS_RECIPIENTS = 3135
+AMBIGUOUS_ERROR = "TRANSPORT_CONNECTIONERROR"
+CONFIRMATION = "CONTINUAR_41_DESPUES_265_CUARENTENA"
 
 
 class RecoveryBlocked(RuntimeError):
@@ -139,6 +149,64 @@ def _check_second_stoppage_order(rows: list) -> list:
                  for row in rows[second + 1:]),
              "Hay un envío posterior a #261; no repetir.")
     return rows[second + 1:]
+
+
+def _check_third_stoppage_order(rows: list) -> list:
+    """Reject drift in every past stage; only #266–#268 may be READY."""
+    ids = [int(row.id) for row in rows]
+    _require(len(ids) == len(set(ids))
+             and 255 in ids and 261 in ids and 265 in ids,
+             "Historial de lotes incompleto o duplicado.")
+    p255, p261, p265 = (ids.index(n) for n in (255, 261, 265))
+    _require(0 < p255 < p261 < p265 < len(rows) - 1,
+             "Orden de lotes incompatible.")
+    _require(all(row.status == "SUBMITTED"
+                 and row.provider_campaign_id is not None
+                 and row.submitted_at is not None
+                 for row in rows[:p255]),
+             "Los aceptados originales cambiaron.")
+    _require(rows[p255].status == "PROVIDER_ERROR"
+             and rows[p261].status == "PROVIDER_ERROR",
+             "Los rechazos originales cambiaron.")
+    accepted = rows[p255 + 1:p261]
+    _require([int(row.id) for row in accepted] == list(RECOVERY_ACCEPTED),
+             "El primer tramo aceptado cambió.")
+    accepted += rows[p261 + 1:p265]
+    expected = dict(RECOVERY_ACCEPTED)
+    expected.update(THIRD_ACCEPTED)
+    _require([int(row.id) for row in rows[p261 + 1:p265]] ==
+             list(THIRD_ACCEPTED),
+             "El segundo tramo aceptado cambió.")
+    _require(all(row.sucursal_canon == expected[int(row.id)][0]
+                 and row.status == "SUBMITTED"
+                 and row.provider_campaign_id == expected[int(row.id)][1]
+                 and row.submitted_at is not None
+                 and row.submitted_by_user_id == 47
+                 for row in accepted),
+             "Se modificó un identificador externo de lote aceptado.")
+    ambiguous = rows[p265]
+    _require(ambiguous.sucursal_canon == AMBIGUOUS_BRANCH
+             and ambiguous.status == "RECONCILIATION_REQUIRED"
+             and int(ambiguous.recipient_count) == AMBIGUOUS_RECIPIENTS
+             and ambiguous.provider_channel_id == AMBIGUOUS_CHANNEL
+             and ambiguous.error_code == AMBIGUOUS_ERROR
+             and ambiguous.support_ref is None
+             and ambiguous.provider_campaign_id is None
+             and ambiguous.submitted_at is None
+             and ambiguous.submit_started_at is not None
+             and ambiguous.submitted_by_user_id == 47
+             and ambiguous.reconciliation_resolution is None
+             and (ambiguous.provider_response_json or {}).get("http_status") is None,
+             "TEC_MXL #265 perdió la cuarentena original.")
+    pending = rows[p265 + 1:]
+    _require([int(r.id) for r in pending] == [266, 267, 268]
+             and all(r.status == "READY"
+                     and r.provider_campaign_id is None
+                     and r.submit_started_at is None
+                     and r.submitted_at is None
+                     for r in pending),
+             "Los tres lotes posteriores ya fueron intentados o cambiaron.")
+    return pending
 
 
 def _validate_started_dispatch_window(
@@ -271,9 +339,25 @@ def _review() -> RecoveryReview:
              and int(second_failed.retry_attempt_count or 0) == 0
              and not second_failed.retry_history_json,
              "Rechazo #261 no corresponde a la evidencia de producción.")
+    ambiguous = by_name.get(AMBIGUOUS_BRANCH)
+    _require(ambiguous is not None
+             and ambiguous.id == AMBIGUOUS_ID
+             and ambiguous.status == "RECONCILIATION_REQUIRED"
+             and ambiguous.error_code == AMBIGUOUS_ERROR
+             and int(ambiguous.recipient_count) == AMBIGUOUS_RECIPIENTS
+             and ambiguous.provider_channel_id == AMBIGUOUS_CHANNEL
+             and ambiguous.template_name == TEMPLATE_NAME
+             and ambiguous.submit_started_at is not None
+             and ambiguous.submitted_at is None
+             and ambiguous.provider_campaign_id is None
+             and ambiguous.submitted_by_user_id == 47
+             and ambiguous.support_ref is None
+             and ambiguous.reconciliation_resolution is None
+             and (ambiguous.provider_response_json or {}).get("http_status") is None,
+             "TEC_MXL #265 cambió o no está pendiente de conciliación.")
     planned_ready = [by_name[batch.sucursal_canon] for batch in plan.batches
                      if manifest[batch.sucursal_canon]["planned_status"] == "READY"]
-    pending = _check_second_stoppage_order(planned_ready)
+    pending = _check_third_stoppage_order(planned_ready)
     _validate_started_dispatch_window(
         ready_rows=planned_ready,
         failed_id=FAILED_CHILD_ID,
@@ -282,7 +366,8 @@ def _review() -> RecoveryReview:
     )
     _require(manifest[FAILED_BRANCH]["planned_status"] == "READY"
              and manifest[SECOND_FAILED_BRANCH]["planned_status"] == "READY"
-             and len(pending) == 7,
+             and len(pending) == 3
+             and manifest[AMBIGUOUS_BRANCH]["planned_status"] == "READY",
              "No hay pendientes dentro del manifiesto autorizado.")
     if job is not None:
         job_ids = list(job.pending_child_ids or [])
@@ -299,6 +384,7 @@ def _review() -> RecoveryReview:
     expected_failed = {}
     expected_ready = {}
     expected_held = {}
+    expected_ambiguous = {}
     for batch in plan.batches:
         row = by_name[batch.sucursal_canon]
         state = manifest[batch.sucursal_canon]["planned_status"]
@@ -319,11 +405,16 @@ def _review() -> RecoveryReview:
             expected_failed[row.sucursal_canon] = (
                 SECOND_FAILED_RECIPIENTS, FAILED_ERROR, SECOND_FAILED_REF,
             )
+        elif row.id == AMBIGUOUS_ID:
+            expected_ambiguous[row.sucursal_canon] = (
+                AMBIGUOUS_RECIPIENTS, AMBIGUOUS_ERROR,
+            )
         elif row.status == "READY":
             expected_ready[row.sucursal_canon] = int(row.recipient_count)
         else:
             raise RecoveryBlocked("Existe otro estado inesperado en campaña #41.")
-    _require(len(expected_failed) == 2 and len(expected_ready) == len(pending),
+    _require(len(expected_failed) == 2 and len(expected_ambiguous) == 1
+             and len(expected_ready) == len(pending),
              "Se detectaron omisiones adicionales o pendientes distintos.")
     complete = review_partial_resume(
         campaign_id=CAMPAIGN_ID,
@@ -333,6 +424,7 @@ def _review() -> RecoveryReview:
         expected_failed=expected_failed,
         expected_ready=expected_ready,
         expected_held=expected_held,
+        expected_ambiguous=expected_ambiguous,
         session=db.session,
     )
     _require([int(x.child_id) for x in complete.ready_children] ==
@@ -366,7 +458,7 @@ def _check_current_capacity(review: RecoveryReview, batches: tuple) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true",
-                        help="Envía realmente SOLO los READY posteriores a #261")
+                        help="Envía realmente SOLO los READY posteriores a TEC_MXL #265")
     parser.add_argument("--confirm", default="",
                         help="Confirmación literal requerida para --apply")
     args = parser.parse_args()
@@ -387,6 +479,7 @@ def main() -> int:
                   " / " + str(review.submitted_recipients), flush=True)
             print("OMITIDO = PASEO_2000 | #255 | 7994 | PROVIDER_ERROR", flush=True)
             print("OMITIDO = SEND_CUL | #261 | 3402 | PROVIDER_ERROR", flush=True)
+            print("CUARENTENA = TEC_MXL | #265 | 3135 | RECONCILIATION_REQUIRED", flush=True)
             print("HELD = " + str(review.held), flush=True)
             print("PENDIENTES = " + str(len(pending)) + " / " +
                   str(sum(len(x.batch.recipients) for x in pending)), flush=True)
@@ -443,7 +536,7 @@ def main() -> int:
                     return 2
             print("ACEPTADOS_NUEVOS = " + str(Counter(x[1] for x in results)["SUBMITTED"]),
                   flush=True)
-            print("CAMPAÑA_41 = CONTINUACIÓN_CON_255_Y_261_EXCLUIDOS", flush=True)
+            print("CAMPAÑA_41 = CONTINUACIÓN_CON_265_EN_CUARENTENA", flush=True)
             print("EJECUCIÓN_ORIGINAL = REVIEW_REQUIRED (sin borrar error)", flush=True)
             return 0
         finally:

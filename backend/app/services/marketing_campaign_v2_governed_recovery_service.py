@@ -54,6 +54,10 @@ FAILED_REF = "bc-mw1c1why-phq041"
 SECOND_FAILED_ID = 261
 SECOND_FAILED_ERROR = "TEMPLATE_NOT_FOUND"
 SECOND_FAILED_REF = "bc-mw2eakos-r7lxsj"
+AMBIGUOUS_ID = 265
+AMBIGUOUS_ERROR = "TRANSPORT_CONNECTIONERROR"
+AMBIGUOUS_CHANNEL = "6a86010a24aa9a00076c9800"
+AMBIGUOUS_RECIPIENTS = 3135
 
 
 class GovernedRecoveryBlocked(RuntimeError):
@@ -104,6 +108,24 @@ def verify_suffix(
     else:
         require(all(i < SECOND_FAILED_ID for i in ready_ids),
                 "El sufijo combina lotes a ambos lados del rechazo #261.")
+    if ready_ids and min(ready_ids) > AMBIGUOUS_ID:
+        ambiguous = by_id.get(AMBIGUOUS_ID)
+        require(ambiguous is not None
+                and ambiguous.status == "RECONCILIATION_REQUIRED"
+                and ambiguous.error_code == AMBIGUOUS_ERROR
+                and ambiguous.provider_channel_id == AMBIGUOUS_CHANNEL
+                and int(ambiguous.recipient_count) == AMBIGUOUS_RECIPIENTS
+                and ambiguous.provider_campaign_id is None
+                and ambiguous.submitted_at is None
+                and ambiguous.submit_started_at is not None
+                and ambiguous.submitted_by_user_id == 47
+                and ambiguous.reconciliation_resolution is None
+                and ambiguous.support_ref is None
+                and (ambiguous.provider_response_json or {}).get("http_status") is None,
+                "TEC_MXL #265 no conserva íntegra la cuarentena.")
+    else:
+        require(all(i < AMBIGUOUS_ID for i in ready_ids),
+                "Sufijo cruza la cuarentena de TEC_MXL #265.")
     for position, child_id in enumerate(ready_ids):
         row = by_id.get(child_id)
         require(row is not None, "Falta un lote del manifiesto.")

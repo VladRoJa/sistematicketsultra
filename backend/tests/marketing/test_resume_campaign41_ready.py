@@ -13,6 +13,8 @@ from scripts.resume_campaign41_ready import (
     _check_second_stoppage_order,
     _validate_started_dispatch_window,
     RECOVERY_ACCEPTED,
+    THIRD_ACCEPTED,
+    _check_third_stoppage_order,
 )
 
 
@@ -340,3 +342,81 @@ def test_governed_suffix_rejects_modified_second_error():
             ready_ids=(262, 263), completed=(),
             next_id=262, actor_user_id=7,
         )
+
+
+def _after_ambiguous_tec_mxl():
+    rows = _after_second_failure()[:]
+    # Already accepted in the second governed recovery.
+    for child_id, (branch, external_id) in THIRD_ACCEPTED.items():
+        row = rows[[r.id for r in rows].index(child_id)]
+        row.sucursal_canon = branch
+        row.status = "SUBMITTED"
+        row.provider_campaign_id = external_id
+        row.submitted_at = object()
+        row.submit_started_at = object()
+        row.submitted_by_user_id = 47
+    ambiguous = rows[[r.id for r in rows].index(265)]
+    ambiguous.sucursal_canon = "TEC_MXL"
+    ambiguous.status = "RECONCILIATION_REQUIRED"
+    ambiguous.recipient_count = 3135
+    ambiguous.provider_channel_id = "6a86010a24aa9a00076c9800"
+    ambiguous.error_code = "TRANSPORT_CONNECTIONERROR"
+    ambiguous.support_ref = None
+    ambiguous.provider_campaign_id = None
+    ambiguous.submitted_at = None
+    ambiguous.submit_started_at = object()
+    ambiguous.submitted_by_user_id = 47
+    ambiguous.reconciliation_resolution = None
+    ambiguous.provider_response_json = {"http_status": None}
+    return rows
+
+
+def test_isolate_ambiguous_tec_mxl_returns_only_three_ready():
+    rows = _after_ambiguous_tec_mxl()
+    assert [row.id for row in _check_third_stoppage_order(rows)] == [266, 267, 268]
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda rows: setattr(rows[9], "provider_campaign_id", "duplicate-262"),
+    lambda rows: setattr(rows[10], "status", "READY"),
+    lambda rows: setattr(rows[11], "status", "PROVIDER_ERROR"),
+    lambda rows: setattr(rows[12], "status", "PROVIDER_ERROR"),
+    lambda rows: setattr(rows[12], "provider_campaign_id", "unknown"),
+    lambda rows: setattr(rows[12], "submit_started_at", None),
+    lambda rows: setattr(rows[12], "error_code", "HTTP_400"),
+    lambda rows: setattr(rows[12], "reconciliation_resolution", "NOT_CREATED_CONFIRMED"),
+    lambda rows: setattr(rows[13], "status", "SUBMITTED"),
+    lambda rows: setattr(rows[13], "submit_started_at", object()),
+    lambda rows: setattr(rows[14], "provider_campaign_id", "unexpected"),
+])
+def test_isolating_tec_mxl_blocks_if_history_or_pending_changed(mutate):
+    rows = _after_ambiguous_tec_mxl()
+    mutate(rows)
+    with pytest.raises(RecoveryBlocked):
+        _check_third_stoppage_order(rows)
+
+
+def test_governed_suffix_after_tec_mxl_rechecks_uncertain_child():
+    rows = [_governed_row(253, "SUBMITTED", provider_id="original"),
+            _governed_row(255, "PROVIDER_ERROR"),
+            _governed_row(261, "PROVIDER_ERROR"),
+            _governed_row(265, "RECONCILIATION_REQUIRED"),
+            _governed_row(266, "READY"), _governed_row(267, "READY")]
+    rows[2].error_code = "TEMPLATE_NOT_FOUND"
+    rows[2].support_ref = "bc-mw2eakos-r7lxsj"
+    uncertain = rows[3]
+    uncertain.error_code = "TRANSPORT_CONNECTIONERROR"
+    uncertain.provider_channel_id = "6a86010a24aa9a00076c9800"
+    uncertain.recipient_count = 3135
+    uncertain.submitted_by_user_id = 47
+    uncertain.submit_started_at = object()
+    uncertain.reconciliation_resolution = None
+    uncertain.provider_response_json = {"http_status": None}
+    governed_recovery.verify_suffix(
+        rows=rows, accepted_original=((253, "original"),),
+        ready_ids=(266, 267), completed=(), next_id=266, actor_user_id=7)
+    uncertain.provider_campaign_id = "found-after-all"
+    with pytest.raises(governed_recovery.GovernedRecoveryBlocked, match="265"):
+        governed_recovery.verify_suffix(
+            rows=rows, accepted_original=((253, "original"),),
+            ready_ids=(266, 267), completed=(), next_id=266, actor_user_id=7)
