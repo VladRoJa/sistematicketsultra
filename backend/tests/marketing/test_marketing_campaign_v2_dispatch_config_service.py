@@ -140,6 +140,49 @@ def test_channel_config_inactive_binding_cannot_resolve(session):
     ) is None
 
 
+def test_template_catalog_orders_newest_first_even_when_labels_are_alphabetical(session):
+    old = service.save_template(
+        provider="IVENTAS",
+        template_name="old_template",
+        label="A antigua",
+        is_active=True,
+        purposes=["REACTIVATION"],
+        variables={},
+        compatible_channel_ids=[],
+        actor_user_id=7,
+        session=session,
+        now=datetime(2026, 10, 1, tzinfo=timezone.utc),
+    )
+    recent = service.save_template(
+        provider="IVENTAS",
+        template_name="recent_template",
+        label="Z reciente",
+        is_active=True,
+        purposes=["REACTIVATION"],
+        variables={},
+        compatible_channel_ids=[],
+        actor_user_id=7,
+        session=session,
+        now=datetime(2026, 11, 4, tzinfo=timezone.utc),
+    )
+    recent_same_time = service.save_template(
+        provider="IVENTAS",
+        template_name="recent_same_time",
+        label="M reciente mismo instante",
+        is_active=True,
+        purposes=["REACTIVATION"],
+        variables={},
+        compatible_channel_ids=[],
+        actor_user_id=7,
+        session=session,
+        now=datetime(2026, 11, 4, tzinfo=timezone.utc),
+    )
+    rows = service.list_templates(provider="IVENTAS", session=session)
+    assert [row["id"] for row in rows] == [
+        recent_same_time["id"], recent["id"], old["id"]
+    ]
+
+
 def test_template_catalog_normalizes_mapping_and_filters_by_purpose(session):
     saved = service.save_template(
         provider="iventas",
