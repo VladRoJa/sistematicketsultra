@@ -87,6 +87,10 @@ from app.services.marketing_campaign_v2_quota_service import (
     register_quota_capacity,
     assess_preflight_capacity,
 )
+from app.services.marketing_campaign_v2_failed_cohort_service import (
+    FailedCohortConflict, FailedCohortNotFound, FailedCohortValidation,
+    preview_failed_cohort, freeze_failed_cohort,
+)
 from app.services.marketing_campaign_v2_held_derived_cohort_service import (
     freeze_derived_held_cohort,
 )
@@ -1750,6 +1754,65 @@ def campaign_v2_governed_resolve_endpoint(campaign_id: int, execution_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error al resolver ejecución gobernada.", 500)
+
+
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/dispatch/failed/preview"
+)
+@jwt_required()
+def campaign_v2_failed_recovery_preview_endpoint(campaign_id: int):
+    """Review exact original recipients with confirmed provider rejections."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(preview_failed_cohort(
+            source_campaign_id=campaign_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except FailedCohortNotFound as exc:
+        return _error(str(exc), 404)
+    except (FailedCohortValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except FailedCohortConflict as exc:
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No se pudo evaluar la cohorte fallida.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/failed/freeze"
+)
+@jwt_required()
+def campaign_v2_failed_recovery_freeze_endpoint(campaign_id: int):
+    """Freeze and audit exact rejected cohort. No iVentas call or approval."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({
+            "expected_candidate_fingerprint", "expected_recipient_count",
+        })
+        result = freeze_failed_cohort(
+            source_campaign_id=campaign_id,
+            expected_candidate_fingerprint=payload.get("expected_candidate_fingerprint"),
+            expected_recipient_count=payload.get("expected_recipient_count"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201 if result["created"] else 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except FailedCohortNotFound as exc:
+        return _error(str(exc), 404)
+    except (FailedCohortValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except FailedCohortConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible crear la campaña con fallidas.", 500)
 
 
 @marketing_campaign_v2_bp.post(
