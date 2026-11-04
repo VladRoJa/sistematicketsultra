@@ -13,6 +13,7 @@ MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY = "ingresos_totalpass"
 MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY = "ingresos_wellhub"
 MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY = "track_monthly_targets"
 MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY = "venta_total"
+MANUAL_STRUCTURED_KPI_DESEMPENO_REPORT_TYPE_KEY = "kpi_desempeno"
 MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY = "socios_vencidos"
 MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY = "socios_activos"
 MANUAL_STRUCTURED_GOOGLE_ADS_REPORT_TYPE_KEY = "google_ads_campaign_daily"
@@ -24,6 +25,7 @@ SUPPORTED_MANUAL_STRUCTURED_REPORT_TYPES = frozenset(
         MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_TRACK_MONTHLY_TARGETS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_KPI_DESEMPENO_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_SOCIOS_VENCIDOS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_SOCIOS_ACTIVOS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_GOOGLE_ADS_REPORT_TYPE_KEY,
@@ -183,6 +185,15 @@ def _resolve_venta_total_ingestor() -> Callable[..., Any]:
     )
 
 
+def _resolve_kpi_desempeno_ingestor() -> Callable[..., Any]:
+    return _resolve_callable(
+        direct_callable_key="WAREHOUSE_KPI_DESEMPENO_INGESTOR",
+        module_key="WAREHOUSE_KPI_DESEMPENO_INGESTOR_MODULE",
+        entrypoint_key="WAREHOUSE_KPI_DESEMPENO_INGESTOR_ENTRYPOINT",
+        description="ingestor estructurado de kpi_desempeno",
+    )
+
+
 def _resolve_socios_vencidos_ingestor() -> Callable[..., Any]:
     return _resolve_callable(
         direct_callable_key="WAREHOUSE_SOCIOS_VENCIDOS_INGESTOR",
@@ -239,12 +250,38 @@ def _resolve_snapshot_kind_for_manual_upload(
         MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_WELLHUB_REPORT_TYPE_KEY,
         MANUAL_STRUCTURED_VENTA_TOTAL_REPORT_TYPE_KEY,
+        MANUAL_STRUCTURED_KPI_DESEMPENO_REPORT_TYPE_KEY,
     }:
         return "daily"
 
     raise WarehouseManualIngestionDispatcherError(
         f"No hay snapshot_kind configurado para el report_type_key manual {report_type_key!r}."
     )
+
+
+def _dispatch_kpi_desempeno_ingestion(
+    *,
+    warehouse_upload_id: int,
+    requested_by: str | None,
+    ingestion_source: str | None,
+    snapshot_kind: str,
+) -> dict[str, Any]:
+    ingestor = _resolve_kpi_desempeno_ingestor()
+    result = _invoke_callable_flexibly(
+        ingestor,
+        kwargs={
+            "warehouse_upload_id": warehouse_upload_id,
+            "requested_by": requested_by,
+            "ingestion_source": ingestion_source,
+            "snapshot_kind": snapshot_kind,
+        },
+        description="ingestor estructurado manual de kpi_desempeno",
+    )
+    if not isinstance(result, dict):
+        raise WarehouseManualIngestionDispatcherError(
+            "El ingestor KPI Desempeño debe devolver dict."
+        )
+    return result
 
 
 def _dispatch_totalpass_ingestion(
@@ -525,6 +562,21 @@ def dispatch_manual_structured_ingestion(
     snapshot_kind = _resolve_snapshot_kind_for_manual_upload(
         loaded_upload=loaded_upload,
     )
+
+    if report_type_key == MANUAL_STRUCTURED_KPI_DESEMPENO_REPORT_TYPE_KEY:
+        ingestion_result = _dispatch_kpi_desempeno_ingestion(
+            warehouse_upload_id=warehouse_upload_id,
+            requested_by=requested_by,
+            ingestion_source=ingestion_source,
+            snapshot_kind=snapshot_kind,
+        )
+        return {
+            "ingestion_status": ingestion_result.get("status", "ingested"),
+            "warehouse_upload_id": warehouse_upload_id,
+            "report_type_key": report_type_key,
+            "snapshot_kind": snapshot_kind,
+            "structured_result": ingestion_result,
+        }
 
     if report_type_key == MANUAL_STRUCTURED_TOTALPASS_REPORT_TYPE_KEY:
         ingestion_result = _dispatch_totalpass_ingestion(
