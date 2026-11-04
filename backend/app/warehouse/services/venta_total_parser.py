@@ -153,6 +153,11 @@ def parse_venta_total_xlsx(
         if _is_report_generated_row(row):
             skipped_rows += 1
             continue
+
+        # LA VIGA is cancelled; keep the mixed RAW file, not this structured row.
+        if str(row.get("Sucursal") or "").strip().upper().replace("_", " ") == "LA VIGA":
+            skipped_rows += 1
+            continue
         
         folio_raw = row.get("Folio")
         if pd.isna(folio_raw) or str(folio_raw).strip() == "":
