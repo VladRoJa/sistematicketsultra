@@ -101,6 +101,7 @@ class CampaignV2SubmittedBatchResult:
     retry_last_by_user_id: int | None
     error_code: str | None
     support_ref: str | None
+    send_via_sucursal_canon: str | None = None
 
 
 @dataclass(frozen=True)
@@ -436,6 +437,9 @@ def serialize_campaign_v2_submit_result(
                 "child_id": batch.child_id,
                 "sucursal_id": batch.sucursal_id,
                 "sucursal_canon": batch.sucursal_canon,
+                "send_via_sucursal_canon": (
+                    batch.send_via_sucursal_canon or batch.sucursal_canon
+                ),
                 "provider_channel_id": batch.provider_channel_id,
                 "template_name": batch.template_name,
                 "recipient_count": batch.recipient_count,
@@ -564,6 +568,12 @@ def _prepare_provider_campaign_rows(
                 "template_name": batch.template_name,
                 "file_url": batch.file_url,
                 "dispatch_fingerprint_version": DISPATCH_FINGERPRINT_VERSION,
+                **({
+                    "origin_sucursal_canon": batch.sucursal_canon,
+                    "send_via_sucursal_canon": batch.send_via_sucursal_canon,
+                    "send_via_channel_binding_id": batch.channel_binding_id,
+                    "send_via_provider_channel_id": batch.provider_channel_id,
+                } if batch.send_via_sucursal_canon else {}),
             },
             recipient_count=len(batch.recipients),
             dispatch_fingerprint=plan.dispatch_fingerprint,
@@ -828,6 +838,8 @@ def _provider_campaign_name(
     batch: CampaignV2DispatchBatchPlan,
 ) -> str:
     suffix = f" · {batch.sucursal_canon}"
+    if batch.send_via_sucursal_canon:
+        suffix += f" (via {batch.send_via_sucursal_canon})"
     base = " ".join(str(plan.campaign_name or "").split()) or (
         f"Campaign V2 #{plan.campaign_id}"
     )
@@ -966,6 +978,10 @@ def _serialize_row_result(
         retry_last_by_user_id=row.retry_last_by_user_id,
         error_code=row.error_code,
         support_ref=row.support_ref,
+        send_via_sucursal_canon=(
+            dict(getattr(row, "template_snapshot_json", None) or {}).get("send_via_sucursal_canon")
+            or str(row.sucursal_canon)
+        ),
     )
 
 
@@ -977,6 +993,7 @@ def _serialize_row_result_dict(
         "child_id": result.child_id,
         "sucursal_id": result.sucursal_id,
         "sucursal_canon": result.sucursal_canon,
+        "send_via_sucursal_canon": result.send_via_sucursal_canon,
         "provider_channel_id": result.provider_channel_id,
         "template_name": result.template_name,
         "recipient_count": result.recipient_count,

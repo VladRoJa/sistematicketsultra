@@ -10,6 +10,7 @@ on:
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/app/integrations/iventas/template_inventory.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_*"
+      - "backend/tests/marketing/test_campaign_v2_channel_routing.py"
       - "backend/tests/marketing/test_campaign_v2_confirmed_failures.py"
       - "backend/app/services/marketing_campaign_v2_confirmed_rejection.py"
       - "backend/app/services/marketing_campaign_v2_failed_cohort_service.py"
@@ -59,6 +60,7 @@ jobs:
             tests/marketing/test_marketing_campaign_v2_budget_service.py \
             tests/marketing/test_marketing_campaign_v2_budget_migration.py \
             tests/marketing/test_marketing_campaign_v2_dispatch_config_service.py \
+            tests/marketing/test_campaign_v2_channel_routing.py \
             tests/marketing/test_campaign_v2_confirmed_failures.py \
             tests/marketing/test_iventas_template_inventory.py
 

@@ -19,6 +19,9 @@ from openpyxl import load_workbook
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, capture_sender_routes,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientEvidenceORM,
@@ -267,6 +270,10 @@ def freeze_excel_campaign(
         raise ExcelCampaignImportConflictError("Ya existe una campaña importada con ese nombre.")
     frozen_at = datetime.now(timezone.utc)
     branch_keys = sorted(plan["branch_counts"])
+    sender_routes = capture_sender_routes(
+        session=active,
+        recipient_origins=(row["sucursal"] for row in plan["recipients"]),
+    )
     campaign = MarketingCampaignV2ORM(
         name=plan["name"], purpose=plan["purpose"], source=SOURCE,
         audience_definition_json={
@@ -292,6 +299,7 @@ def freeze_excel_campaign(
                     "blacklist_excluded_count": plan["blacklist_excluded_count"],
                 },
             },
+            **({ROUTING_SNAPSHOT_KEY: sender_routes} if sender_routes else {}),
         },
         created_by_user_id=int(created_by_user_id),
         frozen_at=frozen_at, created_at=frozen_at, updated_at=frozen_at,
