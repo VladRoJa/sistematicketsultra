@@ -298,3 +298,94 @@ def test_unexpected_worker_boundary_failure_never_replays(durable):
             )
         assert d2c_calls == [1]
         assert len(provider_factory_calls) == 1
+
+
+def test_confirmed_nonacceptance_continues_real_pg_audit_without_replay(durable):
+    """Two failed children separated by accepted ones; durable SQL event chain."""
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    engine = durable
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations/versions/m1214fail110426_confirmed_rejection_and_failed_cohort.py"
+    )
+    spec = importlib.util.spec_from_file_location("campaign1214migration", migration_path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with engine.begin() as conn:
+        migration.op = Operations(MigrationContext.configure(conn))
+        migration.upgrade()
+
+    children = {
+        ident: SimpleNamespace(
+            id=ident, campaign_v2_id=1, status="READY",
+            submit_started_at=None, submitted_at=None,
+            provider_campaign_id=None,
+        )
+        for ident in range(1, TOTAL + 1)
+    }
+    calls = []
+    def fake_d2c(**kwargs):
+        child_id = kwargs["child_id"]
+        calls.append(child_id)
+        child = children[child_id]
+        child.submit_started_at = datetime.now(timezone.utc)
+        child.submitted_by_user_id = 1
+        if child_id in (2, 4):
+            child.status = "PROVIDER_ERROR"
+            child.error_code = "TEMPLATE_NOT_FOUND"
+            child.support_ref = "bc-synthetic-" + str(child_id)
+            child.provider_response_json = {"http_status": 400}
+            child.reconciliation_resolution = None
+            child.retry_attempt_count = 0
+            child.retry_history_json = []
+            return {
+                "child_id": child_id, "status": "PROVIDER_ERROR",
+                "definitively_not_accepted": True,
+            }
+        child.status = "SUBMITTED"
+        child.provider_campaign_id = "synthetic-" + str(child_id)
+        child.submitted_at = datetime.now(timezone.utc)
+        return {"child_id": child_id, "status": "SUBMITTED"}
+
+    with patch.object(worker, "_actor"), patch.object(
+            worker, "execute_governed_child", side_effect=fake_d2c):
+        with Session(engine) as session:
+            assert worker.claim_next_queued(
+                session=session, worker_id="worker-A", config=FLAGS,
+            ) == (50, 1)
+        with FakeChildrenSession(engine, children=children) as session:
+            worker.process_claimed_job(
+                session=session, job_id=50, worker_id="worker-A",
+                generation=1, config=FLAGS, provider_factory=object,
+            )
+
+        assert calls == list(range(1, TOTAL+1))
+        with engine.connect() as conn:
+            status = conn.execute(sa.text("""
+                SELECT status, last_accepted_child_id, current_child_id
+                  FROM marketing_campaign_v2_background_jobs WHERE id=50
+            """)).one()
+            assert (status.status, status.last_accepted_child_id, status.current_child_id) == (
+                "COMPLETED", 26, None,
+            )
+            events = conn.execute(sa.text("""
+                SELECT event_kind, child_id, reason_code
+                  FROM marketing_campaign_v2_background_job_events WHERE job_id=50
+                 ORDER BY event_no
+            """)).all()
+            assert sum(e.event_kind == "CHILD_ACCEPTED" for e in events) == 24
+            rejected = [e for e in events if e.event_kind == "CHILD_REJECTED"]
+            assert [e.child_id for e in rejected] == [2, 4]
+            assert all(e.reason_code == "TEMPLATE_NOT_FOUND" for e in rejected)
+            assert events[-1].event_kind == "COMPLETED"
+
+        with FakeChildrenSession(engine, children=children) as session:
+            worker.process_claimed_job(
+                session=session, job_id=50, worker_id="worker-A",
+                generation=1, config=FLAGS, provider_factory=object,
+            )
+        assert len(calls) == TOTAL
