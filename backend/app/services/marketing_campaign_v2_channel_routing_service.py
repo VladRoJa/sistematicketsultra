@@ -35,7 +35,8 @@ def _required_binding(value: Any, label: str) -> int:
 
 def validate_sender_route(source: Any, sender: Any) -> None:
     if (source is None or sender is None or
-            _canonical(source.sucursal_canon), _canonical(sender.sucursal_canon)) not in ALLOWED_ROUTES:
+            (_canonical(source.sucursal_canon), _canonical(sender.sucursal_canon))
+            not in ALLOWED_ROUTES):
         raise CampaignV2SenderRoutingConflict(
             "Solo está autorizada la ruta INDEPENDENCIA -> TEC_MXL."
         )
