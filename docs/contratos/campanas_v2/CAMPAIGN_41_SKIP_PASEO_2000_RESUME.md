@@ -143,3 +143,38 @@ Cuando se autorice el nuevo envío, debe utilizar el nuevo token de
 confirmación `CONTINUAR_41_SIN_255_261` y mantenerse restringido a
 la misma ruta controlada, una sola vez y con una revisión manual antes.
 El preflight local no certifica existencia de plantilla en iVentas.
+
+
+## Tercera interrupción — TEC_MXL #265, 2026-11-04
+
+El segundo tramo aceptó #262 SEND_MXL (5,157; provider `6aeb742601d5f90009b03954`),
+#263 SEND_SALTILLO (4,870; provider `6aeb746901d5f90009b03dbb`)
+y #264 STA_CATARINA (2,964; provider `6aeb74abd85a8f00082012fa`).
+
+#265 TEC_MXL: 3,135, canal `6a86010a24aa9a00076c9800`,
+`RECONCILIATION_REQUIRED` / `TRANSPORT_CONNECTIONERROR`;
+`submit_started_at = 2026-11-04 10:09:47.962 -0800`,
+sin respuesta ni provider_campaign_id. El operador revisó manualmente el panel
+de iVentas y no encontró la campaña `Winback ene 25 a oct 26 · TEC_MXL`.
+**La ausencia en el panel NO es prueba suficiente de no creación.**
+
+La tercera continuación es exclusivamente para los tres lotes no intentados:
+#266 TLALNEPANTLA (1,511), #267 VILLAS_DEL_REY (3,731),
+#268 VILLA_VERDE (2,387): 7,629 destinatarios. Verifica en cada claim
+los quince aceptados, ambos rechazos deterministas, la cuarentena intacta de
+#265 y los tres READY; no modifica ni reintenta #265. Se vuelven a evaluar
+permisos, snapshots, cuota vigente y bloqueo de contacto.
+
+**Estado esperado en dry-run**: 15/56,257 SUBMITTED; 2/11,396 rechazados;
+1/3,135 en CUARENTENA; 3/7,629 READY; `CUOTA_ACTUAL = VALIDADA`.
+
+No reutilizar tokens antiguos de confirmación.
+La nueva confirmación (solo tras aprobación expresa de envío real y
+verificación del dry-run) será `CONTINUAR_41_DESPUES_265_CUARENTENA`.
+Si un lote nuevo termina en un resultado distinto de SUBMITTED, detener de
+nuevo y NO volver a ejecutar `--apply` a ciegas.
+
+La cuarentena #265 requiere evidencia definitiva del proveedor para
+conciliación auditada posterior: campaña encontrada con identidad externa,
+o confirmación documentada del proveedor de no creación.
+Sin evidencia no registrar una resolución ni reenviar #265.
