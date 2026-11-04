@@ -89,6 +89,50 @@ def _check_original_order(rows: list, failed_id: int) -> list:
     return rows[pos + 1:]
 
 
+def _validate_started_dispatch_window(
+    *, ready_rows: list, failed_id: int, confirmed_at: datetime,
+    expires_at: datetime,
+) -> None:
+    """The original FIRST claim must be timely, not every later claim.
+
+    Governed D2c explicitly allows sequential continuation beyond the initial
+    approval TTL after the first accepted claim. All subsequent accepted rows
+    must precede the deterministic failed claim.
+    """
+    index = next((i for i, row in enumerate(ready_rows)
+                  if int(row.id) == failed_id), -1)
+    _require(index > 0, "No existe prefijo aceptado verificable.")
+    accepted = ready_rows[:index]
+    first = accepted[0]
+    failed = ready_rows[index]
+    _require(first.submit_started_at is not None
+             and first.submitted_at is not None
+             and failed.submit_started_at is not None,
+             "Faltan timestamps del despacho original.")
+    started = _database_date(first.submit_started_at)
+    confirmation = _database_date(confirmed_at)
+    expiry = _database_date(expires_at)
+    failed_start = _database_date(failed.submit_started_at)
+    _require(confirmation <= started <= expiry,
+             "El primer envío comenzó fuera de la ventana aprobada.")
+    previous_completion = None
+    for row in accepted:
+        _require(row.status == "SUBMITTED"
+                 and row.submit_started_at is not None
+                 and row.submitted_at is not None,
+                 "Historial de aceptación incompleto.")
+        claim_time = _database_date(row.submit_started_at)
+        completion = _database_date(row.submitted_at)
+        _require(claim_time <= completion
+                 and (previous_completion is None
+                      or previous_completion <= claim_time),
+                 "Los envíos aceptados no siguen el orden temporal.")
+        previous_completion = completion
+    _require(previous_completion is not None
+             and previous_completion <= failed_start,
+             "El error #255 no sigue al prefijo aceptado.")
+
+
 def _review() -> RecoveryReview:
     now = datetime.now(timezone.utc)
     approval = (
@@ -160,13 +204,15 @@ def _review() -> RecoveryReview:
              and not failed.retry_history_json
              and (failed.provider_response_json or {}).get("http_status") == 400,
              "El rechazo iVentas #255 no coincide con la evidencia autorizada.")
-    _require(_database_date(failed.submit_started_at) <=
-             _database_date(approval.expires_at),
-             "El fallo original ocurrió fuera de la autorización.")
-
     planned_ready = [by_name[batch.sucursal_canon] for batch in plan.batches
                      if manifest[batch.sucursal_canon]["planned_status"] == "READY"]
     pending = _check_original_order(planned_ready, FAILED_CHILD_ID)
+    _validate_started_dispatch_window(
+        ready_rows=planned_ready,
+        failed_id=FAILED_CHILD_ID,
+        confirmed_at=execution.confirmed_at,
+        expires_at=approval.expires_at,
+    )
     _require(manifest[FAILED_BRANCH]["planned_status"] == "READY"
              and len(pending) > 0,
              "No hay pendientes dentro del manifiesto autorizado.")
