@@ -64,6 +64,11 @@ def test_base_ingresos_uses_activo_facturado_and_keeps_negatives(
                 estatus="ACTIVO",
                 total=Decimal("900.00"),
             ),
+            SimpleNamespace(
+                sucursal="GIMNASIO PRUEBA",
+                estatus="ACTIVO",
+                total=Decimal("700.00"),
+            ),
         ]
     )
 
