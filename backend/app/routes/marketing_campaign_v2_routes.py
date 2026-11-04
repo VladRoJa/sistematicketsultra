@@ -1757,6 +1757,36 @@ def campaign_v2_governed_resolve_endpoint(campaign_id: int, execution_id: int):
 
 
 @marketing_campaign_v2_bp.get(
+    "/campaigns-v2/<int:campaign_id>/dispatch/batches"
+)
+@jwt_required()
+def campaign_v2_dispatch_batches_endpoint(campaign_id: int):
+    """Durable provider batch summary even if preflight now fails."""
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        # The original scope guard is still applied to the campaign itself.
+        get_campaign_v2(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(get_campaign_v2_submit_state(
+            campaign_id=campaign_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaign V2 no encontrada.", 404)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _error("Error consultando resultados de lotes.", 500)
+
+
+@marketing_campaign_v2_bp.get(
     "/campaigns-v2/<int:campaign_id>/dispatch/failed/preview"
 )
 @jwt_required()
