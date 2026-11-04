@@ -14,6 +14,9 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, capture_sender_routes,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2RecipientORM,
@@ -152,6 +155,10 @@ def freeze_derived_held_cohort(
             raise HeldReleaseConflict(str(exc)) from exc
 
         frozen_scope = deepcopy(definition["filters"])
+        sender_routes = capture_sender_routes(
+            session=active,
+            recipient_origins=(row.sucursal for row in source_rows),
+        )
         suffix = " · HELD " + str(source_child.sucursal_canon)
         base = str(original.name or "Campaign V2").strip()
         derived_name = base[:max(1, 255-len(suffix))] + suffix
@@ -184,6 +191,7 @@ def freeze_derived_held_cohort(
                     "send_authorized": False,
                     "quota_reserved": False,
                 },
+                **({ROUTING_SNAPSHOT_KEY: sender_routes} if sender_routes else {}),
             },
             created_by_user_id=actor_user_id,
             frozen_at=timestamp, created_at=timestamp, updated_at=timestamp,
