@@ -61,9 +61,11 @@ def review_partial_resume(
     expected_ready: Mapping[str, int],
     session: Any,
     expected_held: Mapping[str, tuple[int, str]] | None = None,
+    expected_ambiguous: Mapping[str, tuple[int, str]] | None = None,
 ) -> PartialResumeReview:
     """Read-only check of EVERY persisted child against the approved manifest."""
     held = dict(expected_held or {})
+    ambiguous = dict(expected_ambiguous or {})
     plan = build_campaign_v2_preflight(
         campaign_id=campaign_id,
         template_id=template_id,
@@ -80,12 +82,12 @@ def review_partial_resume(
         )
     expected_names = (
         set(expected_submitted) | set(expected_failed) | set(expected_ready)
-        | set(held)
+        | set(held) | set(ambiguous)
     )
     if (
         len(expected_names)
         != len(expected_submitted) + len(expected_failed)
-        + len(expected_ready) + len(held)
+        + len(expected_ready) + len(held) + len(ambiguous)
         or len(plan.batches) != len(expected_names)
     ):
         raise MarketingCampaignV2SubmitPreconditionError(
@@ -154,6 +156,22 @@ def review_partial_resume(
             ):
                 raise MarketingCampaignV2SubmitPreconditionError(
                     f"Authorized skip no longer matches original error: {name}."
+                )
+        elif name in ambiguous:
+            count, code = ambiguous[name]
+            if (
+                str(row.status) != "RECONCILIATION_REQUIRED"
+                or int(row.recipient_count) != count
+                or str(row.error_code) != code
+                or row.provider_campaign_id is not None
+                or row.submitted_at is not None
+                or row.submit_started_at is None
+                or row.support_ref is not None
+                or row.reconciliation_resolution is not None
+                or (row.provider_response_json or {}).get("http_status") is not None
+            ):
+                raise MarketingCampaignV2SubmitPreconditionError(
+                    f"Ambiguous child changed and must remain quarantined: {name}."
                 )
         elif name in held:
             count, reason = held[name]
