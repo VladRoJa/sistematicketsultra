@@ -6,8 +6,10 @@ on:
       - "backend/app/services/marketing_campaign_v2_partial_resume_service.py"
       - "backend/app/services/marketing_campaign_v2_deterministic_rejection_retry.py"
       - "backend/scripts/resume_campaign8_pending.py"
+      - "backend/scripts/resume_campaign41_ready.py"
       - "backend/scripts/retry_campaign8_la_paz.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_partial_resume.py"
+      - "backend/tests/marketing/test_resume_campaign41_ready.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_deterministic_rejection_retry.py"
       - ".github/workflows/campaign-v2-partial-resume.yml"
   push:
@@ -38,6 +40,7 @@ jobs:
         run: |
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_partial_resume.py \
+            tests/marketing/test_resume_campaign41_ready.py \
             tests/marketing/test_marketing_campaign_v2_deterministic_rejection_retry.py \
             tests/marketing/test_marketing_campaign_v2_submit_service.py \
             tests/marketing/test_marketing_campaign_v2_retry_service.py \
