@@ -26,6 +26,8 @@ KPI_DESEMPENO_ALIAS_SOURCE_FAMILY = "gasca_family"
 
 OUT_OF_SCOPE_RAW_BRANCHES = {
     "BECA",
+    "LA VIGA",
+    "LA_VIGA",
 }
 
 from app.warehouse.services.track_branch_cohort_service import (
