@@ -395,7 +395,10 @@
               </thead>
               <tbody>
                 <tr *ngFor="let batch of plan.batches">
-                  <td>{{ batch.track_label }} <span class="muted">({{ batch.sucursal_canon }})</span></td>
+                  <td>{{ batch.track_label }} <span class="muted">({{ batch.sucursal_canon }})</span>
+              <span class="muted" *ngIf="batch.send_via_sucursal_canon && batch.send_via_sucursal_canon !== batch.sucursal_canon">
+                · Origen: {{ batch.sucursal_canon }} / Emisor: {{ batch.send_via_sucursal_canon }}
+              </span></td>
                   <td class="mono">{{ batch.provider_channel_id || '—' }}</td>
                   <td>{{ batch.template_name }}</td>
                   <td>{{ batch.recipient_count | number }}</td>
