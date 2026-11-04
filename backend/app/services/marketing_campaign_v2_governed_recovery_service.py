@@ -51,6 +51,9 @@ CAMPAIGN_ID = 41
 FAILED_ID = 255
 FAILED_ERROR = "TEMPLATE_NOT_FOUND"
 FAILED_REF = "bc-mw1c1why-phq041"
+SECOND_FAILED_ID = 261
+SECOND_FAILED_ERROR = "TEMPLATE_NOT_FOUND"
+SECOND_FAILED_REF = "bc-mw2eakos-r7lxsj"
 
 
 class GovernedRecoveryBlocked(RuntimeError):
@@ -88,6 +91,19 @@ def verify_suffix(
             and failed.provider_campaign_id is None
             and failed.submitted_at is None,
             "El lote omitido #255 cambió.")
+    # Historical tests also exercise the original #256–#268 recovery.
+    # A continuation starting after #261 must verify its second fixed error.
+    if ready_ids and min(ready_ids) > SECOND_FAILED_ID:
+        second = by_id.get(SECOND_FAILED_ID)
+        require(second is not None and second.status == "PROVIDER_ERROR"
+                and second.error_code == SECOND_FAILED_ERROR
+                and second.support_ref == SECOND_FAILED_REF
+                and second.provider_campaign_id is None
+                and second.submitted_at is None,
+                "Sendero Culiacán #261 ya no conserva el rechazo original.")
+    else:
+        require(all(i < SECOND_FAILED_ID for i in ready_ids),
+                "El sufijo combina lotes a ambos lados del rechazo #261.")
     for position, child_id in enumerate(ready_ids):
         row = by_id.get(child_id)
         require(row is not None, "Falta un lote del manifiesto.")

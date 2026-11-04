@@ -119,3 +119,27 @@ de recuperación se verifica por los provider children y sus
 La recuperación se prueba con PostgreSQL sintético e iVentas simulado;
 no es evidencia de entrega. Si un nuevo envío falla o se interrumpe,
 **no repetir `--apply`**. Revisar primero el lote y conciliación externa.
+
+
+## Segunda interrupción — 2026-11-04, SEND_CUL #261
+
+El envío real con el paquete #1212 sí aceptó los lotes #256–#260:
+PASEO_LA_PAZ (3,604), SANTA_FE (4,723), SAN_ISIDRO_CUL (3,152),
+SAN_LUIS (3,238), SEND_CHIH (2,845); total 17,562 adicionales.
+Su identidad externa está congelada en el script y debe coincidir con
+la persistida. El lote #261 SEND_CUL (3,402) fue rechazado
+`TEMPLATE_NOT_FOUND`, referencia `bc-mw2eakos-r7lxsj`.
+La ejecución se detuvo deliberadamente sin intentar #262–#268.
+
+La segunda continuación requiere aprobación operativa **expresa** para
+omitir también SEND_CUL. No resetea/reintenta #261 ni #255. El nuevo
+dry-run debe arrojar 12 lotes SUBMITTED / 43,266 destinatarios,
+2 rechazados con evidencia íntegra, y 7 READY / 23,755 destinatarios.
+Si cualquier fila, actor, external ID, snapshot, orden, flag o capacidad
+cambia, la continuación se bloquea.
+
+No ejecutar el anterior comando `--confirm CONTINUAR_41_SIN_255`.
+Cuando se autorice el nuevo envío, debe utilizar el nuevo token de
+confirmación `CONTINUAR_41_SIN_255_261` y mantenerse restringido a
+la misma ruta controlada, una sola vez y con una revisión manual antes.
+El preflight local no certifica existencia de plantilla en iVentas.

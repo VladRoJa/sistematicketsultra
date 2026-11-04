@@ -10,7 +10,9 @@ import pytest
 from scripts.resume_campaign41_ready import (
     RecoveryBlocked,
     _check_original_order,
+    _check_second_stoppage_order,
     _validate_started_dispatch_window,
+    RECOVERY_ACCEPTED,
 )
 
 
@@ -274,4 +276,67 @@ def test_governed_recovery_requires_process_local_kill_switches(monkeypatch):
         governed_recovery.claim_next(
             review=NS(), child=NS(), actor_user_id=7,
             completed=(), session=NS(),
+        )
+
+
+def _after_second_failure():
+    rows = [
+        _row(253, "SUBMITTED", provider_id="original-253",
+             submitted=True, attempted=True),
+        _row(254, "SUBMITTED", provider_id="original-254",
+             submitted=True, attempted=True),
+        _row(255, "PROVIDER_ERROR", attempted=True),
+    ]
+    for child_id, (branch, external_id) in RECOVERY_ACCEPTED.items():
+        row = _row(child_id, "SUBMITTED", provider_id=external_id,
+                   submitted=True, attempted=True)
+        row.sucursal_canon = branch
+        row.submitted_by_user_id = 47
+        rows.append(row)
+    rows.append(_row(261, "PROVIDER_ERROR", attempted=True))
+    rows.extend(_row(child_id, "READY") for child_id in range(262, 269))
+    return rows
+
+
+def test_second_failure_returns_only_seven_unattempted_children():
+    rows = _after_second_failure()
+    assert [r.id for r in _check_second_stoppage_order(rows)] == list(range(262, 269))
+
+
+@pytest.mark.parametrize("change", [
+    lambda rows: setattr(rows[3], "status", "READY"),
+    lambda rows: setattr(rows[3], "provider_campaign_id", "foreign"),
+    lambda rows: setattr(rows[8], "status", "SUBMITTED"),
+    lambda rows: setattr(rows[9], "submit_started_at", object()),
+    lambda rows: setattr(rows[10], "provider_campaign_id", "already-claimed"),
+    lambda rows: setattr(rows[7], "submitted_by_user_id", 99),
+])
+def test_second_failure_fails_closed_on_accepted_or_ready_drift(change):
+    rows = _after_second_failure()
+    change(rows)
+    with pytest.raises(RecoveryBlocked):
+        _check_second_stoppage_order(rows)
+
+
+def test_governed_suffix_rejects_modified_second_error():
+    rows = [
+        _governed_row(253, "SUBMITTED", provider_id="old-253"),
+        _governed_row(255, "PROVIDER_ERROR"),
+        _governed_row(261, "PROVIDER_ERROR"),
+        _governed_row(262, "READY"),
+        _governed_row(263, "READY"),
+    ]
+    rows[2].error_code = "TEMPLATE_NOT_FOUND"
+    rows[2].support_ref = "bc-mw2eakos-r7lxsj"
+    governed_recovery.verify_suffix(
+        rows=rows, accepted_original=((253, "old-253"),),
+        ready_ids=(262, 263), completed=(),
+        next_id=262, actor_user_id=7,
+    )
+    rows[2].support_ref = "wrong-ref"
+    with pytest.raises(governed_recovery.GovernedRecoveryBlocked, match="261"):
+        governed_recovery.verify_suffix(
+            rows=rows, accepted_original=((253, "old-253"),),
+            ready_ids=(262, 263), completed=(),
+            next_id=262, actor_user_id=7,
         )
