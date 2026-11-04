@@ -55,7 +55,7 @@ test('el dock desactiva avisos por job, no detiene envíos ni reabre por polling
   assert.match(dismissMethod, /persistDismissedBackgroundJobIds\(/);
   assert.match(dismissMethod, /this.jobs = this.jobs.filter\(/);
   assert.doesNotMatch(dismissMethod, /stopBackgroundJob|startBackgroundJob/);
-  assert.match(dock, /visibleBackgroundJobs\(response.jobs, Date.now\(\)\)[\s\S]{0,100}filter\(job => !this.dismissedJobIds.has\(job.job_id\)\)/);
+  assert.match(dock, /visibleBackgroundJobs\([\s\S]{0,100}response.jobs.filter\(job => !this.dismissedJobIds.has\(job.job_id\)\)/);
   assert.doesNotMatch(dock, /this.dismissed = true|this.dismissed = false/);
 });
 
