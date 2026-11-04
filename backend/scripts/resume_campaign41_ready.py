@@ -95,7 +95,7 @@ def _review() -> RecoveryReview:
         db.session.query(MarketingCampaignV2DispatchApprovalORM)
         .filter(MarketingCampaignV2DispatchApprovalORM.campaign_v2_id == CAMPAIGN_ID)
         .order_by(MarketingCampaignV2DispatchApprovalORM.revision_no.desc())
-        .one_or_none()
+        .first()
     )
     _require(approval is not None, "No existe aprobación gobernada para #41.")
     execution = (
