@@ -161,7 +161,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   }
 
   senderForBinding(binding: CampaignV2ChannelBinding): string {
-    const route = binding.metadata['dispatch_via_binding_id'];
+    const route = binding.metadata?.['dispatch_via_binding_id'];
     if (typeof route !== 'number') { return 'Canal propio'; }
     return this.bindings.find(row => row.id === route)?.sucursal_canon ?? 'Emisor inválido';
   }
@@ -361,7 +361,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     this.bindingActive.setValue(binding.is_active);
     this.bindingDefault.setValue(binding.is_default);
     this.bindingMetadata = { ...binding.metadata };
-    const route = binding.metadata['dispatch_via_binding_id'];
+    const route = binding.metadata?.['dispatch_via_binding_id'];
     this.bindingRouteViaBindingId.setValue(typeof route === 'number' ? route : null);
     this.notice = '';
     this.error = '';
