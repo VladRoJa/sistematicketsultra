@@ -792,6 +792,7 @@ export class MarketingCampaignV2CampaignDetailDialogComponent implements OnInit 
       MISSING_CHANNEL: 'Sin channel configurado',
       MISSING_REQUIRED_VARIABLE: 'Falta variable requerida',
       TEMPLATE_CHANNEL_MISMATCH: 'Template incompatible con channel',
+      PROVIDER_TEMPLATE_UNVERIFIED: 'Plantilla aún no verificada en iVentas',
     };
     return labels[reason] || reason;
   }
