@@ -260,3 +260,18 @@ def test_ambiguous_provider_result_is_persisted_and_stops(monkeypatch):
     )
     assert result[1:] == ("RECONCILIATION_REQUIRED", "UNEXPECTED_PROVIDER_RESULT")
     assert saved[0]["status"] == "RECONCILIATION_REQUIRED"
+
+
+
+def test_governed_recovery_requires_process_local_kill_switches(monkeypatch):
+    monkeypatch.setattr(governed_recovery, "has_app_context", lambda: True)
+    monkeypatch.setattr(
+        governed_recovery, "current_app",
+        NS(config={"CAMPAIGN_V2_PROVIDER_SEND_ENABLED": False,
+                   "CAMPAIGN_V2_GOVERNED_DISPATCH_ENABLED": True}),
+    )
+    with pytest.raises(governed_recovery.GovernedRecoveryBlocked, match="habilitada"):
+        governed_recovery.claim_next(
+            review=NS(), child=NS(), actor_user_id=7,
+            completed=(), session=NS(),
+        )
