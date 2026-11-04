@@ -25,6 +25,9 @@ from app.models.marketing import (
 from app.services.marketing_campaign_v2_confirmed_rejection import (
     confirmed_rejected_child,
 )
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, capture_sender_routes,
+)
 from app.services.marketing_campaign_v2_contact_gate_service import (
     acquire_campaign_v2_contact_gate,
 )
@@ -249,6 +252,10 @@ def freeze_failed_cohort(*, source_campaign_id: int,
         original = review["original"]
         definition = original.audience_definition_json or {}
         filters = deepcopy(definition.get("filters") or {})
+        sender_routes = capture_sender_routes(
+            session=active,
+            recipient_origins=(row.sucursal for row in review["recipients"]),
+        )
         suffix = " · Recuperación fallidas"
         campaign_name = str(original.name or "Campaign V2")[:255-len(suffix)] + suffix
         derived = Campaign(
@@ -268,6 +275,7 @@ def freeze_failed_cohort(*, source_campaign_id: int,
                     "fingerprint": review["fingerprint"],
                     "summary": {"unique_recipient_count": expected_recipient_count},
                 },
+                **({ROUTING_SNAPSHOT_KEY: sender_routes} if sender_routes else {}),
                 "failed_recovery": {
                     "version": FAILED_RECOVERY_VERSION,
                     "source_campaign_id": source_campaign_id,
