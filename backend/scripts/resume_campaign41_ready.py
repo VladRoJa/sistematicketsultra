@@ -1,4 +1,4 @@
-"""One-off governed Campaign #41 continuation, excluding PASEO_2000 #255.
+"""One-off governed Campaign #41 continuation after two deterministic template rejections.
 
 Default is a read-only dry run. --apply makes REAL iVentas requests only for
 untouched READY children after the failed child. Neither the original error
@@ -46,7 +46,18 @@ FAILED_ERROR = "TEMPLATE_NOT_FOUND"
 FAILED_SUPPORT_REF = "bc-mw1c1why-phq041"
 FAILED_CHANNEL = "6a299740e83fa20008b59c9a"
 TEMPLATE_NAME = "promos_noviembre_v"
-CONFIRMATION = "CONTINUAR_41_SIN_255"
+SECOND_FAILED_ID = 261
+SECOND_FAILED_BRANCH = "SEND_CUL"
+SECOND_FAILED_RECIPIENTS = 3402
+SECOND_FAILED_REF = "bc-mw2eakos-r7lxsj"
+RECOVERY_ACCEPTED = {
+    256: ("PASEO_LA_PAZ", "6aeb6b14d85a8f00081fe177"),
+    257: ("SANTA_FE", "6aeb6b53b5e53c00082fc5b8"),
+    258: ("SAN_ISIDRO_CUL", "6aeb6b9201d5f90009b01b88"),
+    259: ("SAN_LUIS", "6aeb6bd3b5e53c00082fcf17"),
+    260: ("SEND_CHIH", "6aeb6c12b5e53c00082fd33a"),
+}
+CONFIRMATION = "CONTINUAR_41_SIN_255_261"
 
 
 class RecoveryBlocked(RuntimeError):
@@ -89,6 +100,45 @@ def _check_original_order(rows: list, failed_id: int) -> list:
                  for row in rows[pos + 1:]),
              "Hay intentos posteriores o cambió un READY. No repetir.")
     return rows[pos + 1:]
+
+
+def _check_second_stoppage_order(rows: list) -> list:
+    """Only an immutable accepted prefix, #255 error, 5 accepted, #261 error, READY suffix."""
+    ids = [int(row.id) for row in rows]
+    _require(len(ids) == len(set(ids)), "IDs duplicados en manifiesto.")
+    _require(FAILED_CHILD_ID in ids and SECOND_FAILED_ID in ids,
+             "Falta uno de los dos rechazos.")
+    first = ids.index(FAILED_CHILD_ID)
+    second = ids.index(SECOND_FAILED_ID)
+    _require(first > 0 and second > first + 1 and second < len(rows) - 1,
+             "La secuencia de continuación no está íntegra.")
+    _require(all(row.status == "SUBMITTED" and row.provider_campaign_id
+                 and row.submitted_at is not None
+                 for row in rows[:first]),
+             "Los aceptados originales cambiaron.")
+    _require(rows[first].status == "PROVIDER_ERROR"
+             and rows[second].status == "PROVIDER_ERROR",
+             "Uno de los rechazos ya no está intacto.")
+    recovered = rows[first + 1:second]
+    _require([int(row.id) for row in recovered] == list(RECOVERY_ACCEPTED),
+             "Los cinco lotes de recuperación cambiaron de orden.")
+    _require(all(row.sucursal_canon == RECOVERY_ACCEPTED[int(row.id)][0]
+                 and row.status == "SUBMITTED"
+                 and row.provider_campaign_id == RECOVERY_ACCEPTED[int(row.id)][1]
+                 and row.submitted_at is not None
+                 and row.submitted_by_user_id == 47
+                 for row in recovered),
+             "Un lote ya aceptado en recuperación cambió.")
+    _require([int(row.id) for row in rows[second + 1:]] ==
+             list(range(262, 269)),
+             "El sufijo ya no corresponde a #262–#268.")
+    _require(all(row.status == "READY"
+                 and row.provider_campaign_id is None
+                 and row.submit_started_at is None
+                 and row.submitted_at is None
+                 for row in rows[second + 1:]),
+             "Hay un envío posterior a #261; no repetir.")
+    return rows[second + 1:]
 
 
 def _validate_started_dispatch_window(
@@ -206,9 +256,24 @@ def _review() -> RecoveryReview:
              and not failed.retry_history_json
              and (failed.provider_response_json or {}).get("http_status") == 400,
              "El rechazo iVentas #255 no coincide con la evidencia autorizada.")
+    second_failed = by_name.get(SECOND_FAILED_BRANCH)
+    _require(second_failed is not None
+             and int(second_failed.id) == SECOND_FAILED_ID
+             and int(second_failed.recipient_count) == SECOND_FAILED_RECIPIENTS
+             and second_failed.status == "PROVIDER_ERROR"
+             and second_failed.error_code == FAILED_ERROR
+             and second_failed.support_ref == SECOND_FAILED_REF
+             and second_failed.template_name == TEMPLATE_NAME
+             and second_failed.provider_campaign_id is None
+             and second_failed.submitted_at is None
+             and second_failed.submit_started_at is not None
+             and not second_failed.reconciliation_resolution
+             and int(second_failed.retry_attempt_count or 0) == 0
+             and not second_failed.retry_history_json,
+             "Rechazo #261 no corresponde a la evidencia de producción.")
     planned_ready = [by_name[batch.sucursal_canon] for batch in plan.batches
                      if manifest[batch.sucursal_canon]["planned_status"] == "READY"]
-    pending = _check_original_order(planned_ready, FAILED_CHILD_ID)
+    pending = _check_second_stoppage_order(planned_ready)
     _validate_started_dispatch_window(
         ready_rows=planned_ready,
         failed_id=FAILED_CHILD_ID,
@@ -216,7 +281,8 @@ def _review() -> RecoveryReview:
         expires_at=approval.expires_at,
     )
     _require(manifest[FAILED_BRANCH]["planned_status"] == "READY"
-             and len(pending) > 0,
+             and manifest[SECOND_FAILED_BRANCH]["planned_status"] == "READY"
+             and len(pending) == 7,
              "No hay pendientes dentro del manifiesto autorizado.")
     if job is not None:
         job_ids = list(job.pending_child_ids or [])
@@ -249,11 +315,15 @@ def _review() -> RecoveryReview:
             expected_failed[row.sucursal_canon] = (
                 FAILED_RECIPIENTS, FAILED_ERROR, FAILED_SUPPORT_REF,
             )
+        elif row.id == SECOND_FAILED_ID:
+            expected_failed[row.sucursal_canon] = (
+                SECOND_FAILED_RECIPIENTS, FAILED_ERROR, SECOND_FAILED_REF,
+            )
         elif row.status == "READY":
             expected_ready[row.sucursal_canon] = int(row.recipient_count)
         else:
             raise RecoveryBlocked("Existe otro estado inesperado en campaña #41.")
-    _require(len(expected_failed) == 1 and len(expected_ready) == len(pending),
+    _require(len(expected_failed) == 2 and len(expected_ready) == len(pending),
              "Se detectaron omisiones adicionales o pendientes distintos.")
     complete = review_partial_resume(
         campaign_id=CAMPAIGN_ID,
@@ -296,7 +366,7 @@ def _check_current_capacity(review: RecoveryReview, batches: tuple) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true",
-                        help="Envía realmente SOLO los READY posteriores a #255")
+                        help="Envía realmente SOLO los READY posteriores a #261")
     parser.add_argument("--confirm", default="",
                         help="Confirmación literal requerida para --apply")
     args = parser.parse_args()
@@ -316,6 +386,7 @@ def main() -> int:
             print("ACEPTADOS_PREVIOS = " + str(review.submitted) +
                   " / " + str(review.submitted_recipients), flush=True)
             print("OMITIDO = PASEO_2000 | #255 | 7994 | PROVIDER_ERROR", flush=True)
+            print("OMITIDO = SEND_CUL | #261 | 3402 | PROVIDER_ERROR", flush=True)
             print("HELD = " + str(review.held), flush=True)
             print("PENDIENTES = " + str(len(pending)) + " / " +
                   str(sum(len(x.batch.recipients) for x in pending)), flush=True)
@@ -372,7 +443,7 @@ def main() -> int:
                     return 2
             print("ACEPTADOS_NUEVOS = " + str(Counter(x[1] for x in results)["SUBMITTED"]),
                   flush=True)
-            print("CAMPAÑA_41 = CONTINUACIÓN_CON_PASEO_2000_EXCLUIDO", flush=True)
+            print("CAMPAÑA_41 = CONTINUACIÓN_CON_255_Y_261_EXCLUIDOS", flush=True)
             print("EJECUCIÓN_ORIGINAL = REVIEW_REQUIRED (sin borrar error)", flush=True)
             return 0
         finally:
