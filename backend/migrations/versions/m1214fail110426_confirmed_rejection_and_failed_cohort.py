@@ -26,24 +26,24 @@ def upgrade():
     op.drop_constraint(
         "ck_mkt_v2_bg_job_events_kind",
         "marketing_campaign_v2_background_job_events",
-        schema="public", type_="check",
+        type_="check",
     )
     op.create_check_constraint(
         "ck_mkt_v2_bg_job_events_kind",
         "marketing_campaign_v2_background_job_events",
-        NEW_EVENTS, schema="public",
+        NEW_EVENTS,
     )
     op.create_table(
         "marketing_campaign_v2_failed_recoveries",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column(
             "source_campaign_id", sa.BigInteger(),
-            sa.ForeignKey("public.marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+            sa.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
             "derived_campaign_id", sa.BigInteger(),
-            sa.ForeignKey("public.marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
+            sa.ForeignKey("marketing_campaign_v2_campaigns.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column("failed_fingerprint", sa.String(64), nullable=False),
@@ -51,7 +51,7 @@ def upgrade():
         sa.Column("recipient_count", sa.Integer(), nullable=False),
         sa.Column(
             "created_by_user_id", sa.Integer(),
-            sa.ForeignKey("public.users.id", ondelete="SET NULL"), nullable=True,
+            sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
         ),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), nullable=False,
@@ -71,31 +71,29 @@ def upgrade():
             "length(failed_fingerprint) = 64",
             name="ck_mkt_v2_failed_recoveries_digest",
         ),
-        schema="public",
     )
 
 
 def downgrade():
     bind = op.get_bind()
     if bind.execute(
-        sa.text("SELECT EXISTS(SELECT 1 FROM public.marketing_campaign_v2_failed_recoveries)")
+        sa.text("SELECT EXISTS(SELECT 1 FROM marketing_campaign_v2_failed_recoveries)")
     ).scalar_one():
         raise RuntimeError("Cannot drop nonempty failed campaign derivation audit.")
     if bind.execute(sa.text("""
         SELECT EXISTS(
-          SELECT 1 FROM public.marketing_campaign_v2_background_job_events
+          SELECT 1 FROM marketing_campaign_v2_background_job_events
           WHERE event_kind='CHILD_REJECTED'
         )
     """)).scalar_one():
         raise RuntimeError("Cannot drop confirmed rejection events.")
-    op.drop_table("marketing_campaign_v2_failed_recoveries", schema="public")
+    op.drop_table("marketing_campaign_v2_failed_recoveries")
     op.drop_constraint(
         "ck_mkt_v2_bg_job_events_kind",
-        "marketing_campaign_v2_background_job_events", schema="public",
+        "marketing_campaign_v2_background_job_events",
         type_="check",
     )
     op.create_check_constraint(
         "ck_mkt_v2_bg_job_events_kind",
         "marketing_campaign_v2_background_job_events", OLD_EVENTS,
-        schema="public",
     )
