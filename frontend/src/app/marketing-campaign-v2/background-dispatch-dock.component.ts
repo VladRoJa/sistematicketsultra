@@ -12,6 +12,7 @@ import {
   visibleBackgroundJobs,
 } from './background-dispatch.model';
 import { BackgroundDispatchActivityService } from './background-dispatch-activity.service';
+import { loadDismissedBackgroundJobIds, persistDismissedBackgroundJobIds } from './background-dispatch-dock-visibility';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { MarketingCampaignV2GovernedConsoleDialogComponent } from './marketing-campaign-v2-governed-console-dialog.component';
 
@@ -34,7 +35,7 @@ export class BackgroundDispatchDockComponent implements OnInit {
 
   jobs: BackgroundDispatchJob[] = [];
   stale = false;
-  dismissed = false;
+  private dismissedJobIds = new Set<number>();
   readonly label = backgroundDispatchLabel;
   readonly progress = backgroundDispatchProgress;
 
@@ -44,6 +45,7 @@ export class BackgroundDispatchDockComponent implements OnInit {
     // The backend GET is the authority for dispatch permissions. Avoid
     // duplicating role allowlists that can hide an authorized operator's job.
     if (!this.initialIdentity) return;
+    this.dismissedJobIds = loadDismissedBackgroundJobIds(this.initialIdentity);
     this.refresh();
     interval(10000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.activity.changes$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
@@ -51,9 +53,13 @@ export class BackgroundDispatchDockComponent implements OnInit {
   }
 
   dismissDock(): void {
-    // Visual-only dismissal: never stop or alter a background dispatch job.
-    // Refresh continues tracking jobs without reopening the dock on each poll.
-    this.dismissed = true;
+    // Deactivate these specific alerts, not the dispatch jobs. New jobs can
+    // still appear, and dismissals survive polling, navigation and page reloads.
+    if (!this.initialIdentity || this.currentIdentity() !== this.initialIdentity) return;
+    this.dismissedJobIds = persistDismissedBackgroundJobIds(
+      this.initialIdentity, this.dismissedJobIds, this.jobs.map(job => job.job_id),
+    );
+    this.jobs = this.jobs.filter(job => !this.dismissedJobIds.has(job.job_id));
   }
 
   private currentIdentity(): string {
@@ -77,7 +83,8 @@ export class BackgroundDispatchDockComponent implements OnInit {
           return;
         }
         this.stale = false;
-        this.jobs = visibleBackgroundJobs(response.jobs, Date.now());
+        this.jobs = visibleBackgroundJobs(response.jobs, Date.now())
+          .filter(job => !this.dismissedJobIds.has(job.job_id));
       },
       error: (error: HttpErrorResponse) => {
         if ([401, 403, 404].includes(error.status)) {
