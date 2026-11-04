@@ -227,3 +227,74 @@ def test_failed_frozen_cohort_is_audited_idempotent_and_never_sends(monkeypatch)
     assert again["derived_campaign_id"] == 900
     assert again["created"] is False
     assert session.commits == first_commits
+
+
+def test_worker_continues_between_two_confirmed_failures_without_replay(monkeypatch):
+    sequence = [
+        "SUBMITTED", "PROVIDER_ERROR", "SUBMITTED",
+        "PROVIDER_ERROR", "SUBMITTED",
+    ]
+    ids = [11, 12, 13, 14, 15]
+    job = NS(pending_child_ids=ids, initial_pending_count=len(ids))
+    session = NS(rollback=MagicMock(), expire_all=MagicMock())
+    provider_calls = []
+    completions = []
+    monkeypatch.setattr(worker, "_owned", lambda *_a, **_kw: job)
+    monkeypatch.setattr(worker, "_prepare", lambda _s, _j, _w, _g, index, _c, _at: (
+        {"child_id": ids[index]}, NS(),
+    ))
+    monkeypatch.setattr(worker, "execute_governed_child",
+                        lambda **kw: provider_calls.append(kw["child_id"]) or {
+                            "child_id": kw["child_id"],
+                            "status": sequence[ids.index(kw["child_id"])],
+                            "definitively_not_accepted": kw["child_id"] in (12, 14),
+                        })
+    monkeypatch.setattr(worker, "_accepted",
+                        lambda _s, _j, _w, _g, id_, _at:
+                        completions.append(("ACCEPTED", id_)) or id_ == 15)
+    monkeypatch.setattr(worker, "_rejected",
+                        lambda _s, _j, _w, _g, id_, _at:
+                        completions.append(("REJECTED", id_)) or False)
+    monkeypatch.setattr(worker, "_fail_closed",
+                        lambda *_args: pytest.fail("confirmed rejections must not quarantine"))
+    worker.process_claimed_job(
+        session=session, job_id=7, worker_id="worker", generation=1,
+        config=NS(), provider_factory=lambda: NS(),
+    )
+    assert provider_calls == ids
+    assert completions == [
+        ("ACCEPTED", 11), ("REJECTED", 12), ("ACCEPTED", 13),
+        ("REJECTED", 14), ("ACCEPTED", 15),
+    ]
+
+
+def test_worker_stops_on_ambiguous_result_before_next_provider_call(monkeypatch):
+    ids = [11, 12, 13]
+    job = NS(pending_child_ids=ids, initial_pending_count=3)
+    session = NS(rollback=MagicMock(), expire_all=MagicMock())
+    provider_calls = []
+    quarantined = []
+    monkeypatch.setattr(worker, "_owned", lambda *_a, **_kw: job)
+    monkeypatch.setattr(worker, "_prepare", lambda _s, _j, _w, _g, index, _c, _at: (
+        {"child_id": ids[index]}, NS(),
+    ))
+    def execute(**kw):
+        provider_calls.append(kw["child_id"])
+        return {
+            "child_id": kw["child_id"],
+            "status": "SUBMITTED" if kw["child_id"] == 11 else "RECONCILIATION_REQUIRED",
+            "definitively_not_accepted": False,
+        }
+    monkeypatch.setattr(worker, "execute_governed_child", execute)
+    monkeypatch.setattr(worker, "_accepted", lambda *_args: False)
+    monkeypatch.setattr(worker, "_rejected", lambda *_args: pytest.fail(
+        "ambiguous must never enter confirmed-rejected branch"
+    ))
+    monkeypatch.setattr(worker, "_fail_closed",
+                        lambda _s, _j, _w, _g, reason: quarantined.append(reason))
+    worker.process_claimed_job(
+        session=session, job_id=7, worker_id="worker", generation=1,
+        config=NS(), provider_factory=lambda: NS(),
+    )
+    assert provider_calls == [11, 12]
+    assert quarantined == ["PROVIDER_RESULT_REVIEW_REQUIRED"]
