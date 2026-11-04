@@ -14,6 +14,8 @@ on:
       - "backend/migrations/versions/n26c10202626_campaign_v2_background_jobs.py"
       - "backend/migrations/versions/p1181c102030_openings_comment_guard_metadata.py"
       - "backend/tests/marketing/test_background_dispatch_*"
+      - "backend/tests/marketing/test_campaign_v2_confirmed_failures.py"
+      - "backend/migrations/versions/m1214fail110426_confirmed_rejection_and_failed_cohort.py"
       - "frontend/src/app/marketing-campaign-v2/**"
       - "frontend/src/app/layout/**"
       - "frontend/tests/background-dispatch-m2-integration.test.cjs"

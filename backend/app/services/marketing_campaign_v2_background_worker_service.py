@@ -21,6 +21,7 @@ from app.models.user_model import UserORM
 from app.services.marketing_access import (
     MarketingAuthorizationError, resolve_marketing_access,
 )
+from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
     BackgroundDispatchClaim, BackgroundDispatchStoppedBeforeClaim,
     execute_governed_child,
@@ -254,6 +255,31 @@ def _accepted(session: Any, job_id: int, worker_id: str, generation: int,
     return finished
 
 
+def _rejected(session: Any, job_id: int, worker_id: str, generation: int,
+              child_id: int, at: datetime) -> bool:
+    """Persist durable progress past a provably unaccepted child, no replay."""
+    job = _owned(session, job_id, worker_id, generation, at)
+    if job.current_child_id != child_id:
+        raise BackgroundWorkerReview("CURRENT_CHILD_CHANGED")
+    child = session.get(Child, child_id)
+    if (child is None or child.campaign_v2_id != job.campaign_v2_id
+            or not confirmed_rejected_child(child)):
+        raise BackgroundWorkerReview("REJECTION_NOT_DEFINITIVE")
+    job.current_child_id = None
+    job.updated_at = at
+    _event(session, job, "CHILD_REJECTED", at,
+           child_id=child_id, reason=str(child.error_code)[:64])
+    if job.status == "STOP_REQUESTED":
+        _stop_or_complete(session, job, at, done=False)
+    elif child_id == _ids(job)[-1]:
+        _stop_or_complete(session, job, at, done=True)
+    else:
+        job.worker_lease_until = at + LEASE
+    finished = job.status in ("STOPPED", "COMPLETED")
+    session.commit()
+    return finished
+
+
 def _stopped_before_claim(session: Any, job_id: int, worker_id: str,
                           generation: int, child_id: int) -> None:
     """STOPPED only when READY was never claimed as SUBMITTING."""
@@ -321,11 +347,19 @@ def process_claimed_job(*, session: Any, job_id: int, worker_id: str,
                 send_enabled=_enabled(config),
                 governed_enabled=_enabled(config), session=session,
             )
-            if response.get("status") != "SUBMITTED" or response.get("child_id") != child_id:
-                raise BackgroundWorkerReview("PROVIDER_RESULT_REVIEW_REQUIRED")
+            if response.get("child_id") != child_id:
+                raise BackgroundWorkerReview("CHILD_RESULT_IDENTITY_CHANGED")
             session.expire_all()
-            if _accepted(session, job_id, worker_id, generation,
-                         child_id, _now(clock())):
+            if response.get("status") == "SUBMITTED":
+                completed = _accepted(session, job_id, worker_id, generation,
+                                      child_id, _now(clock()))
+            elif (response.get("status") == "PROVIDER_ERROR" and
+                  response.get("definitively_not_accepted") is True):
+                completed = _rejected(session, job_id, worker_id, generation,
+                                      child_id, _now(clock()))
+            else:
+                raise BackgroundWorkerReview("PROVIDER_RESULT_REVIEW_REQUIRED")
+            if completed:
                 return
     except BackgroundDispatchStoppedBeforeClaim:
         if child_id is not None:

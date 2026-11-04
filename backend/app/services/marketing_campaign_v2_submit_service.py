@@ -11,6 +11,7 @@ from typing import Any, Mapping
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2ProviderCampaignORM,
@@ -386,13 +387,38 @@ def get_campaign_v2_submit_state(
         campaign_id=normalized_campaign_id,
         session=active_session,
     )
+    safe = [row for row in rows if confirmed_rejected_child(row)]
+    uncertain = [row for row in rows if row.status in {
+        "RECONCILIATION_REQUIRED", "SUBMITTING",
+    }]
+    ready = [row for row in rows if row.status == "READY"]
+    accepted = [row for row in rows if (
+        row.status in {"SUBMITTED", "SCHEDULED"}
+        and row.provider_campaign_id is not None
+    )]
+    unresolved = [row for row in rows if (
+        row.status == "PROVIDER_ERROR" and row not in safe
+    )]
     return {
         "status": _aggregate_status(rows),
         "has_provider_campaigns": bool(rows),
-        "batches": [
-            _serialize_row_result_dict(row)
-            for row in rows
-        ],
+        "batches": [_serialize_row_result_dict(row) for row in rows],
+        "summary": {
+            "accepted_batches": len(accepted),
+            "accepted_recipients": sum(int(row.recipient_count) for row in accepted),
+            "confirmed_rejected_batches": len(safe),
+            "confirmed_rejected_recipients": sum(int(row.recipient_count) for row in safe),
+            "uncertain_batches": len(uncertain),
+            "uncertain_recipients": sum(int(row.recipient_count) for row in uncertain),
+            "unattempted_batches": len(ready),
+            "unattempted_recipients": sum(int(row.recipient_count) for row in ready),
+            "other_rejected_batches": len(unresolved),
+            "can_create_failed_recovery": bool(safe) and not ready and not any(
+                row.status in {"PREPARED", "SUBMITTING"} for row in rows
+            ),
+            "provider_template_verification": "UNVERIFIED",
+            "delivery_confirmed": False,
+        },
     }
 
 
@@ -988,6 +1014,7 @@ def _serialize_row_result_dict(
         "retry_last_by_user_id": result.retry_last_by_user_id,
         "error_code": result.error_code,
         "support_ref": result.support_ref,
+        "definitively_not_accepted": confirmed_rejected_child(row),
     }
 
 

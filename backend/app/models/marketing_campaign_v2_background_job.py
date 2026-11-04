@@ -103,7 +103,7 @@ class MarketingCampaignV2BackgroundJobEventORM(db.Model):
         db.UniqueConstraint("job_id", "event_no", name="uq_mkt_v2_bg_job_events_sequence"),
         db.CheckConstraint("event_no > 0", name="ck_mkt_v2_bg_job_events_sequence"),
         db.CheckConstraint(
-            "event_kind IN ('ENQUEUED','STARTED','CHILD_ACCEPTED','STOP_REQUESTED',"
+            "event_kind IN ('ENQUEUED','STARTED','CHILD_ACCEPTED','CHILD_REJECTED','STOP_REQUESTED',"
             "'STOPPED','COMPLETED','REVIEW_REQUIRED')",
             name="ck_mkt_v2_bg_job_events_kind"),
         db.Index("ix_mkt_v2_bg_job_events_job_time", "job_id", "occurred_at"),

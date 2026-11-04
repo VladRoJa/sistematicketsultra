@@ -1081,12 +1081,58 @@ export interface CampaignV2SubmitBatch {
   support_ref: string | null;
 }
 
+export interface CampaignV2FailedRecoveryPreview {
+  source_campaign_id: number;
+  source_child_ids: number[];
+  candidate_fingerprint: string;
+  recipient_count: number;
+  branches: Array<{
+    child_id: number;
+    sucursal_canon: string;
+    provider_channel_id: string;
+    template_name: string;
+    recipient_count: number;
+    error_code: string;
+    support_ref: string;
+  }>;
+  template_provider_verification: 'UNVERIFIED';
+  provider_requests: 0;
+  send_authorized: false;
+}
+
+export interface CampaignV2FailedRecoveryFrozen {
+  derived_campaign_id: number;
+  source_campaign_id: number;
+  source_child_ids: number[];
+  recipient_count: number;
+  status: 'FROZEN';
+  created: boolean;
+  provider_requests: 0;
+  send_authorized: false;
+}
+
+export interface CampaignV2BatchSummary {
+  accepted_batches: number;
+  accepted_recipients: number;
+  confirmed_rejected_batches: number;
+  confirmed_rejected_recipients: number;
+  uncertain_batches: number;
+  uncertain_recipients: number;
+  unattempted_batches: number;
+  unattempted_recipients: number;
+  other_rejected_batches: number;
+  can_create_failed_recovery: boolean;
+  provider_template_verification: 'UNVERIFIED';
+  delivery_confirmed: false;
+}
+
 export interface CampaignV2SubmitState {
   enabled: boolean;
   can_send: boolean;
   status: CampaignV2SubmitStatus;
   has_provider_campaigns: boolean;
   batches: CampaignV2SubmitBatch[];
+  summary?: CampaignV2BatchSummary;
 }
 
 export interface CampaignV2SubmitResponse {

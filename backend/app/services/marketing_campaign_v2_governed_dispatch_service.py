@@ -43,6 +43,9 @@ from app.services.marketing_campaign_v2_contact_gate_service import (
     acquire_campaign_v2_contact_gate,
     verify_outbound_contact_admission,
 )
+from app.services.marketing_campaign_v2_confirmed_rejection import (
+    confirmed_not_accepted, confirmed_rejected_child,
+)
 from app.services.marketing_campaign_v2_submit_service import (
     _load_campaign_rows,
     _persist_provider_failure, _persist_provider_success,
@@ -158,20 +161,45 @@ def manifest_digest(manifest: Any) -> str:
 
 
 
+def _verified_prefix_and_suffix(*, ready: list, execution: Any) -> tuple[list, list]:
+    """Prove that all attempted children form one immutable, ordered prefix.
+
+    Deterministically rejected children are terminal attempts, never retries.
+    Unknown failures, SUBMITTING and uncertain outcomes are always blocked.
+    """
+    statuses = [str(row.status) for row in ready]
+    if not statuses:
+        raise GovernedDispatchConflict("No hay lotes aprobados READY.")
+    first_pending = next((i for i, state in enumerate(statuses)
+                          if state == "READY"), len(statuses))
+    prefix = ready[:first_pending]
+    pending = ready[first_pending:]
+    if any(row.status != "READY" for row in pending):
+        raise GovernedDispatchConflict("El historial tiene un envío fuera de orden.")
+    if int(execution.last_child_id or 0) != (
+            int(prefix[-1].id) if prefix else 0):
+        raise GovernedDispatchConflict("Último intento no coincide con la auditoría.")
+    for row in prefix:
+        if row.status == "SUBMITTED":
+            if (not row.provider_campaign_id or row.submitted_at is None
+                    or row.submit_started_at is None
+                    or row.submitted_by_user_id is None):
+                raise GovernedDispatchConflict("Aceptación anterior incompleta.")
+        elif not confirmed_rejected_child(row):
+            raise GovernedDispatchConflict("Hay un resultado no conciliado en el prefijo.")
+    return prefix, pending
+
+
 def _verified_started_suffix(*, session: Any, approval: Any, plan: Any,
                              manifest: dict, children: list) -> tuple:
-    """An accepted, ordered prefix is the ONLY authority to outlive first-start TTL.
-
-    Never creates/retries/claims provider work. Call under the campaign row lock.
-    The first actual provider claim must predate the original approval expiry.
-    """
+    """An orderly, durable attempted prefix may continue past first-start TTL."""
     execution = session.query(MarketingCampaignV2GovernedExecutionORM).filter(
         MarketingCampaignV2GovernedExecutionORM.approval_id == approval.id,
     ).one_or_none()
     if (execution is None or execution.status != "AUTHORIZED" or
             execution.manifest_digest != manifest_digest(approval.manifest_json) or
             _database_date(execution.confirmed_at) >= _database_date(approval.expires_at)):
-        raise GovernedDispatchConflict("No existe ejecución activa válida para continuar.")
+        raise GovernedDispatchConflict("No existe ejecución válida para continuar.")
 
     _check_child_identities(plan=plan, manifest=manifest, children=children)
     by_branch = {c.sucursal_canon: c for c in children}
@@ -180,22 +208,20 @@ def _verified_started_suffix(*, session: Any, approval: Any, plan: Any,
         raise GovernedDispatchConflict("Retención HELD histórica incompatible.")
     ready = [by_branch[b.sucursal_canon] for b in plan.batches
              if manifest[b.sucursal_canon]["planned_status"] == "READY"]
-    statuses = [c.status for c in ready]
-    if (not ready or "SUBMITTED" not in statuses or "READY" not in statuses or
-            statuses != ["SUBMITTED"] * statuses.count("SUBMITTED") +
-            ["READY"] * statuses.count("READY")):
-        raise GovernedDispatchConflict("No hay prefijo aceptado y pendiente íntegro.")
-    accepted = ready[:statuses.count("SUBMITTED")]
-    if (execution.last_child_id != accepted[-1].id or
-            not accepted[0].submit_started_at or
-            _database_date(accepted[0].submit_started_at) >
-            _database_date(approval.expires_at) or
-            any(not c.submit_started_at or c.submitted_by_user_id is None or
-                not c.provider_campaign_id or c.submitted_at is None
-                for c in accepted)):
-        raise GovernedDispatchConflict("Historial de ejecución anterior incompatible.")
-    pending = {c.sucursal_canon for c in ready if c.status == "READY"}
-    return tuple(b for b in plan.batches if b.sucursal_canon in pending)
+    prefix, pending = _verified_prefix_and_suffix(
+        ready=ready, execution=execution,
+    )
+    if not prefix or not pending:
+        raise GovernedDispatchConflict("Sin continuación legítima de lotes pendientes.")
+    first = prefix[0]
+    if (not first.submit_started_at
+            or _database_date(first.submit_started_at) <
+            _database_date(execution.confirmed_at)
+            or _database_date(first.submit_started_at) >
+            _database_date(approval.expires_at)):
+        raise GovernedDispatchConflict("Primer intento fuera de la autorización inicial.")
+    return tuple(b for b in plan.batches
+                 if b.sucursal_canon in {row.sucursal_canon for row in pending})
 
 
 def _locked_review(*, campaign_id: int, session: Any, now: datetime,
@@ -362,7 +388,8 @@ def _check_child_identities(*, plan: Any, manifest: dict, children: list):
                     row.provider_campaign_id is not None):
                 raise GovernedDispatchConflict("HELD modificado o intentado.")
         elif row.status not in {"READY", "SUBMITTED"}:
-            raise GovernedDispatchConflict("Un child requiere revisión manual previa.")
+            if not confirmed_rejected_child(row):
+                raise GovernedDispatchConflict("Un child requiere revisión manual previa.")
         elif row.status == "SUBMITTED":
             if not row.provider_campaign_id or row.submitted_at is None:
                 raise GovernedDispatchConflict("SUBMITTED carece de identidad provider.")
@@ -491,8 +518,10 @@ def execute_governed_child(
             claim=background_claim, now=claim_time,
         )
         if _database_date(execution.expires_at) <= claim_time:
-            if not any(c.status == "SUBMITTED" for c in children):
-                raise GovernedDispatchConflict("Autorización de despacho vencida sin inicio confirmado.")
+            if not any(getattr(c, "submit_started_at", None) is not None and
+                       (c.status == "SUBMITTED" or confirmed_rejected_child(c))
+                       for c in children):
+                raise GovernedDispatchConflict("Autorización vencida sin inicio verificable.")
             # Only a verified durable prefix may continue after the FIRST claim
             # window. Every remaining child rechecks current capacity.
             _verified_started_suffix(
@@ -506,28 +535,18 @@ def execute_governed_child(
         pending = [b for b in original_ready if by_branch[b.sucursal_canon].status == "READY"]
         if not pending:
             raise GovernedDispatchConflict("No existen children READY autorizables.")
-        # A prior accepted child must be immutable. Other states are blocked
-        # by _check_child_identities. No out-of-order or parallel sends.
-        # An already accepted prefix must match the one durable execution
-        # history. A foreign/manual SUBMITTED row cannot authorize the suffix.
-        statuses = [by_branch[b.sucursal_canon].status for b in original_ready]
-        if statuses != ["SUBMITTED"] * statuses.count("SUBMITTED") + (
-                ["READY"] * statuses.count("READY")):
-            raise GovernedDispatchConflict("Orden de envíos previo inconsistente.")
-        submitted = [by_branch[b.sucursal_canon] for b in original_ready
-                     if by_branch[b.sucursal_canon].status == "SUBMITTED"]
-        prior_id = int(submitted[-1].id) if submitted else None
-        if execution.last_child_id != prior_id:
-            raise GovernedDispatchConflict("Historial de ejecución incompatible.")
+        # Every prior attempt must be final and immutably ordered. A proven
+        # template rejection may precede the next READY; ambiguous failures may not.
+        ordered = [by_branch[b.sucursal_canon] for b in original_ready]
+        prefix, verified_pending = _verified_prefix_and_suffix(
+            ready=ordered, execution=execution,
+        )
+        if not verified_pending or verified_pending[0].id != child_id:
+            raise GovernedDispatchConflict("Solo el siguiente READY puede enviarse.")
         first_pending = pending[0]
         row = by_branch[first_pending.sucursal_canon]
         if int(row.id) != child_id:
-            raise GovernedDispatchConflict("Solo se permite el siguiente READY en orden.")
-        if any(by_branch[b.sucursal_canon].status != "SUBMITTED"
-               for b in original_ready
-               if b.sucursal_canon != first_pending.sucursal_canon
-               and b not in pending):
-            raise GovernedDispatchConflict("El historial anterior requiere revisión.")
+            raise GovernedDispatchConflict("El siguiente lote cambió.")
 
         dispatch = build_campaign_v2_provider_dispatch_batch(
             plan=plan, batch=first_pending,
@@ -584,14 +603,20 @@ def execute_governed_child(
             actor_user_id=actor_user_id, session=active, now=_utc(None),
         )
 
-    # A failure stops the entire execution; no automatic retry or continuation.
+    # Only a confirmed nonacceptance may release the next READY.
+    # Unknown results and persistence uncertainty remain REVIEW_REQUIRED.
+    safely_rejected = confirmed_not_accepted(
+        status=result_status, error_code=code,
+        http_status=http, support_ref=ref,
+    )
+    can_continue = result_status == "SUBMITTED" or safely_rejected
     # On crash in this block, persisted IN_FLIGHT still blocks further calls.
     execution = active.get(MarketingCampaignV2GovernedExecutionORM, execution_id)
     if execution is None or execution.status != "IN_FLIGHT" or execution.last_child_id != child_id:
         raise GovernedDispatchConflict("Resultado persistido; ejecución requiere revisión.")
     execution.status = (
-        "AUTHORIZED" if result_status == "SUBMITTED" and len(pending) > 1
-        else "COMPLETE" if result_status == "SUBMITTED"
+        "AUTHORIZED" if can_continue and len(pending) > 1
+        else "COMPLETE" if can_continue
         else "REVIEW_REQUIRED"
     )
     execution.updated_at = _utc(None)
@@ -604,5 +629,6 @@ def execute_governed_child(
             outcome.provider_campaign_id if result_status == "SUBMITTED" else None
         ),
         "error_code": code,
+        "definitively_not_accepted": safely_rejected,
         "next_child_requires_fresh_validation": True,
     }
