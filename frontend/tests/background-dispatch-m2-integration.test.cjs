@@ -43,17 +43,46 @@ test('el indicador global solo consulta, nunca envía ni detiene', () => {
   assert.doesNotMatch(dockHtml, /contraseña|teléfono|destinatarios|operator_password/);
 });
 
-test('el dock tiene cierre visual accesible que no interrumpe el envío ni se revierte con polling', () => {
-  assert.match(dockHtml, /\*ngIf="jobs.length && !dismissed"/);
-  assert.match(dockHtml, /aria-label="Cerrar seguimiento de envíos"/);
+test('el dock desactiva avisos por job, no detiene envíos ni reabre por polling', () => {
+  assert.match(dockHtml, /\*ngIf="jobs.length"/);
+  assert.match(dockHtml, /aria-label="Desactivar avisos de estos envíos"/);
   assert.match(dockHtml, /\(click\)="dismissDock\(\)"/);
+  assert.match(dock, /loadDismissedBackgroundJobIds\(this.initialIdentity\)/);
   const dismissMethod = dock.slice(
     dock.indexOf('  dismissDock(): void {'),
     dock.indexOf('  private currentIdentity(): string {')
   );
-  assert.match(dismissMethod, /this.dismissed = true;/);
-  assert.doesNotMatch(dismissMethod, /stopBackgroundJob|startBackgroundJob|this.jobs = \[\]/);
-  assert.doesNotMatch(dock.slice(dock.indexOf('  refresh(): void {')), /this.dismissed = false;/);
+  assert.match(dismissMethod, /persistDismissedBackgroundJobIds\(/);
+  assert.match(dismissMethod, /this.jobs = this.jobs.filter\(/);
+  assert.doesNotMatch(dismissMethod, /stopBackgroundJob|startBackgroundJob/);
+  assert.match(dock, /visibleBackgroundJobs\(response.jobs, Date.now\(\)\)[\s\S]{0,100}filter\(job => !this.dismissedJobIds.has\(job.job_id\)\)/);
+  assert.doesNotMatch(dock, /this.dismissed = true|this.dismissed = false/);
+});
+
+test('la preferencia visual persiste por usuario y job ID, sin payload de campañas', () => {
+  const ts = require('typescript');
+  const source = read('background-dispatch-dock-visibility.ts');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020}
+  }).outputText;
+  const module = {exports: {}};
+  vm.runInNewContext(compiled, {module, exports: module.exports, JSON, Set, Number, Array, encodeURIComponent});
+  const {loadDismissedBackgroundJobIds, persistDismissedBackgroundJobIds} = module.exports;
+  const data = new Map();
+  const storage = {
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => { data.set(key, value); },
+  };
+  const identity = 'OPERADOR_A';
+  const initially = loadDismissedBackgroundJobIds(identity, storage);
+  assert.equal(initially.size, 0);
+  persistDismissedBackgroundJobIds(identity, initially, [41, 0, NaN, -1], storage);
+  const restored = loadDismissedBackgroundJobIds(identity, storage);
+  assert.deepEqual([...restored], [41]);
+  assert.equal(loadDismissedBackgroundJobIds('OPERADOR_B', storage).size, 0);
+  // A previously dismissed job stays hidden; a new job still produces a banner.
+  assert.deepEqual([41, 42].filter(id => !restored.has(id)), [42]);
+  assert.equal([...data.values()].some(value => value.includes('campaign_id')), false);
 });
 
 test('el dock consulta permiso backend sin lista estática de roles', () => {
