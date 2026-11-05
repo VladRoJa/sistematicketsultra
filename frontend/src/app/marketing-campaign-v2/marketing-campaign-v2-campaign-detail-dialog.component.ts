@@ -11,6 +11,8 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 
@@ -143,6 +145,8 @@ export interface MarketingCampaignV2CampaignDetailDialogData {
     MatButtonModule,
     MatDialogModule,
     MatFormFieldModule,
+    MatIconModule,
+    MatTabsModule,
     MatProgressSpinnerModule,
     MatSelectModule,
   ],
