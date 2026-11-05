@@ -65,8 +65,23 @@ def template_signature(template: Any) -> str:
     ).encode("utf-8")).hexdigest()
 
 
+def binding_signature(bindings: list[dict[str, Any]]) -> str:
+    """Bind evidence to every commercial branch and effective sender identity."""
+    stable = sorted((
+        int(b["sucursal_id"]),
+        str(b["sucursal_canon"]),
+        int(b["channel_binding_id"] or 0),
+        str(b["provider_channel_id"] or ""),
+        str(b["send_via_sucursal_canon"] or ""),
+    ) for b in bindings)
+    return hashlib.sha256(json.dumps(
+        stable, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")).hexdigest()
+
+
 def accepted_evidence_channels(
     *, campaign_id: int, template: Any, session: Any,
+    required_binding_signature: str,
     now: datetime | None = None,
 ) -> frozenset[str]:
     timestamp = _utc(now or datetime.now(timezone.utc))
@@ -75,7 +90,8 @@ def accepted_evidence_channels(
            .order_by(MarketingCampaignV2TemplateEvidenceORM.id.desc()).first())
     if row is None or _utc(row.observed_at) > timestamp or _utc(row.expires_at) <= timestamp:
         return frozenset()
-    if row.template_signature != template_signature(template):
+    if (row.template_signature != template_signature(template)
+            or row.binding_signature != required_binding_signature):
         return frozenset()
     if str(row.template_name).casefold() != str(template.template_name).casefold():
         return frozenset()
@@ -141,10 +157,20 @@ def register_template_evidence(
             "Plantilla sin aprobación explícita en estos canales: " +
             ", ".join(f"{channel} ({status})" for channel, status in rejected.items())
         )
+    outbound_bindings = [
+        {
+            "sucursal_id": batch.sucursal_id,
+            "sucursal_canon": batch.sucursal_canon,
+            "channel_binding_id": batch.channel_binding_id,
+            "provider_channel_id": batch.provider_channel_id,
+            "send_via_sucursal_canon": batch.send_via_sucursal_canon,
+        } for batch in plan.batches
+    ]
     row = MarketingCampaignV2TemplateEvidenceORM(
         campaign_id=campaign_id, template_id=template_id,
         template_name=template.template_name,
         template_signature=template_signature(template),
+        binding_signature=binding_signature(outbound_bindings),
         accepted_channel_ids_json=channels,
         inventory_sha256=hashlib.sha256(raw.encode("utf-8")).hexdigest(),
         source_reference=source_reference.strip(),

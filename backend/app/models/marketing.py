@@ -485,6 +485,7 @@ class MarketingCampaignV2TemplateEvidenceORM(db.Model):
     )
     template_name = db.Column(db.String(255), nullable=False)
     template_signature = db.Column(db.String(64), nullable=False)
+    binding_signature = db.Column(db.String(64), nullable=False)
     accepted_channel_ids_json = db.Column(db.JSON, nullable=False)
     inventory_sha256 = db.Column(db.String(64), nullable=False)
     source_reference = db.Column(db.String(500), nullable=False)
@@ -504,7 +505,7 @@ class MarketingCampaignV2TemplateEvidenceORM(db.Model):
             "campaign_id", "template_id", "id",
         ),
         db.CheckConstraint(
-            "length(template_signature) = 64 AND length(inventory_sha256) = 64",
+            "length(template_signature) = 64 AND length(binding_signature) = 64 AND length(inventory_sha256) = 64",
             name="ck_mkt_v2_template_evidence_hashes",
         ),
         db.CheckConstraint(

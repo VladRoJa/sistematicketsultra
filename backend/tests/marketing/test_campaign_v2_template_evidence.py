@@ -10,7 +10,7 @@ from app.models.marketing import (
 )
 from app.services.marketing_campaign_v2_template_evidence_service import (
     TemplateEvidenceValidation, _capture_time, accepted_evidence_channels,
-    register_template_evidence, template_signature,
+    register_template_evidence, template_signature, binding_signature,
 )
 
 
@@ -65,7 +65,11 @@ def call_registration(session, inventory=None, **override):
     )
     payload.update(override)
     plan = SimpleNamespace(batches=[
-        SimpleNamespace(provider_channel_id=c) for c in CHANNELS
+        SimpleNamespace(
+            provider_channel_id=c, sucursal_id=i + 1,
+            sucursal_canon="BRANCH_" + str(i + 1),
+            channel_binding_id=i + 11, send_via_sucursal_canon=None,
+        ) for i, c in enumerate(CHANNELS)
     ])
     with patch(
         "app.services.marketing_campaign_v2_preflight_service.build_campaign_v2_preflight",
@@ -87,6 +91,7 @@ def test_exact_all_channel_coverage_records_immutable_proof_without_provider_cal
     stored = session.add.call_args.args[0]
     assert stored.campaign_id == 42
     assert stored.template_signature == template_signature(make_template())
+    assert len(stored.binding_signature) == 64
 
 
 @pytest.mark.parametrize("inventory", [
@@ -122,8 +127,15 @@ def test_no_operator_confirmation_no_evidence_persisted():
 
 def test_evidence_revoked_by_expiry_or_template_drift():
     original = make_template()
+    binding = binding_signature([
+        {"sucursal_id": i + 1, "sucursal_canon": "BRANCH_" + str(i + 1),
+         "channel_binding_id": i + 11, "provider_channel_id": c,
+         "send_via_sucursal_canon": None}
+        for i, c in enumerate(CHANNELS)
+    ])
     old = SimpleNamespace(
         id=8, template_name=original.template_name,
+        binding_signature=binding,
         template_signature=template_signature(original),
         observed_at=NOW - timedelta(minutes=5),
         expires_at=NOW + timedelta(hours=23),
@@ -132,15 +144,27 @@ def test_evidence_revoked_by_expiry_or_template_drift():
     session = MagicMock()
     session.query.return_value.filter_by.return_value.order_by.return_value.first.return_value = old
     assert accepted_evidence_channels(
-        campaign_id=42, template=original, session=session, now=NOW
+        campaign_id=42, template=original, session=session,
+        required_binding_signature=binding, now=NOW
     ) == frozenset(CHANNELS)
     old.expires_at = NOW - timedelta(seconds=1)
     assert not accepted_evidence_channels(
-        campaign_id=42, template=original, session=session, now=NOW
+        campaign_id=42, template=original, session=session,
+        required_binding_signature=binding, now=NOW
     )
     old.expires_at = NOW + timedelta(hours=23)
     changed = make_template()
     changed.variables_json = {"1": "member_id"}
     assert not accepted_evidence_channels(
-        campaign_id=42, template=changed, session=session, now=NOW
+        campaign_id=42, template=changed, session=session,
+        required_binding_signature=binding, now=NOW
+    )
+
+    assert not accepted_evidence_channels(
+        campaign_id=42, template=original, session=session,
+        required_binding_signature=binding_signature([
+            {"sucursal_id": 1, "sucursal_canon": "BRANCH_1",
+             "channel_binding_id": 999, "provider_channel_id": "channel-a",
+             "send_via_sucursal_canon": None}
+        ]), now=NOW,
     )

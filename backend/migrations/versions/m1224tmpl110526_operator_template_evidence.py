@@ -29,6 +29,7 @@ def upgrade():
         ),
         sa.Column("template_name", sa.String(255), nullable=False),
         sa.Column("template_signature", sa.String(64), nullable=False),
+        sa.Column("binding_signature", sa.String(64), nullable=False),
         sa.Column("accepted_channel_ids_json", sa.JSON(), nullable=False),
         sa.Column("inventory_sha256", sa.String(64), nullable=False),
         sa.Column("source_reference", sa.String(500), nullable=False),
@@ -44,7 +45,7 @@ def upgrade():
             nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"),
         ),
         sa.CheckConstraint(
-            "length(template_signature) = 64 AND length(inventory_sha256) = 64",
+            "length(template_signature) = 64 AND length(binding_signature) = 64 AND length(inventory_sha256) = 64",
             name="ck_mkt_v2_template_evidence_hashes",
         ),
         sa.CheckConstraint(
