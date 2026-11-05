@@ -1,9 +1,9 @@
 <header class="dialog-header">
   <div>
-    <p class="eyebrow">Campaña guardada · destinatarios fijos</p>
+    <p class="eyebrow">Campaña #{{ data.campaignId }} · destinatarios congelados</p>
     <h2>{{ campaign?.name || 'Detalle de campaña' }}</h2>
   </div>
-  <button mat-button type="button" (click)="close()">Cerrar</button>
+  <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="close()"><mat-icon aria-hidden="true">close</mat-icon>Cerrar</button>
 </header>
 
 <mat-dialog-content>
@@ -14,69 +14,159 @@
   <div *ngIf="error" class="inline-error" role="alert">{{ error }}</div>
 
   <ng-container *ngIf="campaign && !loadingCampaignDetail">
-    <section *ngIf="data.canManageDispatchConfig" class="governed-entry">
-      <button mat-stroked-button type="button" (click)="openGovernedConsole()">Preparar envío · paso a paso</button>
-      <p>Revisa destinatarios, costo y capacidad. Después prepara y autoriza los lotes. El envío real requiere otra confirmación.</p>
-    </section>
     <section class="summary-grid">
       <div><span>Fuente</span><strong>{{ sourceLabel(campaign.source) }}</strong></div>
       <div><span>Guardada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
       <div><span>Destinatarios</span><strong>{{ campaign.recipient_count | number }}</strong></div>
-      <div><span>Referencia de seguridad</span><strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong></div>
+
     </section>
 
-    <section class="purpose-row">
-      <mat-form-field appearance="fill">
-        <mat-label>Objetivo de la campaña</mat-label>
-        <mat-select [formControl]="purposeControl">
-          <mat-option *ngFor="let value of data.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
-        </mat-select>
-      </mat-form-field>
-      <button mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose">
-        {{ updatingPurpose ? 'Guardando…' : 'Guardar objetivo' }}
-      </button>
-    </section>
-
-    <div class="definition-grid">
-      <section class="definition-panel">
-        <h3>Reglas guardadas de la campaña</h3>
-        <dl>
-          <div *ngFor="let row of filterRows(campaign.audience_definition)">
-            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+    <mat-tab-group class="campaign-detail-tabs" animationDuration="0ms" aria-label="Secciones del detalle de campaña">
+      <mat-tab label="Resultados">
+        <div class="campaign-detail-tab-panel">
+          <p class="campaign-detail-tab-intro">Consulta el estado de los mensajes, los lotes de iVentas y los resultados comerciales. Los datos provienen de cortes guardados.</p>
+      <section class="recipient-overview" *ngIf="recipientStatusView as overview"
+               aria-label="Resumen de estados de envío">
+        <div class="recipient-overview-heading">
+          <strong>Resumen de entrega</strong>
+          <span>{{ overview.total | number }} destinatarios congelados · Últimos cortes guardados por lote</span>
+        </div>
+        <p *ngIf="!overview.hasSnapshot" class="recipient-overview-empty">
+          Aún no hay una captura de estadísticas de iVentas para esta campaña. No significa que haya cero mensajes enviados o leídos.
+          Comprueba el estado de sus lotes y la captura de estadísticas; los destinatarios originales permanecen congelados.
+        </p>
+        <ng-container *ngIf="overview.hasSnapshot">
+          <div class="recipient-overview-kpis">
+            <div class="recipient-overview-kpi">
+              <span>Aceptados por iVentas</span>
+              <strong class="recipient-overview-accepted">{{ overview.accepted | number }}</strong>
+              <small>{{ overview.acceptedRate }} de la audiencia</small>
+            </div>
+            <div class="recipient-overview-kpi">
+              <span>Entrega o lectura confirmada</span>
+              <strong>{{ overview.reached | number }}</strong>
+              <small>{{ overview.reachedRate }} de la audiencia</small>
+            </div>
           </div>
-        </dl>
-      </section>
-      <section class="definition-panel">
-        <h3>Información adicional del origen</h3>
-        <dl *ngIf="metadataRows(campaign.audience_definition.source_metadata).length; else noMetadata">
-          <div *ngFor="let row of metadataRows(campaign.audience_definition.source_metadata)">
-            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+          <div class="campaign-detail-delivery-stages" aria-label="Última etapa confirmada de entrega">
+            <div><span>Enviados sin entrega confirmada</span><strong>{{ (recipientStatusSummary?.counts?.SENT ?? 0) | number }}</strong></div>
+            <div><span>Entregados sin lectura confirmada</span><strong>{{ (recipientStatusSummary?.counts?.DELIVERED ?? 0) | number }}</strong></div>
+            <div><span>Leídos</span><strong>{{ (recipientStatusSummary?.counts?.VIEWED ?? 0) | number }}</strong></div>
           </div>
-        </dl>
-        <ng-template #noMetadata><p class="muted">Sin información adicional.</p></ng-template>
+          <p class="campaign-detail-status-explanation">Son estados exclusivos del último corte disponible por lote. «Aceptado» no equivale a «Entregado» y un estado sin evidencia no equivale a cero envíos.</p>
+          <div class="recipient-overview-bar" role="img"
+               aria-label="Distribución de estados de los destinatarios">
+            <span *ngFor="let segment of overview.segments"
+                  class="recipient-overview-segment"
+                  [ngClass]="segment.className"
+                  [style.width.%]="segment.percent"></span>
+          </div>
+          <div class="recipient-overview-legend">
+            <span *ngFor="let segment of overview.segments">
+              <i class="recipient-overview-dot" [ngClass]="segment.className" aria-hidden="true"></i>
+              {{ segment.label }} {{ segment.count | number }}
+            </span>
+          </div>
+        </ng-container>
       </section>
-    </div>
-
+          <div *ngIf="loadingRecipients" class="state-row compact" role="status">Cargando estados de destinatarios…</div>
+      <section class="provider-submit-state" *ngIf="data.canManageDispatchConfig"
+               aria-label="Resultados de lotes iVentas">
+        <div class="section-heading compact-heading">
+          <div>
+            <h3>Resultados de lotes y recuperación</h3>
+            <p>Aceptado por iVentas no significa entregado. Los errores inciertos nunca se reenvían automáticamente.</p>
+          </div>
+          <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="loadDispatchState()"><mat-icon aria-hidden="true">refresh</mat-icon>
+            Actualizar resultados
+          </button>
+        </div>
+        <p *ngIf="dispatchStateError" class="inline-error" role="alert">{{ dispatchStateError }}</p>
+        <ng-container *ngIf="dispatchState as state">
+          <div *ngIf="state.summary as summary" class="preflight-summary-grid">
+            <div><span>Aceptados por iVentas</span><strong>{{ summary.accepted_batches | number }} lotes · {{ summary.accepted_recipients | number }} destinatarios</strong></div>
+            <div><span>Rechazos definitivos</span><strong>{{ summary.confirmed_rejected_batches | number }} lotes · {{ summary.confirmed_rejected_recipients | number }} destinatarios</strong></div>
+            <div><span>Resultados inciertos</span><strong>{{ summary.uncertain_batches | number }} lotes · {{ summary.uncertain_recipients | number }} destinatarios</strong></div>
+            <div><span>Sin intentar</span><strong>{{ summary.unattempted_batches | number }} lotes · {{ summary.unattempted_recipients | number }} destinatarios</strong></div>
+          </div>
+          <details class="campaign-detail-disclosure" *ngIf="state.has_provider_campaigns">
+            <summary>Ver detalle de los lotes registrados en iVentas</summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal comercial</th>
+                  <th>Canal iVentas</th>
+                  <th>Plantilla</th>
+                  <th>Destinatarios</th>
+                  <th>Estado</th>
+                  <th>ID iVentas</th>
+                  <th>Error / referencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let child of state.batches">
+                  <td>{{ child.sucursal_canon }}
+                    <span class="muted" *ngIf="child.send_via_sucursal_canon && child.send_via_sucursal_canon !== child.sucursal_canon">
+                      · emitido por {{ child.send_via_sucursal_canon }}
+                    </span>
+                  </td>
+                  <td class="mono">{{ child.provider_channel_id }}</td>
+                  <td>{{ child.template_name }}</td>
+                  <td>{{ child.recipient_count | number }}</td>
+                  <td>{{ child.status }}</td>
+                  <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
+                  <td class="mono">{{ child.error_code || '—' }} {{ child.support_ref || '' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          </details>
+          <div *ngIf="state.summary?.can_create_failed_recovery && !failedRecoveryResult">
+            <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button"
+                    (click)="reviewFailedRecovery()" [disabled]="failedRecoveryLoading"><mat-icon aria-hidden="true">find_in_page</mat-icon>
+              Crear campaña con fallidas
+            </button>
+            <p class="muted">Solo rechazos definitivamente no aceptados. No incluye aceptados ni resultados inciertos.</p>
+          </div>
+        </ng-container>
+        <div *ngIf="failedRecoveryPreview as preview">
+          <p><strong>Confirmar cohorte:</strong>
+             {{ preview.branches.length }} sucursales ·
+             {{ preview.recipient_count | number }} destinatarios congelados.</p>
+          <p class="muted">Plantilla iVentas: NO VERIFICADA. Crear esta campaña no realiza ningún envío ni reserva cuota.</p>
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button" (click)="createFailedRecovery()"
+                  [disabled]="failedRecoveryLoading"><mat-icon aria-hidden="true">add_circle</mat-icon>
+            Confirmar creación sin enviar
+          </button>
+        </div>
+        <p *ngIf="failedRecoveryLoading" class="muted">Validando destinatarios originales…</p>
+        <p *ngIf="failedRecoveryError" class="inline-error" role="alert">{{ failedRecoveryError }}</p>
+        <div *ngIf="failedRecoveryResult as result" class="inline-success" role="status">
+          Campaña #{{ result.derived_campaign_id }} {{ result.created ? 'creada' : 'ya existente' }}
+          con {{ result.recipient_count | number }} destinatarios. No se enviaron mensajes.
+        </div>
+      </section>
     <section class="reporting-section">
       <div class="section-heading">
         <div>
           <h3>Resultados de la campaña</h3>
         </div>
         <div class="reporting-actions">
-          <button
-            mat-stroked-button
+          <button class="campaign-detail-btn campaign-detail-btn--primary"
+            mat-flat-button
             type="button"
             (click)="loadReporting()"
             [disabled]="loadingReporting"
-          >
+          ><mat-icon aria-hidden="true">query_stats</mat-icon>
             {{ loadingReporting ? 'Cargando…' : 'Cargar resultados' }}
           </button>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportReporting()"
             [disabled]="exportingReporting"
-          >
+          ><mat-icon aria-hidden="true">file_download</mat-icon>
             {{ exportingReporting ? 'Exportando…' : 'Exportar reporte' }}
           </button>
         </div>
@@ -87,7 +177,7 @@
           <div>
             <h4 id="commercial-attribution-title">Resultados comerciales · Gasca</h4>
           </div>
-          <button mat-stroked-button type="button" (click)="loadCommercialAttribution()" [disabled]="loadingCommercialAttribution">
+          <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="loadCommercialAttribution()" [disabled]="loadingCommercialAttribution"><mat-icon aria-hidden="true">refresh</mat-icon>
             {{ loadingCommercialAttribution ? 'Consultando…' : 'Actualizar' }}
           </button>
         </div>
@@ -125,6 +215,7 @@
           Aún no hay observaciones persistidas para esta campaña.
         </p>
 
+        <ng-container *ngIf="report.observation.snapshot_id !== null">
         <div class="reporting-summary-grid">
           <div><span>Destinatarios congelados</span><strong>{{ report.audience.total_recipients | number }}</strong></div>
           <div><span>Disponibilidad de resultados</span><strong>{{ reportingSnapshotLabel() }}</strong></div>
@@ -145,6 +236,8 @@
           <div><span>% con seguimiento</span><strong>{{ reportingPercent(report.coverage.status_coverage_rate) }}</strong></div>
         </div>
 
+        <details class="campaign-detail-disclosure">
+          <summary>Ver datos técnicos del proveedor y evolución histórica</summary>
         <div class="reporting-detail-grid">
           <section>
             <h4>Datos originales de iVentas (detalle técnico)</h4>
@@ -202,9 +295,15 @@
           </div>
           <ng-template #noEvolution><p class="muted">Sin registros anteriores de resultados.</p></ng-template>
         </section>
+        </details>
+        </ng-container>
       </ng-container>
     </section>
+        </div>
+      </mat-tab>
 
+      <mat-tab label="Destinatarios">
+        <div class="campaign-detail-tab-panel">
     <section class="recipients-section">
       <div class="section-heading">
         <div>
@@ -213,20 +312,20 @@
         </div>
         <div class="recipient-actions">
           <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportDeliveryPackage()"
             [disabled]="exportingDeliveryPackage || !campaign?.recipient_count"
-          >
+          ><mat-icon aria-hidden="true">download</mat-icon>
             {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar lista original' }}
           </button>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportSendablePackage()"
             [disabled]="exportingSendablePackage || !campaign?.recipient_count"
-          >
+          ><mat-icon aria-hidden="true">download</mat-icon>
             {{ exportingSendablePackage ? 'Preparando…' : 'Descargar lista para envío' }}
           </button>
         </div>
@@ -249,11 +348,85 @@
       </p>
 
       <div class="recipient-actions">
-        <button mat-stroked-button type="button" (click)="openPreparationCenter()">
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="openPreparationCenter()"><mat-icon aria-hidden="true">rule</mat-icon>
           Centro de preparación · Ambigüedades y duplicados
         </button>
         <p class="muted">Revisar exclusiones no cambia la lista original ni envía mensajes.</p>
       </div>
+      <div class="recipient-filter-toolbar">
+        <span class="recipient-filter-title">Filtrar por estado</span>
+        <div class="recipient-filter-buttons" role="group" aria-label="Filtrar destinatarios por estado del envío">
+          <button
+            *ngFor="let filter of recipientStatusFilters"
+            class="recipient-filter-button"
+            [class.is-selected]="recipientsProviderFilter === filter.value"
+            [attr.aria-pressed]="recipientsProviderFilter === filter.value"
+            type="button"
+            (click)="selectRecipientsProviderFilter(filter.value)"
+          >{{ filter.label }}</button>
+        </div>
+        <span *ngIf="!loadingRecipients" class="recipient-filter-summary" aria-live="polite">
+          {{ recipientsTotal | number }} resultados
+        </span>
+      </div>
+
+      <p *ngIf="recipients.length" class="recipients-status-note">
+        Estados individuales de iVentas · {{ recipientsStatusSnapshotLabel() }}.
+        La información proviene del último corte guardado, no de una consulta en tiempo real.
+      </p>
+      <div class="table-wrap recipients-table" *ngIf="recipients.length; else emptyRecipients">
+        <table>
+          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Estado del envío</th><th>Conflictos</th><th>Registros de origen</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let recipient of recipients">
+              <td>{{ recipient.phone_mx10 }}</td>
+              <td>{{ recipient.member_name || '—' }}</td>
+              <td>{{ recipient.sucursal || '—' }}</td>
+              <td>{{ recipient.tarifa_raw || '—' }}</td>
+              <td>{{ familyLabel(recipient.audience_family) }}</td>
+              <td>
+                <span class="recipient-status-chip"
+                      [ngClass]="recipientProviderStatusClass(recipient)"
+                      [title]="recipientProviderStatusTooltip(recipient)">
+                  {{ recipientProviderStatusLabel(recipient) }}
+                </span>
+              </td>
+              <td><span *ngIf="recipient.conflict_fields.length" class="conflict-label">Datos con conflicto</span><span *ngIf="!recipient.conflict_fields.length">—</span></td>
+              <td>{{ recipient.evidence_count }}</td>
+              <td><button class="campaign-detail-btn campaign-detail-btn--secondary" mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #emptyRecipients><p *ngIf="!loadingRecipients && !error" class="muted recipient-filter-empty">{{ recipientsEmptyMessage }}</p></ng-template>
+
+      <div class="pager" *ngIf="recipientsTotalPages > 1">
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>
+        <span>Página {{ recipientsPage }} de {{ recipientsTotalPages }}</span>
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="nextRecipientsPage()" [disabled]="recipientsPage >= recipientsTotalPages || loadingRecipients">Siguiente</button>
+      </div>
+        </section>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Preparar envío">
+        <div class="campaign-detail-tab-panel">
+          <p class="campaign-detail-tab-intro">Configura y revisa destinatarios, plantillas y límites antes de autorizar cualquier envío.</p>
+    <section *ngIf="data.canManageDispatchConfig" class="governed-entry">
+      <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button" (click)="openGovernedConsole()"><mat-icon aria-hidden="true">send</mat-icon>Preparar envío · paso a paso</button>
+      <p>Revisa destinatarios, costo y capacidad. Después prepara y autoriza los lotes. El envío real requiere otra confirmación.</p>
+    </section>
+    <section class="purpose-row">
+      <mat-form-field appearance="fill">
+        <mat-label>Objetivo de la campaña</mat-label>
+        <mat-select [formControl]="purposeControl">
+          <mat-option *ngFor="let value of data.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose"><mat-icon aria-hidden="true">save</mat-icon>
+        {{ updatingPurpose ? 'Guardando…' : 'Guardar objetivo' }}
+      </button>
+    </section>
       <section class="dispatch-preflight-section">
         <div class="section-heading">
           <div>
@@ -274,17 +447,18 @@
               </mat-option>
             </mat-select>
           </mat-form-field>
-          <button
-            mat-stroked-button
+          <button class="campaign-detail-btn campaign-detail-btn--primary"
+            mat-flat-button
             type="button"
             (click)="reviewDispatch()"
             [disabled]="!canReviewDispatch"
-          >
+          ><mat-icon aria-hidden="true">fact_check</mat-icon>
             {{ preflighting ? 'Revisando…' : 'Comprobar destinatarios' }}
           </button>
         </div>
 
         <p *ngIf="loadingDispatchTemplates" class="muted">Cargando plantillas disponibles…</p>
+        <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length > 0 && dispatchTemplateControl.value === null" class="campaign-detail-action-hint">Selecciona una plantilla para habilitar la comprobación. Esta revisión no envía mensajes.</p>
         <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
           No hay plantillas activas compatibles con el objetivo de esta campaña.
         </p>
@@ -331,6 +505,8 @@
                 <strong>{{ quota.hold_recommended_recipients | number }}</strong></div>
               <div><span>Evaluación</span><strong>{{ quota.status }}</strong></div>
             </div>
+            <details class="campaign-detail-disclosure">
+              <summary>Ver límites y capacidad por sucursal</summary>
             <div class="table-wrap preflight-batches" *ngIf="quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
               <table>
                 <thead><tr><th>Sucursal</th><th>Destinatarios</th><th>Regla</th><th>Resultado</th></tr></thead>
@@ -363,6 +539,7 @@
                 </tbody>
               </table>
             </div>
+            </details>
             <p class="muted" *ngIf="quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1'">
               Estimación interna en ventana móvil de 24 horas: solo envíos y reservas visibles para Suite Ultra.
               El saldo real de Meta y los envíos externos son desconocidos. La evaluación no reserva ni autoriza envíos.
@@ -382,7 +559,9 @@
             <span *ngIf="plan.blocked.template_channel_mismatch">Template/channel incompatible: {{ plan.blocked.template_channel_mismatch }}</span>
           </div>
 
-          <div class="table-wrap preflight-batches" *ngIf="plan.batches.length">
+          <details class="campaign-detail-disclosure" *ngIf="plan.batches.length">
+            <summary>Ver {{ plan.batches.length }} lotes y canales del proveedor</summary>
+          <div class="table-wrap preflight-batches">
             <table>
               <thead>
                 <tr>
@@ -413,6 +592,7 @@
             </table>
           </div>
 
+          </details>
           <div class="preflight-fingerprint">
             <span>Dispatch fingerprint · {{ plan.dispatch_fingerprint_version }}</span>
             <strong class="mono">{{ plan.dispatch_fingerprint }}</strong>
@@ -423,14 +603,14 @@
               <strong>Envío directo (método anterior)</strong>
               <span>{{ submitAvailabilityLabel() }}</span>
             </div>
-            <button
+            <button class="campaign-detail-btn campaign-detail-btn--danger"
               *ngIf="plan.submission.can_send"
               mat-flat-button
               color="warn"
               type="button"
               (click)="confirmAndSubmitDispatch()"
               [disabled]="!canSubmitDispatch"
-            >
+            ><mat-icon aria-hidden="true">warning</mat-icon>
               {{ submitting ? 'Enviando…' : 'Enviar mensajes ahora' }}
             </button>
           </div>
@@ -444,89 +624,19 @@
 
         </ng-container>
       </section>
+        </div>
+      </mat-tab>
 
-      <section class="provider-submit-state" *ngIf="data.canManageDispatchConfig"
-               aria-label="Resultados de lotes iVentas">
-        <div class="section-heading compact-heading">
-          <div>
-            <h3>Resultados de lotes y recuperación</h3>
-            <p>Aceptado por iVentas no significa entregado. Los errores inciertos nunca se reenvían automáticamente.</p>
-          </div>
-          <button mat-stroked-button type="button" (click)="loadDispatchState()">
-            Actualizar resultados
-          </button>
-        </div>
-        <p *ngIf="dispatchStateError" class="inline-error" role="alert">{{ dispatchStateError }}</p>
-        <ng-container *ngIf="dispatchState as state">
-          <div *ngIf="state.summary as summary" class="preflight-summary-grid">
-            <div><span>Aceptados por iVentas</span><strong>{{ summary.accepted_batches | number }} lotes · {{ summary.accepted_recipients | number }} destinatarios</strong></div>
-            <div><span>Rechazos definitivos</span><strong>{{ summary.confirmed_rejected_batches | number }} lotes · {{ summary.confirmed_rejected_recipients | number }} destinatarios</strong></div>
-            <div><span>Resultados inciertos</span><strong>{{ summary.uncertain_batches | number }} lotes · {{ summary.uncertain_recipients | number }} destinatarios</strong></div>
-            <div><span>Sin intentar</span><strong>{{ summary.unattempted_batches | number }} lotes · {{ summary.unattempted_recipients | number }} destinatarios</strong></div>
-          </div>
-          <div class="table-wrap" *ngIf="state.has_provider_campaigns">
-            <table>
-              <thead>
-                <tr>
-                  <th>Sucursal comercial</th>
-                  <th>Canal iVentas</th>
-                  <th>Plantilla</th>
-                  <th>Destinatarios</th>
-                  <th>Estado</th>
-                  <th>ID iVentas</th>
-                  <th>Error / referencia</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let child of state.batches">
-                  <td>{{ child.sucursal_canon }}
-                    <span class="muted" *ngIf="child.send_via_sucursal_canon && child.send_via_sucursal_canon !== child.sucursal_canon">
-                      · emitido por {{ child.send_via_sucursal_canon }}
-                    </span>
-                  </td>
-                  <td class="mono">{{ child.provider_channel_id }}</td>
-                  <td>{{ child.template_name }}</td>
-                  <td>{{ child.recipient_count | number }}</td>
-                  <td>{{ child.status }}</td>
-                  <td class="mono">{{ child.provider_campaign_id || '—' }}</td>
-                  <td class="mono">{{ child.error_code || '—' }} {{ child.support_ref || '' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div *ngIf="state.summary?.can_create_failed_recovery && !failedRecoveryResult">
-            <button mat-stroked-button type="button"
-                    (click)="reviewFailedRecovery()" [disabled]="failedRecoveryLoading">
-              Crear campaña con fallidas
-            </button>
-            <p class="muted">Solo rechazos definitivamente no aceptados. No incluye aceptados ni resultados inciertos.</p>
-          </div>
-        </ng-container>
-        <div *ngIf="failedRecoveryPreview as preview">
-          <p><strong>Confirmar cohorte:</strong>
-             {{ preview.branches.length }} sucursales ·
-             {{ preview.recipient_count | number }} destinatarios congelados.</p>
-          <p class="muted">Plantilla iVentas: NO VERIFICADA. Crear esta campaña no realiza ningún envío ni reserva cuota.</p>
-          <button mat-flat-button type="button" (click)="createFailedRecovery()"
-                  [disabled]="failedRecoveryLoading">
-            Confirmar creación sin enviar
-          </button>
-        </div>
-        <p *ngIf="failedRecoveryLoading" class="muted">Validando destinatarios originales…</p>
-        <p *ngIf="failedRecoveryError" class="inline-error" role="alert">{{ failedRecoveryError }}</p>
-        <div *ngIf="failedRecoveryResult as result" class="inline-success" role="status">
-          Campaña #{{ result.derived_campaign_id }} {{ result.created ? 'creada' : 'ya existente' }}
-          con {{ result.recipient_count | number }} destinatarios. No se enviaron mensajes.
-        </div>
-      </section>
-
+      <mat-tab label="Seguimiento">
+        <div class="campaign-detail-tab-panel">
+          <p class="campaign-detail-tab-intro">Selecciona los estados que quieras analizar y prepara una cohorte independiente sin enviar mensajes.</p>
       <section class="followup-preview-section" aria-labelledby="followup-preview-title">
         <div class="section-heading">
           <div>
             <h3 id="followup-preview-title">Preparar campaña de seguimiento</h3>
             <p>Selecciona varios estados para combinarlos. Cualquier estado marcado será incluido (OR).</p>
           </div>
-          <span class="followup-preview-stage">Envíos bloqueados</span>
+          <span class="followup-preview-stage">Sin envío automático</span>
         </div>
         <div class="followup-status-options" role="group" aria-label="Estados acumulables para seguimiento">
           <label *ngFor="let option of followupStatusOptions" class="followup-status-option"
@@ -539,9 +649,9 @@
           </label>
         </div>
         <div class="followup-preview-actions">
-          <button mat-stroked-button type="button"
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button"
                   (click)="previewFollowup()"
-                  [disabled]="followupPreviewLoading || followupFreezing || !!followupFreezeResult || selectedFollowupStatuses.length === 0">
+                  [disabled]="followupPreviewLoading || followupFreezing || !!followupFreezeResult || selectedFollowupStatuses.length === 0"><mat-icon aria-hidden="true">calculate</mat-icon>
             {{ followupPreviewLoading ? 'Calculando…' : 'Calcular audiencia acumulada' }}
           </button>
           <span class="muted">{{ selectedFollowupStatuses.length }} estados seleccionados</span>
@@ -580,9 +690,9 @@
                    (change)="setFollowupFreezeConfirmed($event)" />
             <span>Confirmo congelar una cohorte independiente. Entiendo que esto no autoriza envíos.</span>
           </label>
-          <button mat-stroked-button type="button"
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button"
                   (click)="freezeFollowup()"
-                  [disabled]="followupFreezing || !followupFreezeConfirmed || !followupNameControl.value.trim() || followupPreviewResult.candidate_count === 0">
+                  [disabled]="followupFreezing || !followupFreezeConfirmed || !followupNameControl.value.trim() || followupPreviewResult.candidate_count === 0"><mat-icon aria-hidden="true">playlist_add_check</mat-icon>
             {{ followupFreezing ? 'Congelando…' : 'Congelar campaña de seguimiento' }}
           </button>
         </div>
@@ -593,98 +703,37 @@
           <span>Envíos bloqueados. Falta aprobar la política de recontacto y una nueva autorización.</span>
         </div>
       </section>
-
-      <section class="recipient-overview" *ngIf="recipientStatusView as overview"
-               aria-label="Resumen de estados de envío">
-        <div class="recipient-overview-heading">
-          <strong>Resumen de entrega</strong>
-          <span>{{ overview.total | number }} destinatarios congelados · Últimos cortes guardados por lote</span>
         </div>
-        <p *ngIf="!overview.hasSnapshot" class="recipient-overview-empty">
-          Aún no hay estadísticas guardadas de iVentas para esta campaña.
-          Los destinatarios permanecen congelados y el estado de envío todavía no está disponible.
-        </p>
-        <ng-container *ngIf="overview.hasSnapshot">
-          <div class="recipient-overview-kpis">
-            <div class="recipient-overview-kpi">
-              <span>Aceptados por iVentas</span>
-              <strong class="recipient-overview-accepted">{{ overview.accepted | number }}</strong>
-              <small>{{ overview.acceptedRate }} de la audiencia</small>
-            </div>
-            <div class="recipient-overview-kpi">
-              <span>Entrega o lectura confirmada</span>
-              <strong>{{ overview.reached | number }}</strong>
-              <small>{{ overview.reachedRate }} de la audiencia</small>
-            </div>
+      </mat-tab>
+
+      <mat-tab label="Información">
+        <div class="campaign-detail-tab-panel">
+          <p class="campaign-detail-tab-intro">Consulta las condiciones originales guardadas de esta campaña. Su audiencia permanece congelada.</p>
+          <div class="campaign-detail-security-reference">
+            <span>Referencia de seguridad de la audiencia</span>
+            <strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong>
           </div>
-          <div class="recipient-overview-bar" role="img"
-               aria-label="Distribución de estados de los destinatarios">
-            <span *ngFor="let segment of overview.segments"
-                  class="recipient-overview-segment"
-                  [ngClass]="segment.className"
-                  [style.width.%]="segment.percent"></span>
+    <div class="definition-grid">
+      <section class="definition-panel">
+        <h3>Reglas guardadas de la campaña</h3>
+        <dl>
+          <div *ngFor="let row of filterRows(campaign.audience_definition)">
+            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
           </div>
-          <div class="recipient-overview-legend">
-            <span *ngFor="let segment of overview.segments">
-              <i class="recipient-overview-dot" [ngClass]="segment.className" aria-hidden="true"></i>
-              {{ segment.label }} {{ segment.count | number }}
-            </span>
-          </div>
-        </ng-container>
+        </dl>
       </section>
-
-      <div class="recipient-filter-toolbar">
-        <span class="recipient-filter-title">Filtrar por estado</span>
-        <div class="recipient-filter-buttons" role="group" aria-label="Filtrar destinatarios por estado del envío">
-          <button
-            *ngFor="let filter of recipientStatusFilters"
-            class="recipient-filter-button"
-            [class.is-selected]="recipientsProviderFilter === filter.value"
-            [attr.aria-pressed]="recipientsProviderFilter === filter.value"
-            type="button"
-            (click)="selectRecipientsProviderFilter(filter.value)"
-          >{{ filter.label }}</button>
+      <section class="definition-panel">
+        <h3>Información adicional del origen</h3>
+        <dl *ngIf="metadataRows(campaign.audience_definition.source_metadata).length; else noMetadata">
+          <div *ngFor="let row of metadataRows(campaign.audience_definition.source_metadata)">
+            <dt>{{ row.label }}</dt><dd>{{ row.value }}</dd>
+          </div>
+        </dl>
+        <ng-template #noMetadata><p class="muted">Sin información adicional.</p></ng-template>
+      </section>
+    </div>
         </div>
-        <span *ngIf="!loadingRecipients" class="recipient-filter-summary" aria-live="polite">
-          {{ recipientsTotal | number }} resultados
-        </span>
-      </div>
-
-      <p *ngIf="recipients.length" class="recipients-status-note">
-        Estados individuales de iVentas · {{ recipientsStatusSnapshotLabel() }}.
-        La información proviene del último corte guardado, no de una consulta en tiempo real.
-      </p>
-      <div class="table-wrap recipients-table" *ngIf="recipients.length; else emptyRecipients">
-        <table>
-          <thead><tr><th>Teléfono</th><th>Nombre</th><th>Sucursal</th><th>Tarifa</th><th>Familia</th><th>Estado del envío</th><th>Conflictos</th><th>Registros de origen</th><th></th></tr></thead>
-          <tbody>
-            <tr *ngFor="let recipient of recipients">
-              <td>{{ recipient.phone_mx10 }}</td>
-              <td>{{ recipient.member_name || '—' }}</td>
-              <td>{{ recipient.sucursal || '—' }}</td>
-              <td>{{ recipient.tarifa_raw || '—' }}</td>
-              <td>{{ familyLabel(recipient.audience_family) }}</td>
-              <td>
-                <span class="recipient-status-chip"
-                      [ngClass]="recipientProviderStatusClass(recipient)"
-                      [title]="recipientProviderStatusTooltip(recipient)">
-                  {{ recipientProviderStatusLabel(recipient) }}
-                </span>
-              </td>
-              <td><span *ngIf="recipient.conflict_fields.length" class="conflict-label">Datos con conflicto</span><span *ngIf="!recipient.conflict_fields.length">—</span></td>
-              <td>{{ recipient.evidence_count }}</td>
-              <td><button mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <ng-template #emptyRecipients><p *ngIf="!loadingRecipients && !error" class="muted recipient-filter-empty">{{ recipientsEmptyMessage }}</p></ng-template>
-
-      <div class="pager" *ngIf="recipientsTotalPages > 1">
-        <button mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>
-        <span>Página {{ recipientsPage }} de {{ recipientsTotalPages }}</span>
-        <button mat-stroked-button type="button" (click)="nextRecipientsPage()" [disabled]="recipientsPage >= recipientsTotalPages || loadingRecipients">Siguiente</button>
-      </div>
-    </section>
+      </mat-tab>
+    </mat-tab-group>
   </ng-container>
 </mat-dialog-content>

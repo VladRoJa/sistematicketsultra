@@ -100,5 +100,7 @@ jobs:
         run: |
           node node_modules/esbuild/bin/esbuild src/app/marketing-campaign-v2/marketing-campaign-v2.logic.node-test.ts --bundle --platform=node --format=cjs --outfile=/tmp/winback-logic-tests.cjs
           node --test /tmp/winback-logic-tests.cjs
+      - name: Campaign detail tabbed UX regression
+        run: node --test tests/campaign-v2-detail-tabbed-ux.test.cjs
       - name: Build Angular production
         run: npm run build -- --configuration production --progress=false
