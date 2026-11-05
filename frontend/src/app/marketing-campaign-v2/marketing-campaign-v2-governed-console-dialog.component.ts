@@ -17,7 +17,7 @@ import {
   CampaignV2GovernedApprovalState, CampaignV2GovernedExecutionReview,
   CampaignV2GovernedExecutionReviewReady, CampaignV2GovernedMonitor,
   CampaignV2GovernedMonitorChild, CampaignV2PreflightBatch,
-  CampaignV2PreflightResponse,
+  CampaignV2PreflightResponse, CampaignV2TemplateEvidenceResult,
 } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.logic';
@@ -31,7 +31,7 @@ export interface MarketingCampaignV2GovernedConsoleDialogData {
   jobId?: number;
 }
 
-type Action = 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop';
+type Action = 'evidence' | 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop';
 type ExecutionReview =
   CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady;
 
@@ -53,6 +53,13 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   private readonly backgroundActivity = inject(BackgroundDispatchActivityService);
 
   readonly templateId = new FormControl<number | null>(null);
+  readonly providerInventoryJson = new FormControl('', { nonNullable: true });
+  readonly providerInventoryObservedAt = new FormControl('', { nonNullable: true });
+  readonly providerInventorySource = new FormControl('', { nonNullable: true });
+  readonly providerInventoryConfirmed = new FormControl(false, { nonNullable: true });
+  evidenceError = '';
+  evidenceMessage = '';
+  lastEvidence: CampaignV2TemplateEvidenceResult | null = null;
   readonly approvalPhrase = new FormControl('', { nonNullable: true });
   readonly materializePhrase = new FormControl('', { nonNullable: true });
   readonly reauthorizePhrase = new FormControl('', { nonNullable: true });
@@ -99,6 +106,11 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   }
 
   get busy(): boolean { return this.working !== null; }
+  get requiresProviderTemplateEvidence(): boolean {
+    return this.preflight?.batches.some(
+      batch => batch.blocked_reasons.includes('PROVIDER_TEMPLATE_UNVERIFIED'),
+    ) ?? false;
+  }
   get sentLotCount(): number { return this.monitor?.children_by_status['SUBMITTED'] ?? 0; }
   get actionableLotCount(): number { return (this.monitor?.children_count ?? 0) - this.heldLotCount; }
   get setupInitiallyOpen(): boolean { return !this.reviewReady; }
@@ -258,7 +270,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     const labels: Record<Action, string> = {
       background: 'Registrando ejecución independiente',
       'background-stop': 'Solicitando detención',
-      read: 'Consultando', preflight: 'Revisando destinatarios',
+      read: 'Consultando', preflight: 'Revisando destinatarios', evidence: 'Guardando evidencia de iVentas',
       approve: 'Aprobando costo', materialize: 'Preparando lotes', reauthorize: 'Reautorizando despacho',
       authorize: 'Autorizando', execute: 'Enviando un lote', bulk: 'Enviando lotes pendientes',
     };
@@ -541,6 +553,47 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
           this.error = this.message(err, 'No se pudieron revisar los destinatarios. No se aprobó ningún costo.');
         },
       });
+  }
+
+  registerTemplateEvidence(): void {
+    const templateId = this.templateId.value;
+    if (this.busy || this.hasApproval || !this.requiresProviderTemplateEvidence
+        || !templateId || !this.providerInventoryConfirmed.value) { return; }
+    this.evidenceError = '';
+    this.evidenceMessage = '';
+    let inventory: unknown;
+    try {
+      inventory = JSON.parse(this.providerInventoryJson.value);
+      if (!Array.isArray(inventory)) {
+        this.evidenceError = 'El inventario debe ser una lista JSON de iVentas.';
+        return;
+      }
+    } catch {
+      this.evidenceError = 'El inventario no contiene JSON válido.';
+      return;
+    }
+    this.working = 'evidence';
+    this.api.registerProviderTemplateEvidence(
+      this.data.campaignId, templateId, inventory,
+      this.providerInventoryObservedAt.value, this.providerInventorySource.value,
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.working = null;
+        this.lastEvidence = result;
+        this.evidenceMessage = 'Evidencia registrada para ' +
+          result.accepted_channel_ids.length + ' canales. Vigente hasta ' +
+          result.expires_at + '. No se aprobó ningún envío.';
+        this.providerInventoryJson.setValue('');
+        this.providerInventoryConfirmed.setValue(false);
+        this.runPreflight();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.working = null;
+        this.evidenceError = this.message(
+          err, 'La evidencia no cubre los canales o no está vigente.',
+        );
+      },
+    });
   }
 
   approve(): void {

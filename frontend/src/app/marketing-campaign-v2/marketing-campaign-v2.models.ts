@@ -1528,3 +1528,20 @@ export interface CampaignV2ConsolidatedReport {
     audience_families: CampaignV2ReportingBreakdownRow[];
   };
 }
+
+
+/** Manual, audited iVentas inventory attestation; never a send authorization. */
+export interface CampaignV2TemplateEvidenceResult {
+  id: number;
+  campaign_id: number;
+  template_id: number;
+  template_name: string;
+  accepted_channel_ids: string[];
+  inventory_sha256: string;
+  observed_at: string;
+  expires_at: string;
+  source: 'OPERATOR_ATTESTED_IVENTAS_EXPORT';
+  provider_api_verified: false;
+  send_authorized: false;
+  quota_reserved: false;
+}

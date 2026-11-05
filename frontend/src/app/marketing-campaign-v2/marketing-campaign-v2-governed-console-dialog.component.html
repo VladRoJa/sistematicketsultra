@@ -67,6 +67,35 @@
       <p *ngIf="creativePurposeNotice" class="blocking-note" role="status">{{ creativePurposeNotice }}</p>
       <p *ngIf="preparationIssue" class="blocking-note" role="status">{{ preparationIssue }}</p>
       <p *ngIf="plan.budget_usd as cost" class="hint">Tarifa automática: <strong>US$ {{ cost.unit_cost_usd }}</strong> por mensaje entregado. Máximo si todos reciben: <strong>US$ {{ cost.maximum_estimated_usd }}</strong>. iVentas confirma el cobro después de entregar.</p>
+      <details class="technical" *ngIf="requiresProviderTemplateEvidence && !hasApproval">
+        <summary>Verificar plantilla por canal con evidencia de iVentas (no envía)</summary>
+        <p class="hint">El catálogo local no prueba aprobación real. Copia el inventario JSON consultado en iVentas: nombre, estado accepted, channelId y channel.id por canal emisor. Es una declaración auditada del operador, no una consulta automática.</p>
+        <mat-form-field appearance="fill">
+          <mat-label>Inventario JSON obtenido de iVentas</mat-label>
+          <textarea matInput rows="6" [formControl]="providerInventoryJson"
+                    placeholder='[{"name":"plantilla","status":"accepted","channelId":"canal","channel":{"id":"canal","name":"Sucursal"}}]'></textarea>
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Fecha/hora de consulta (ISO con zona horaria)</mat-label>
+          <input matInput [formControl]="providerInventoryObservedAt"
+                 placeholder="2026-11-05T08:50:00-08:00">
+        </mat-form-field>
+        <mat-form-field appearance="fill">
+          <mat-label>Referencia o folio de evidencia iVentas</mat-label>
+          <input matInput [formControl]="providerInventorySource"
+                 placeholder="Exportación/pantalla de iVentas, fecha y operador">
+        </mat-form-field>
+        <mat-checkbox [formControl]="providerInventoryConfirmed">
+          Confirmo que consulté estos estados en iVentas para los canales emisores de esta campaña.
+        </mat-checkbox>
+        <p *ngIf="evidenceError" class="error" role="alert">{{ evidenceError }}</p>
+        <p *ngIf="evidenceMessage" class="hint" role="status">{{ evidenceMessage }}</p>
+        <button mat-stroked-button type="button" (click)="registerTemplateEvidence()"
+                [disabled]="busy || !providerInventoryConfirmed.value || !providerInventoryJson.value.trim() || !providerInventoryObservedAt.value.trim() || !providerInventorySource.value.trim()">
+          Registrar evidencia y volver a revisar (sin envío)
+        </button>
+        <p class="hint">Vigencia máxima: 24 horas desde la consulta. Si cambia la plantilla o el canal, o vence la evidencia, el servidor bloqueará el envío.</p>
+      </details>
       <details class="technical"><summary>Ver referencias técnicas de esta revisión</summary>
         <p class="fingerprint">Huella de destinatarios: {{ plan.dispatch_fingerprint }}</p>
         <p class="fingerprint">Versión y huella del costo USD: {{ plan.budget_usd?.rate_version || 'No disponible' }} · {{ plan.budget_usd?.quote_fingerprint || 'No disponible' }}</p>

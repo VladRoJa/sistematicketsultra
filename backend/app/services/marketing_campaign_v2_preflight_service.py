@@ -15,6 +15,9 @@ from app.services.marketing_campaign_v2_channel_routing_service import (
 from app.services.marketing_campaign_v2_failed_cohort_service import (
     FAILED_RECOVERY_SOURCE, validate_failed_recovery_preflight,
 )
+from app.services.marketing_campaign_v2_template_evidence_service import (
+    accepted_evidence_channels,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
 )
@@ -196,6 +199,13 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     file_url = template_file_url(template)
+    verified_provider_channels = (
+        accepted_evidence_channels(
+            campaign_id=campaign_id, template=template, session=active_session,
+            now=now,
+        )
+        if campaign.get("source") == FAILED_RECOVERY_SOURCE else frozenset()
+    )
 
     frozen_recipients = list(projection["frozen_recipients"])
     sendable_recipients = list(projection["sendable_recipients"])
@@ -311,9 +321,12 @@ def build_campaign_v2_preflight(
             reasons.append("TEMPLATE_CHANNEL_MISMATCH")
             template_channel_mismatch.update(batch_recipient_ids)
 
-        if campaign.get("source") == FAILED_RECOVERY_SOURCE:
-            # No verified provider catalog-read contract exists yet. The local
-            # JSON inventory does not attest real template availability.
+        if (campaign.get("source") == FAILED_RECOVERY_SOURCE
+                and (binding is None or str(binding.provider_channel_id)
+                     not in verified_provider_channels)):
+            # Fail closed: a local template catalog is not provider evidence.
+            # A current, operator-attested provider inventory must cover each
+            # exact outbound channel; route/template drift revokes the proof.
             reasons.append("PROVIDER_TEMPLATE_UNVERIFIED")
 
         if batch_recipient_ids & missing_variable:

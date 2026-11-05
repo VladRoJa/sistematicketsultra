@@ -62,6 +62,7 @@ import {
   CampaignV2GovernedExecuteResult,
   CampaignV2GovernedMonitor,
   CampaignV2PreflightResponse,
+  CampaignV2TemplateEvidenceResult,
   CampaignV2PreviewDetailRequest,
   CampaignV2PreviewDetailResponse,
   CampaignV2PreviewResponse,
@@ -450,6 +451,25 @@ export class MarketingCampaignV2Service {
       {
         expected_candidate_fingerprint: preview.candidate_fingerprint,
         expected_recipient_count: preview.recipient_count,
+      },
+    );
+  }
+
+  registerProviderTemplateEvidence(
+    campaignId: number,
+    templateId: number,
+    inventory: unknown[],
+    observedAt: string,
+    sourceReference: string,
+  ): Observable<CampaignV2TemplateEvidenceResult> {
+    return this.http.post<CampaignV2TemplateEvidenceResult>(
+      `${this.apiUrl}/${campaignId}/dispatch/template-evidence`,
+      {
+        template_id: templateId,
+        inventory,
+        observed_at: observedAt,
+        source_reference: sourceReference,
+        confirmed_provider_capture: true,
       },
     );
   }
