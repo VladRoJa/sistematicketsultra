@@ -1,11 +1,11 @@
-<aside *ngIf="jobs.length && !dismissed" class="dispatch-dock" aria-label="Seguimiento de envíos en segundo plano">
+<aside *ngIf="jobs.length" class="dispatch-dock" aria-label="Seguimiento de envíos en segundo plano">
   <header class="dispatch-dock__heading">
     <mat-icon aria-hidden="true">outgoing_mail</mat-icon>
     <strong>Envíos de campañas</strong>
     <small *ngIf="stale" role="status">Sin actualización reciente</small>
     <button mat-icon-button type="button" class="dispatch-dock__close"
-      (click)="dismissDock()" aria-label="Cerrar seguimiento de envíos"
-      title="Cerrar seguimiento de envíos">
+      (click)="dismissDock()" aria-label="Desactivar avisos de estos envíos"
+      title="No volver a mostrar estos envíos">
       <mat-icon aria-hidden="true">close</mat-icon>
     </button>
   </header>
