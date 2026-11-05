@@ -1,9 +1,9 @@
 <header class="dialog-header">
   <div>
-    <p class="eyebrow">Campaña guardada · destinatarios fijos</p>
+    <p class="eyebrow">Campaña #{{ data.campaignId }} · destinatarios congelados</p>
     <h2>{{ campaign?.name || 'Detalle de campaña' }}</h2>
   </div>
-  <button mat-button type="button" (click)="close()">Cerrar</button>
+  <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="close()"><mat-icon aria-hidden="true">close</mat-icon>Cerrar</button>
 </header>
 
 <mat-dialog-content>
@@ -32,8 +32,8 @@
           <span>{{ overview.total | number }} destinatarios congelados · Últimos cortes guardados por lote</span>
         </div>
         <p *ngIf="!overview.hasSnapshot" class="recipient-overview-empty">
-          Aún no hay estadísticas guardadas de iVentas para esta campaña.
-          Los destinatarios permanecen congelados y el estado de envío todavía no está disponible.
+          Aún no hay una captura de estadísticas de iVentas para esta campaña. No significa que haya cero mensajes enviados o leídos.
+          Comprueba el estado de sus lotes y la captura de estadísticas; los destinatarios originales permanecen congelados.
         </p>
         <ng-container *ngIf="overview.hasSnapshot">
           <div class="recipient-overview-kpis">
@@ -48,6 +48,12 @@
               <small>{{ overview.reachedRate }} de la audiencia</small>
             </div>
           </div>
+          <div class="campaign-detail-delivery-stages" aria-label="Última etapa confirmada de entrega">
+            <div><span>Enviados sin entrega confirmada</span><strong>{{ (recipientStatusSummary?.counts?.SENT ?? 0) | number }}</strong></div>
+            <div><span>Entregados sin lectura confirmada</span><strong>{{ (recipientStatusSummary?.counts?.DELIVERED ?? 0) | number }}</strong></div>
+            <div><span>Leídos</span><strong>{{ (recipientStatusSummary?.counts?.VIEWED ?? 0) | number }}</strong></div>
+          </div>
+          <p class="campaign-detail-status-explanation">Son estados exclusivos del último corte disponible por lote. «Aceptado» no equivale a «Entregado» y un estado sin evidencia no equivale a cero envíos.</p>
           <div class="recipient-overview-bar" role="img"
                aria-label="Distribución de estados de los destinatarios">
             <span *ngFor="let segment of overview.segments"
@@ -71,7 +77,7 @@
             <h3>Resultados de lotes y recuperación</h3>
             <p>Aceptado por iVentas no significa entregado. Los errores inciertos nunca se reenvían automáticamente.</p>
           </div>
-          <button mat-stroked-button type="button" (click)="loadDispatchState()">
+          <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="loadDispatchState()"><mat-icon aria-hidden="true">refresh</mat-icon>
             Actualizar resultados
           </button>
         </div>
@@ -83,7 +89,9 @@
             <div><span>Resultados inciertos</span><strong>{{ summary.uncertain_batches | number }} lotes · {{ summary.uncertain_recipients | number }} destinatarios</strong></div>
             <div><span>Sin intentar</span><strong>{{ summary.unattempted_batches | number }} lotes · {{ summary.unattempted_recipients | number }} destinatarios</strong></div>
           </div>
-          <div class="table-wrap" *ngIf="state.has_provider_campaigns">
+          <details class="campaign-detail-disclosure" *ngIf="state.has_provider_campaigns">
+            <summary>Ver detalle de los lotes registrados en iVentas</summary>
+          <div class="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -113,9 +121,10 @@
               </tbody>
             </table>
           </div>
+          </details>
           <div *ngIf="state.summary?.can_create_failed_recovery && !failedRecoveryResult">
-            <button mat-stroked-button type="button"
-                    (click)="reviewFailedRecovery()" [disabled]="failedRecoveryLoading">
+            <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button"
+                    (click)="reviewFailedRecovery()" [disabled]="failedRecoveryLoading"><mat-icon aria-hidden="true">find_in_page</mat-icon>
               Crear campaña con fallidas
             </button>
             <p class="muted">Solo rechazos definitivamente no aceptados. No incluye aceptados ni resultados inciertos.</p>
@@ -126,8 +135,8 @@
              {{ preview.branches.length }} sucursales ·
              {{ preview.recipient_count | number }} destinatarios congelados.</p>
           <p class="muted">Plantilla iVentas: NO VERIFICADA. Crear esta campaña no realiza ningún envío ni reserva cuota.</p>
-          <button mat-flat-button type="button" (click)="createFailedRecovery()"
-                  [disabled]="failedRecoveryLoading">
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button" (click)="createFailedRecovery()"
+                  [disabled]="failedRecoveryLoading"><mat-icon aria-hidden="true">add_circle</mat-icon>
             Confirmar creación sin enviar
           </button>
         </div>
@@ -144,20 +153,20 @@
           <h3>Resultados de la campaña</h3>
         </div>
         <div class="reporting-actions">
-          <button
-            mat-stroked-button
+          <button class="campaign-detail-btn campaign-detail-btn--primary"
+            mat-flat-button
             type="button"
             (click)="loadReporting()"
             [disabled]="loadingReporting"
-          >
+          ><mat-icon aria-hidden="true">query_stats</mat-icon>
             {{ loadingReporting ? 'Cargando…' : 'Cargar resultados' }}
           </button>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportReporting()"
             [disabled]="exportingReporting"
-          >
+          ><mat-icon aria-hidden="true">file_download</mat-icon>
             {{ exportingReporting ? 'Exportando…' : 'Exportar reporte' }}
           </button>
         </div>
@@ -168,7 +177,7 @@
           <div>
             <h4 id="commercial-attribution-title">Resultados comerciales · Gasca</h4>
           </div>
-          <button mat-stroked-button type="button" (click)="loadCommercialAttribution()" [disabled]="loadingCommercialAttribution">
+          <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="loadCommercialAttribution()" [disabled]="loadingCommercialAttribution"><mat-icon aria-hidden="true">refresh</mat-icon>
             {{ loadingCommercialAttribution ? 'Consultando…' : 'Actualizar' }}
           </button>
         </div>
@@ -206,6 +215,7 @@
           Aún no hay observaciones persistidas para esta campaña.
         </p>
 
+        <ng-container *ngIf="report.observation.snapshot_id !== null">
         <div class="reporting-summary-grid">
           <div><span>Destinatarios congelados</span><strong>{{ report.audience.total_recipients | number }}</strong></div>
           <div><span>Disponibilidad de resultados</span><strong>{{ reportingSnapshotLabel() }}</strong></div>
@@ -226,6 +236,8 @@
           <div><span>% con seguimiento</span><strong>{{ reportingPercent(report.coverage.status_coverage_rate) }}</strong></div>
         </div>
 
+        <details class="campaign-detail-disclosure">
+          <summary>Ver datos técnicos del proveedor y evolución histórica</summary>
         <div class="reporting-detail-grid">
           <section>
             <h4>Datos originales de iVentas (detalle técnico)</h4>
@@ -283,6 +295,8 @@
           </div>
           <ng-template #noEvolution><p class="muted">Sin registros anteriores de resultados.</p></ng-template>
         </section>
+        </details>
+        </ng-container>
       </ng-container>
     </section>
         </div>
@@ -298,20 +312,20 @@
         </div>
         <div class="recipient-actions">
           <span *ngIf="loadingRecipients" class="loading-inline">Cargando…</span>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportDeliveryPackage()"
             [disabled]="exportingDeliveryPackage || !campaign?.recipient_count"
-          >
+          ><mat-icon aria-hidden="true">download</mat-icon>
             {{ exportingDeliveryPackage ? 'Preparando…' : 'Descargar lista original' }}
           </button>
-          <button
+          <button class="campaign-detail-btn campaign-detail-btn--secondary"
             mat-stroked-button
             type="button"
             (click)="exportSendablePackage()"
             [disabled]="exportingSendablePackage || !campaign?.recipient_count"
-          >
+          ><mat-icon aria-hidden="true">download</mat-icon>
             {{ exportingSendablePackage ? 'Preparando…' : 'Descargar lista para envío' }}
           </button>
         </div>
@@ -334,7 +348,7 @@
       </p>
 
       <div class="recipient-actions">
-        <button mat-stroked-button type="button" (click)="openPreparationCenter()">
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="openPreparationCenter()"><mat-icon aria-hidden="true">rule</mat-icon>
           Centro de preparación · Ambigüedades y duplicados
         </button>
         <p class="muted">Revisar exclusiones no cambia la lista original ni envía mensajes.</p>
@@ -379,7 +393,7 @@
               </td>
               <td><span *ngIf="recipient.conflict_fields.length" class="conflict-label">Datos con conflicto</span><span *ngIf="!recipient.conflict_fields.length">—</span></td>
               <td>{{ recipient.evidence_count }}</td>
-              <td><button mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
+              <td><button class="campaign-detail-btn campaign-detail-btn--secondary" mat-button type="button" (click)="openRecipient(recipient)">Ver</button></td>
             </tr>
           </tbody>
         </table>
@@ -387,9 +401,9 @@
       <ng-template #emptyRecipients><p *ngIf="!loadingRecipients && !error" class="muted recipient-filter-empty">{{ recipientsEmptyMessage }}</p></ng-template>
 
       <div class="pager" *ngIf="recipientsTotalPages > 1">
-        <button mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="previousRecipientsPage()" [disabled]="recipientsPage <= 1 || loadingRecipients">Anterior</button>
         <span>Página {{ recipientsPage }} de {{ recipientsTotalPages }}</span>
-        <button mat-stroked-button type="button" (click)="nextRecipientsPage()" [disabled]="recipientsPage >= recipientsTotalPages || loadingRecipients">Siguiente</button>
+        <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="nextRecipientsPage()" [disabled]="recipientsPage >= recipientsTotalPages || loadingRecipients">Siguiente</button>
       </div>
         </section>
         </div>
@@ -399,7 +413,7 @@
         <div class="campaign-detail-tab-panel">
           <p class="campaign-detail-tab-intro">Configura y revisa destinatarios, plantillas y límites antes de autorizar cualquier envío.</p>
     <section *ngIf="data.canManageDispatchConfig" class="governed-entry">
-      <button mat-stroked-button type="button" (click)="openGovernedConsole()">Preparar envío · paso a paso</button>
+      <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button" (click)="openGovernedConsole()"><mat-icon aria-hidden="true">send</mat-icon>Preparar envío · paso a paso</button>
       <p>Revisa destinatarios, costo y capacidad. Después prepara y autoriza los lotes. El envío real requiere otra confirmación.</p>
     </section>
     <section class="purpose-row">
@@ -409,7 +423,7 @@
           <mat-option *ngFor="let value of data.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
         </mat-select>
       </mat-form-field>
-      <button mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose">
+      <button class="campaign-detail-btn campaign-detail-btn--secondary" mat-stroked-button type="button" (click)="savePurpose()" [disabled]="updatingPurpose || purposeControl.value === campaign.purpose"><mat-icon aria-hidden="true">save</mat-icon>
         {{ updatingPurpose ? 'Guardando…' : 'Guardar objetivo' }}
       </button>
     </section>
@@ -433,17 +447,18 @@
               </mat-option>
             </mat-select>
           </mat-form-field>
-          <button
-            mat-stroked-button
+          <button class="campaign-detail-btn campaign-detail-btn--primary"
+            mat-flat-button
             type="button"
             (click)="reviewDispatch()"
             [disabled]="!canReviewDispatch"
-          >
+          ><mat-icon aria-hidden="true">fact_check</mat-icon>
             {{ preflighting ? 'Revisando…' : 'Comprobar destinatarios' }}
           </button>
         </div>
 
         <p *ngIf="loadingDispatchTemplates" class="muted">Cargando plantillas disponibles…</p>
+        <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length > 0 && dispatchTemplateControl.value === null" class="campaign-detail-action-hint">Selecciona una plantilla para habilitar la comprobación. Esta revisión no envía mensajes.</p>
         <p *ngIf="!loadingDispatchTemplates && dispatchTemplates.length === 0 && !preflightError" class="muted">
           No hay plantillas activas compatibles con el objetivo de esta campaña.
         </p>
@@ -490,6 +505,8 @@
                 <strong>{{ quota.hold_recommended_recipients | number }}</strong></div>
               <div><span>Evaluación</span><strong>{{ quota.status }}</strong></div>
             </div>
+            <details class="campaign-detail-disclosure">
+              <summary>Ver límites y capacidad por sucursal</summary>
             <div class="table-wrap preflight-batches" *ngIf="quota.basis === 'SUITE_BRANCH_EXCEPTION_CAPS_V1'">
               <table>
                 <thead><tr><th>Sucursal</th><th>Destinatarios</th><th>Regla</th><th>Resultado</th></tr></thead>
@@ -522,6 +539,7 @@
                 </tbody>
               </table>
             </div>
+            </details>
             <p class="muted" *ngIf="quota.basis === 'SUITE_OPERATOR_ROLLING_24H_V1'">
               Estimación interna en ventana móvil de 24 horas: solo envíos y reservas visibles para Suite Ultra.
               El saldo real de Meta y los envíos externos son desconocidos. La evaluación no reserva ni autoriza envíos.
@@ -541,7 +559,9 @@
             <span *ngIf="plan.blocked.template_channel_mismatch">Template/channel incompatible: {{ plan.blocked.template_channel_mismatch }}</span>
           </div>
 
-          <div class="table-wrap preflight-batches" *ngIf="plan.batches.length">
+          <details class="campaign-detail-disclosure" *ngIf="plan.batches.length">
+            <summary>Ver {{ plan.batches.length }} lotes y canales del proveedor</summary>
+          <div class="table-wrap preflight-batches">
             <table>
               <thead>
                 <tr>
@@ -572,6 +592,7 @@
             </table>
           </div>
 
+          </details>
           <div class="preflight-fingerprint">
             <span>Dispatch fingerprint · {{ plan.dispatch_fingerprint_version }}</span>
             <strong class="mono">{{ plan.dispatch_fingerprint }}</strong>
@@ -582,14 +603,14 @@
               <strong>Envío directo (método anterior)</strong>
               <span>{{ submitAvailabilityLabel() }}</span>
             </div>
-            <button
+            <button class="campaign-detail-btn campaign-detail-btn--danger"
               *ngIf="plan.submission.can_send"
               mat-flat-button
               color="warn"
               type="button"
               (click)="confirmAndSubmitDispatch()"
               [disabled]="!canSubmitDispatch"
-            >
+            ><mat-icon aria-hidden="true">warning</mat-icon>
               {{ submitting ? 'Enviando…' : 'Enviar mensajes ahora' }}
             </button>
           </div>
@@ -615,7 +636,7 @@
             <h3 id="followup-preview-title">Preparar campaña de seguimiento</h3>
             <p>Selecciona varios estados para combinarlos. Cualquier estado marcado será incluido (OR).</p>
           </div>
-          <span class="followup-preview-stage">Envíos bloqueados</span>
+          <span class="followup-preview-stage">Sin envío automático</span>
         </div>
         <div class="followup-status-options" role="group" aria-label="Estados acumulables para seguimiento">
           <label *ngFor="let option of followupStatusOptions" class="followup-status-option"
@@ -628,9 +649,9 @@
           </label>
         </div>
         <div class="followup-preview-actions">
-          <button mat-stroked-button type="button"
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button"
                   (click)="previewFollowup()"
-                  [disabled]="followupPreviewLoading || followupFreezing || !!followupFreezeResult || selectedFollowupStatuses.length === 0">
+                  [disabled]="followupPreviewLoading || followupFreezing || !!followupFreezeResult || selectedFollowupStatuses.length === 0"><mat-icon aria-hidden="true">calculate</mat-icon>
             {{ followupPreviewLoading ? 'Calculando…' : 'Calcular audiencia acumulada' }}
           </button>
           <span class="muted">{{ selectedFollowupStatuses.length }} estados seleccionados</span>
@@ -669,9 +690,9 @@
                    (change)="setFollowupFreezeConfirmed($event)" />
             <span>Confirmo congelar una cohorte independiente. Entiendo que esto no autoriza envíos.</span>
           </label>
-          <button mat-stroked-button type="button"
+          <button class="campaign-detail-btn campaign-detail-btn--primary" mat-flat-button type="button"
                   (click)="freezeFollowup()"
-                  [disabled]="followupFreezing || !followupFreezeConfirmed || !followupNameControl.value.trim() || followupPreviewResult.candidate_count === 0">
+                  [disabled]="followupFreezing || !followupFreezeConfirmed || !followupNameControl.value.trim() || followupPreviewResult.candidate_count === 0"><mat-icon aria-hidden="true">playlist_add_check</mat-icon>
             {{ followupFreezing ? 'Congelando…' : 'Congelar campaña de seguimiento' }}
           </button>
         </div>
