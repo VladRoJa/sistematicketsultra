@@ -15,6 +15,9 @@ from app.services.marketing_campaign_v2_channel_routing_service import (
 from app.services.marketing_campaign_v2_failed_cohort_service import (
     FAILED_RECOVERY_SOURCE, validate_failed_recovery_preflight,
 )
+from app.services.marketing_campaign_v2_template_evidence_service import (
+    accepted_evidence_channels, binding_signature,
+)
 from app.models.marketing import (
     MarketingCampaignV2ORM, MarketingCampaignV2HeldReleaseIntentORM,
 )
@@ -196,7 +199,6 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     file_url = template_file_url(template)
-
     frozen_recipients = list(projection["frozen_recipients"])
     sendable_recipients = list(projection["sendable_recipients"])
     # One lazy snapshot per preflight: do not re-query catalog/aliases for every row.
@@ -291,6 +293,29 @@ def build_campaign_v2_preflight(
             )
         )
 
+    verified_provider_channels = frozenset()
+    if campaign.get("source") == FAILED_RECOVERY_SOURCE:
+        outbound_bindings = [
+            {
+                "sucursal_id": group["branch"].sucursal_id,
+                "sucursal_canon": group["branch"].sucursal_canon,
+                "channel_binding_id": (
+                    int(group["binding"].id) if group["binding"] is not None else None
+                ),
+                "provider_channel_id": (
+                    str(group["binding"].provider_channel_id)
+                    if group["binding"] is not None else None
+                ),
+                "send_via_sucursal_canon": group["send_via_sucursal_canon"],
+            }
+            for group in grouped.values()
+        ]
+        verified_provider_channels = accepted_evidence_channels(
+            campaign_id=campaign_id, template=template, session=active_session,
+            required_binding_signature=binding_signature(outbound_bindings),
+            now=now,
+        )
+
     batches: list[CampaignV2DispatchBatchPlan] = []
     for (_sucursal_id, _sucursal_canon), group in sorted(
         grouped.items(),
@@ -311,9 +336,12 @@ def build_campaign_v2_preflight(
             reasons.append("TEMPLATE_CHANNEL_MISMATCH")
             template_channel_mismatch.update(batch_recipient_ids)
 
-        if campaign.get("source") == FAILED_RECOVERY_SOURCE:
-            # No verified provider catalog-read contract exists yet. The local
-            # JSON inventory does not attest real template availability.
+        if (campaign.get("source") == FAILED_RECOVERY_SOURCE
+                and (binding is None or str(binding.provider_channel_id)
+                     not in verified_provider_channels)):
+            # Fail closed: a local template catalog is not provider evidence.
+            # A current, operator-attested provider inventory must cover each
+            # exact outbound channel; route/template drift revokes the proof.
             reasons.append("PROVIDER_TEMPLATE_UNVERIFIED")
 
         if batch_recipient_ids & missing_variable:

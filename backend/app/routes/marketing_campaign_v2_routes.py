@@ -157,6 +157,9 @@ from app.services.marketing_campaign_v2_preflight_service import (
     build_campaign_v2_preflight,
     serialize_campaign_v2_preflight,
 )
+from app.services.marketing_campaign_v2_template_evidence_service import (
+    TemplateEvidenceValidation, register_template_evidence,
+)
 from app.services.marketing_campaign_v2_provider import (
     CampaignProviderConfigurationError,
 )
@@ -2797,6 +2800,43 @@ def campaign_v2_previous_contacts_apply_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Falló exclusión auditada de campañas anteriores.", 500)
+
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/template-evidence"
+)
+@jwt_required()
+def register_campaign_v2_provider_template_evidence_endpoint(campaign_id: int):
+    """Record scoped provider inventory proof; never approve, reserve or send."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        if request.content_length is not None and request.content_length > 800_000:
+            return _error("Inventario iVentas demasiado grande.", 413)
+        payload = _parse_payload({
+            "template_id", "inventory", "observed_at", "source_reference",
+            "confirmed_provider_capture",
+        })
+        result = register_template_evidence(
+            campaign_id=campaign_id,
+            template_id=payload.get("template_id"),
+            inventory=payload.get("inventory"),
+            observed_at=payload.get("observed_at"),
+            source_reference=payload.get("source_reference"),
+            confirmed_provider_capture=payload.get("confirmed_provider_capture"),
+            actor_user_id=int(user.id), session=db.session,
+        )
+        return jsonify(result), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (TemplateEvidenceValidation, MarketingCampaignV2RouteValidationError,
+            MarketingCampaignV2DispatchConfigValidationError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible guardar la evidencia de plantilla.", 500)
 
 
 @marketing_campaign_v2_bp.post(
