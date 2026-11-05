@@ -275,3 +275,184 @@ mat-dialog-content { padding: 14px 18px 18px; }
   .recipient-overview-kpi strong { font-size:23px; }
   .recipient-overview-legend { justify-content:flex-start; }
 }
+
+
+/* UX milestone: task-based campaign detail instead of one endless document. */
+.dialog-header {
+  align-items:center;
+  background:#fff;
+  padding:18px 22px 14px;
+  border-bottom:1px solid #dbe3ec;
+}
+.dialog-header h2 { font-size:23px; font-weight:750; line-height:1.25; color:#172238; }
+.dialog-header .eyebrow { font-size:11px; letter-spacing:.075em; }
+mat-dialog-content {
+  box-sizing:border-box;
+  padding:14px 22px 20px;
+  max-height:min(78vh, calc(100dvh - 120px));
+}
+.summary-grid {
+  margin:2px 0 12px;
+  border-color:#dbe3ec;
+  background:#dbe3ec;
+  box-shadow:0 4px 14px rgba(15,23,42,.045);
+}
+.summary-grid > div { padding:13px 15px; }
+.summary-grid strong { font-size:14px; color:#172238; }
+
+.campaign-detail-tabs {
+  --mdc-tab-indicator-active-indicator-color:var(--ultra-orange,#e54525);
+  --mat-tab-header-active-label-text-color:#a9361b;
+  --mat-tab-header-active-hover-label-text-color:#a9361b;
+  --mat-tab-header-inactive-label-text-color:#475569;
+  --mat-tab-header-inactive-hover-label-text-color:#172238;
+  --mat-tab-header-active-focus-label-text-color:#a9361b;
+  display:block;
+  margin-top:8px;
+}
+.campaign-detail-tab-panel { box-sizing:border-box; padding:17px 3px 28px; min-height:190px; }
+.campaign-detail-tab-intro {
+  margin:0 0 16px;
+  padding:10px 13px;
+  border-left:3px solid var(--ultra-orange,#e54525);
+  background:#fff7f2;
+  border-radius:0 8px 8px 0;
+  color:#475569;
+  font-size:12px;
+  line-height:1.55;
+}
+.campaign-detail-tab-panel > .recipient-overview,
+.campaign-detail-tab-panel > .reporting-section,
+.campaign-detail-tab-panel > .provider-submit-state,
+.campaign-detail-tab-panel > .dispatch-preflight-section,
+.campaign-detail-tab-panel > .followup-preview-section {
+  margin-top:15px;
+}
+.campaign-detail-tab-panel .section-heading { align-items:center; flex-wrap:wrap; gap:12px; }
+.campaign-detail-tab-panel h3 { font-size:16px; font-weight:750; color:#1e293b; }
+.campaign-detail-tab-panel .followup-preview-section,
+.campaign-detail-tab-panel .dispatch-preflight-section,
+.campaign-detail-tab-panel .definition-panel {
+  border-color:#dbe3ec;
+  box-shadow:0 2px 12px rgba(15,23,42,.035);
+}
+
+/* Buttons: distinguish a primary step from a neutral utility and real sending. */
+button.campaign-detail-btn {
+  min-height:38px;
+  border-radius:9px;
+  font-size:12px;
+  font-weight:750;
+  letter-spacing:0;
+  white-space:normal;
+  line-height:1.3;
+}
+button.campaign-detail-btn mat-icon { width:18px; height:18px; font-size:18px; margin-right:5px; }
+button.campaign-detail-btn--primary {
+  background:#c2410c !important;
+  border:1px solid #a9361b !important;
+  color:#fff !important;
+  box-shadow:0 2px 8px rgba(194,65,12,.16);
+}
+button.campaign-detail-btn--primary:hover:not([disabled]) {
+  background:#9a3412 !important; box-shadow:0 3px 10px rgba(154,52,18,.2);
+}
+button.campaign-detail-btn--secondary {
+  background:#fff !important;
+  border:1px solid #94a3b8 !important;
+  color:#243b53 !important;
+}
+button.campaign-detail-btn--secondary:hover:not([disabled]) {
+  border-color:#475569 !important; background:#f1f5f9 !important;
+}
+button.campaign-detail-btn--danger {
+  background:#b42318 !important;
+  border:1px solid #991b1b !important;
+  color:#fff !important;
+  box-shadow:0 2px 9px rgba(180,35,24,.13);
+}
+button.campaign-detail-btn--danger:hover:not([disabled]) { background:#991b1b !important; }
+button.campaign-detail-btn:focus-visible {
+  outline:3px solid rgba(234,88,12,.34);
+  outline-offset:2px;
+}
+button.campaign-detail-btn[disabled] {
+  opacity:.48;
+  filter:grayscale(.2);
+  box-shadow:none;
+}
+.campaign-detail-action-hint {
+  margin:10px 0;
+  padding:9px 11px;
+  border:1px solid #fed7aa;
+  background:#fff7ed;
+  border-radius:8px;
+  color:#9a3412;
+  font-size:12px;
+}
+.campaign-detail-delivery-stages {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:9px;
+  margin-bottom:12px;
+}
+.campaign-detail-delivery-stages > div {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+  padding:11px 13px;
+  border:1px solid #405266;
+  border-radius:9px;
+  background:#1e293b;
+}
+.campaign-detail-delivery-stages span { color:#cbd5e1; font-size:11px; font-weight:600; }
+.campaign-detail-delivery-stages strong { font-size:24px; color:#fff; font-variant-numeric:tabular-nums; }
+.campaign-detail-status-explanation {
+  font-size:11px;
+  color:#cbd5e1;
+  margin:0 0 13px;
+  line-height:1.55;
+}
+.campaign-detail-disclosure {
+  margin:12px 0;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  background:#fff;
+  overflow:hidden;
+}
+.campaign-detail-disclosure > summary {
+  padding:12px 14px;
+  cursor:pointer;
+  color:#334155;
+  background:#f8fafc;
+  font-size:12px;
+  font-weight:750;
+}
+.campaign-detail-disclosure > summary:hover { background:#f1f5f9; }
+.campaign-detail-disclosure > summary:focus-visible { outline:2px solid var(--ultra-orange,#e54525); outline-offset:-2px; }
+.campaign-detail-disclosure[open] { padding-bottom:12px; }
+.campaign-detail-disclosure[open] > .table-wrap,
+.campaign-detail-disclosure[open] > .reporting-detail-grid,
+.campaign-detail-disclosure[open] > .reporting-evolution { margin:12px 12px 0; }
+.campaign-detail-tab-panel .purpose-row { align-items:center; }
+.campaign-detail-tab-panel .submit-gate { border:1px solid #f0b9ae; padding:15px; }
+.campaign-detail-tab-panel .submit-gate > div { gap:6px; }
+.campaign-detail-tab-panel .submit-gate > div > strong { color:#991b1b; }
+.campaign-detail-tab-panel .submit-gate span { line-height:1.45; }
+
+@media(max-width:800px) {
+  .dialog-header { padding:14px; }
+  .dialog-header h2 { font-size:19px; }
+  mat-dialog-content { min-width:0; padding:12px; max-height:calc(100dvh - 112px); }
+  .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .campaign-detail-tab-panel { padding:12px 2px 20px; }
+  .campaign-detail-delivery-stages { grid-template-columns:1fr; }
+  .campaign-detail-tab-panel .purpose-row { align-items:stretch; }
+  .campaign-detail-tab-panel .section-heading { align-items:stretch; }
+  .campaign-detail-btn { max-width:100%; }
+}
+@media(max-width:440px) {
+  .summary-grid { grid-template-columns:1fr; }
+  .dialog-header { gap:10px; }
+}
