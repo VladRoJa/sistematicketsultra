@@ -18,7 +18,7 @@
       <div><span>Fuente</span><strong>{{ sourceLabel(campaign.source) }}</strong></div>
       <div><span>Guardada</span><strong>{{ campaign.frozen_at | date:'medium' }}</strong></div>
       <div><span>Destinatarios</span><strong>{{ campaign.recipient_count | number }}</strong></div>
-      <div><span>Referencia de seguridad</span><strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong></div>
+
     </section>
 
     <mat-tab-group class="campaign-detail-tabs" animationDuration="0ms" aria-label="Secciones del detalle de campaña">
@@ -709,6 +709,10 @@
       <mat-tab label="Información">
         <div class="campaign-detail-tab-panel">
           <p class="campaign-detail-tab-intro">Consulta las condiciones originales guardadas de esta campaña. Su audiencia permanece congelada.</p>
+          <div class="campaign-detail-security-reference">
+            <span>Referencia de seguridad de la audiencia</span>
+            <strong class="mono">{{ campaign.preview_fingerprint || '—' }}</strong>
+          </div>
     <div class="definition-grid">
       <section class="definition-panel">
         <h3>Reglas guardadas de la campaña</h3>
