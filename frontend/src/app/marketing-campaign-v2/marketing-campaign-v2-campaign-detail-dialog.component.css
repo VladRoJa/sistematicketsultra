@@ -456,3 +456,31 @@ button.campaign-detail-btn[disabled] {
   .summary-grid { grid-template-columns:1fr; }
   .dialog-header { gap:10px; }
 }
+
+
+/* Keep task navigation accessible even when a detailed table is long. */
+.campaign-detail-tabs {
+  --mat-tab-header-active-indicator-color:var(--ultra-orange,#e54525);
+}
+:host ::ng-deep .campaign-detail-tabs .mat-mdc-tab-header {
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:#fff;
+  border-bottom:1px solid #dbe3ec;
+}
+.summary-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.campaign-detail-security-reference {
+  padding:13px 15px;
+  margin:12px 0 16px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+  background:#f8fafc;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.campaign-detail-security-reference span { color:#475569; font-size:11px; font-weight:750; }
+.campaign-detail-security-reference strong { overflow-wrap:anywhere; font-size:11px !important; }
+@media(max-width:800px) { .summary-grid { grid-template-columns:1fr 1fr; } }
+@media(max-width:440px) { .summary-grid { grid-template-columns:1fr; } }
