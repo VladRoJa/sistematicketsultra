@@ -129,3 +129,87 @@ auditoria transaccional y regla explicita de tolerancia al vencimiento.
 
 No se hace merge, despliegue, migracion, cambio de permisos ni envio de
 campañas dentro de este paquete.
+
+
+## Hallazgo 2026-11-07: Gasca permite re-descargar histórico enriquecido
+
+Se comparó el RAW almacenado de diciembre de 2024 (upload 8692)
+con una descarga manual actual del mismo mes desde Gasca, sin difundir
+datos de socios:
+
+| Métrica | RAW anterior | Descarga actual |
+| --- | ---: | ---: |
+| Movimientos con folio | 68,319 | 68,463 |
+| Movimientos con PIN | 0 | 43,557 |
+| Movimientos con IDSocio | 0 | 43,557 |
+| Movimientos candidatos a membresía identificada | 0 | 25,313 |
+| Folios distintos coincidentes | — | 62,763 |
+
+Esto invalida la hipótesis de que los reportes anteriores a 2025 no
+tienen forma de identificar socios. **El XLSX que entrega hoy Gasca para
+un rango de 2024 sí incluye IDSocio, PIN y Tipo**, aunque el archivado
+en Warehouse no. Los datos originales de Gasca tienen 32 encabezados
+(incluidos RFC, Razon Social, Telefono, Api e IDSocio), frente a las
+25 columnas de los archivos más antiguos.
+
+La comparación prueba el caso diciembre de 2024; NO demuestra que
+2023 y todos los meses de 2024 tengan IDs. Se verifica mes a mes.
+
+### Descargador histórico Playwright (RAW FIRST)
+
+El script `app.warehouse.backfill.redownload_venta_total_history`
+**reutiliza** login de Gasca y los helpers de UI del runner existente,
+pero evita `_limpiar_excel_inplace`, que volvería a serializar el Excel
+y podría convertir folios/IDSocio largos. Nunca escribe base de datos ni
+cambia canonicalidad.
+
+Primero plan, sin iniciar sesión:
+
+```bash
+cd backend
+python -m app.warehouse.backfill.redownload_venta_total_history \
+  --from-month 2024-12 --to-month 2024-12
+```
+
+Piloto de solo **un mes** en entorno autorizado:
+
+```bash
+cd backend
+python -m app.warehouse.backfill.redownload_venta_total_history \
+  --from-month 2024-12 --to-month 2024-12 --execute
+```
+
+Tras verificar el piloto y la cuenta de acceso autorizado, se puede
+planificar un lote pequeño (no es necesario ejecutar meses completos
+en el primer intento):
+
+```bash
+cd backend
+python -m app.warehouse.backfill.redownload_venta_total_history \
+  --from-month 2024-01 --to-month 2024-12 --limit 3 --execute
+```
+
+Los archivos se guardan localmente en
+`backend/data/backfill/gasca_venta_total_enriched/YYYY-MM/`:
+
+- `venta_total_YYYY_MM_gasca_original.xlsx`: XLSX original de Gasca.
+- `venta_total_YYYY_MM_gasca_original.json`: manifiesto con hash,
+  fecha solicitada, número de filas y conteos de PIN/IDSocio,
+  **sin información de personas**.
+
+Un lote repetido que encuentre un XLSX y manifiesto con SHA idéntico
+se salta. Archivos incompletos o de contenido inesperado **no se
+sobrescriben**. El flag `--execute` es obligatorio para usar Playwright.
+Entre peticiones se deja un mínimo de 2 segundos.
+
+**Seguridad:** los XLSX sí contienen PII (PIN, ID Socio, nombre, teléfono,
+RFC): conservar fuera del repositorio, limitar permisos y retención,
+no enviarlos por logs ni adjuntarlos a PR/CI. Solo operadores autorizados.
+
+**Gate:** el resultado es un RAW aislado. Antes de integrar a Warehouse
+se necesita definir ingesta no canónica, preservar `id_socio` en esquema
+(si se elige estructurar), deduplicar folios/renglones y verificar
+periodos pagados. El parser de Venta Total hoy conserva PIN y Tipo
+pero no `id_socio` en sus modelos persistidos. **No usar las descargas
+para emitir precios automáticamente.**
+
