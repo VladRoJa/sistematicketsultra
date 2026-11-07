@@ -50,3 +50,6 @@ graphify-out/
 
 # WSO-01: private manifests/quarantine must never be committed
 /private/wso01/
+
+# Confidential Gasca member history redownloads (PII: PIN/IDSocio)
+backend/data/backfill/gasca_venta_total_enriched/
