@@ -141,12 +141,14 @@ def export_workbook(output: Path, result: StreakResult, *, as_of: date) -> None:
     quality.append(["Filas de cobertura", result.coverage_rows, "Incluye meses repetidos"])
     quality.append(["Meses repetidos", result.duplicate_months, "No inflan la racha"])
     quality.append(["Filas no vinculadas", result.unmatched_coverage, "Revisar identidad"])
+    quality.append(["Meses futuros ignorados", result.future_months_ignored, "Prepagos futuros no adelantan nivel"])
     for status in ("SIN_EVIDENCIA", "PARCIAL_OBSERVADO", "CERTIFICABLE_CON_FUENTE_COMPLETA",
                    "REINICIO_PROMOCION", "NUEVO"):
         count = sum(1 for item in result.members if item.calidad == status)
         quality.append([status, count, "Validar fuente antes de campaña masiva"])
-    quality["A12"] = "ADVERTENCIA"
-    quality["B12"] = "El historial de Venta Total no prueba por si solo meses cubiertos."
+    warning_row = quality.max_row + 2
+    quality.cell(warning_row, 1, "ADVERTENCIA")
+    quality.cell(warning_row, 2, "Venta Total no prueba por si solo meses cubiertos.")
     quality.column_dimensions["A"].width = 44
     quality.column_dimensions["B"].width = 55
     quality.column_dimensions["C"].width = 60
@@ -169,6 +171,7 @@ def main() -> int:
     print(
         f"Generado: {args.output} | socios={len(result.members)} "
         f"| coberturas={result.coverage_rows} | no_vinculadas={result.unmatched_coverage}"
+        f" | futuros_ignorados={result.future_months_ignored}"
     )
     return 0
 
