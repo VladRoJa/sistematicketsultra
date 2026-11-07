@@ -50,7 +50,7 @@ def test_reference_seed_preserves_historical_identity_before_c9():
     assert by_id[23] == "Tlalnepantla"
     assert by_id[24] == "Metepec"
     assert by_id[25] == "Saltillo Villalta"
-    assert by_id[26] == "Serranía"
+    assert by_id[26] == "Serrania"
     assert "La Viga" not in by_id.values()
 
 
