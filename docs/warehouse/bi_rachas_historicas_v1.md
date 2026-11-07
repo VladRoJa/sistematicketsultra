@@ -70,6 +70,8 @@ id_socio,pin,sucursal,mes_cubierto,estado_evidencia,fuente_ref
   Varias filas del mismo mes no suman varios meses.
 - `fuente_ref` debe permitir auditar el folio o registro; nunca generar
   rachas desde resumenes de ventas sin vigencia.
+- Meses de cobertura **futuros** (prepagos) se ignoran al calcular
+  la racha hasta la fecha de corte; se cuentan aparte en Calidad.
 - `historial_completo=SI` es una afirmacion de calidad que debe provenir
   de verificacion real desde el alta; no marcarlo automaticamente.
 - `reinicio_promocion=SI` significa que la fila representa el primer
