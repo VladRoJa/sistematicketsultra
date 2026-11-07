@@ -122,7 +122,7 @@ def profile_download(path: Path, *, expected_month: date) -> dict[str, object]:
             columns: dict[str, int] = {}
             n_rows = n_pin = n_member_id = n_both = n_membership = 0
             in_month = out_month = bad_dates = 0
-             seen_header = False
+            seen_header = False
             with zipped.open("xl/worksheets/sheet1.xml") as stream:
                 for _, row in etree.iterparse(stream, events=("end",), tag=NS + "row"):
                     index = int(row.get("r") or 0)
@@ -311,6 +311,8 @@ def run_backfill(
                         json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
                         encoding="utf-8",
                     )
+                    if os.name == "posix":
+                        manifest.chmod(0o600)
                     stats["downloaded"] += 1
                     print(
                         f"[OK] {month:%Y-%m} rows={profile['rows']} "
