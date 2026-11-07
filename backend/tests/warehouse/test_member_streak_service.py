@@ -67,10 +67,11 @@ def test_reinicio_promocional_no_recupera_maximo_antiguo():
 
 
 def test_months_duplicated_and_unmatched_do_not_inflate():
+    orphan = _month("2026-04", id_socio="999")
+    orphan["pin"] = "999"
     result = reconstruct_member_streaks(
         [_person()], [_month("2026-01"), _month("2026-01"),
-                    _month("2026-03"), _month("2026-04"),
-                    _month("2026-04", id_socio="999")],
+                    _month("2026-03"), _month("2026-04"), orphan],
         as_of=date(2026, 11, 7),
     )
     assert result.duplicate_months == 1
@@ -147,3 +148,11 @@ def test_workbook_contains_editable_tariffs_and_quality(tmp_path):
     assert book["Detalle"]["G2"].value.startswith("=IF(")
     assert book["Cohortes_BI"]["E2"].value.startswith("=COUNTIFS(")
     assert book["Calidad"]["B2"].value == 1
+
+
+def test_conflicting_id_is_rejected_even_if_branch_pin_matches():
+    with pytest.raises(ValueError, match="contradice"):
+        reconstruct_member_streaks(
+            [_person()], [_month("2026-11", id_socio="999")],
+            as_of=date(2026, 11, 7),
+        )
