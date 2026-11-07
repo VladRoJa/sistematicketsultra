@@ -99,7 +99,8 @@ def test_resume_rejects_modified_or_missing_manifest(tmp_path):
     output, manifest = history.month_paths(tmp_path, month)
     output.parent.mkdir(parents=True)
     _xlsx(output)
-    assert not history.resumable(output, manifest)
+    with pytest.raises(history.HistoricalRawError, match="incompletos"):
+        history.resumable(output, manifest)
     manifest.write_text(json.dumps({"sha256": history.file_sha256(output)}))
     assert history.resumable(output, manifest)
     output.write_bytes(b"changed")
