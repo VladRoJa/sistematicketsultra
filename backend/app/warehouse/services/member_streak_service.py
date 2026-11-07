@@ -30,6 +30,7 @@ class StreakResult:
     coverage_rows: int
     duplicate_months: int
     unmatched_coverage: int
+    future_months_ignored: int
 
 
 def _text(value: object) -> str:
@@ -142,7 +143,7 @@ def reconstruct_member_streaks(
         aliases.pop(alias, None)
 
     covered: dict[str, set[int]] = defaultdict(set)
-    duplicates = unmatched = count = 0
+    duplicates = unmatched = future = count = 0
     cutoff = as_of.year * 12 + as_of.month - 1
     for row in paid_coverage:
         count += 1
@@ -152,12 +153,16 @@ def reconstruct_member_streaks(
             raise ValueError("Cada mes cubierto necesita fuente_ref auditable.")
         month = _covered_month(row.get("mes_cubierto"))
         if month > cutoff:
-            raise ValueError("No se admiten meses posteriores al corte.")
+            future += 1  # prepagos futuros no otorgan descuento hoy
+            continue
         raw_key = _member_key(row)
         alias = _pin_alias(row)
-        if alias in collision:
+        if alias in collision and raw_key not in people:
             raise ValueError("PIN/sucursal ambiguo en padrón; resolver identidad antes.")
         key = raw_key if raw_key in people else aliases.get(alias or "", raw_key)
+        if (raw_key.startswith("ID:") and raw_key not in people
+                and key.startswith("ID:") and key != raw_key):
+            raise ValueError("ID Socio de cobertura contradice el padrón.")
         if key not in people:
             unmatched += 1
             continue
@@ -200,4 +205,4 @@ def reconstruct_member_streaks(
                 racha_reiniciada=reset,
             )
         )
-    return StreakResult(tuple(result), count, duplicates, unmatched)
+    return StreakResult(tuple(result), count, duplicates, unmatched, future)
