@@ -7,6 +7,8 @@ on:
       - 'backend/scripts/ops/profile_member_streak_sources.py'
       - 'backend/scripts/ops/export_member_streaks.py'
       - 'backend/tests/warehouse/test_member_streak_service.py'
+      - 'backend/app/warehouse/backfill/redownload_venta_total_history.py'
+      - 'backend/tests/warehouse/test_venta_total_enriched_backfill.py'
       - '.github/workflows/bi-rachas-v1.yml'
   workflow_dispatch:
 
@@ -40,6 +42,6 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Compile
         run: |
-          python -m py_compile app/warehouse/services/member_streak_service.py scripts/ops/profile_member_streak_sources.py scripts/ops/export_member_streaks.py tests/warehouse/test_member_streak_service.py
+          python -m py_compile app/warehouse/services/member_streak_service.py scripts/ops/profile_member_streak_sources.py scripts/ops/export_member_streaks.py app/warehouse/backfill/redownload_venta_total_history.py tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py
       - name: Focal functional tests
-        run: python -m pytest -q --tb=short -o addopts= tests/warehouse/test_member_streak_service.py
+        run: python -m pytest -q --tb=short -o addopts= tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py
