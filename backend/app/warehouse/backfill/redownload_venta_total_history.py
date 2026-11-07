@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import time
 from calendar import monthrange
 from datetime import date, datetime, timezone
@@ -121,8 +122,7 @@ def profile_download(path: Path, *, expected_month: date) -> dict[str, object]:
             columns: dict[str, int] = {}
             n_rows = n_pin = n_member_id = n_both = n_membership = 0
             in_month = out_month = bad_dates = 0
-            statuses: dict[str, int] = {}
-            seen_header = False
+             seen_header = False
             with zipped.open("xl/worksheets/sheet1.xml") as stream:
                 for _, row in etree.iterparse(stream, events=("end",), tag=NS + "row"):
                     index = int(row.get("r") or 0)
@@ -187,7 +187,7 @@ def profile_download(path: Path, *, expected_month: date) -> dict[str, object]:
         "movement_rows_in_month": in_month,
         "movement_rows_out_of_month": out_month,
         "movement_rows_invalid_date": bad_dates,
-        "identity_available": bool(n_pin and n_member_id),
+        "identity_available": bool(n_both),
         "raw_file_bytes": path.stat().st_size,
     }
 
@@ -278,17 +278,23 @@ def run_backfill(
                         stats["skipped"] += 1
                         print(f"[SKIP] {month:%Y-%m} manifest+SHA verificados")
                         continue
-                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                    if os.name == "posix":
+                        output.parent.chmod(0o700)
                     temp = output.with_name(output.stem + ".partial.xlsx")
                     if temp.exists():
                         raise HistoricalRawError(f"Existe descarga parcial: {temp}.")
                     download_month(page, runtime=runtime, end=month, target=temp)
+                    if os.name == "posix":
+                        temp.chmod(0o600)
                     profile = profile_download(temp, expected_month=month)
                     file_hash = file_sha256(temp)
                     # No publicar en Warehouse ni sustituir el snapshot anterior.
                     if output.exists():
                         raise HistoricalRawError(f"Ya existe: {output}")
                     temp.rename(output)
+                    if os.name == "posix":
+                        output.chmod(0o600)
                     metadata = {
                         "report_type_key": "venta_total",
                         "source": "Gasca Playwright existing selectors",
