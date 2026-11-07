@@ -100,8 +100,17 @@ def test_rejects_transaction_without_paid_coverage():
         reconstruct_member_streaks([_person()], [row], as_of=date(2026, 11, 7))
 
 
-def test_future_month_and_bad_month_rejected():
-    for value in ("2027-01", "2026-13", "noviembre"):
+def test_prepaid_future_months_are_not_counted_as_history():
+    result = reconstruct_member_streaks(
+        [_person(estado="ACTIVO")], [_month("2026-11"), _month("2026-12")],
+        as_of=date(2026, 11, 7),
+    )
+    assert result.future_months_ignored == 1
+    assert result.members[0].mejor_racha_observada == 1
+
+
+def test_invalid_month_rejected():
+    for value in ("2026-13", "noviembre"):
         with pytest.raises(ValueError):
             reconstruct_member_streaks(
                 [_person()], [_month(value)], as_of=date(2026, 11, 7)
