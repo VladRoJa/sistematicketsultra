@@ -1,0 +1,19 @@
+# Local-only frontend. Use alongside the running base-stack backend/db:
+# docker compose -p sistematickets -f docker-compose.local.yml up -d --build frontend-local
+# Browse http://localhost:8080 ; never redirects to suiteultragym.com.
+# No Let's Encrypt certificates, no production volume mounts, no scheduler.
+services:
+  frontend-local:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./frontend/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend-net
+
+networks:
+  backend-net:
+    external: true
+    name: sistematickets_backend-net

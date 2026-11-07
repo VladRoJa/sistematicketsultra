@@ -1,0 +1,87 @@
+# Isolated LOCAL development against a restored copy of production.
+# It never starts schedulers or campaign workers, and it does not change
+# docker-compose.yml or the existing clean local DB/backend/frontend.
+#
+# Setup once (PowerShell):
+# docker network create --driver bridge --internal sistematickets_prodcopy_isolated
+# docker network connect --alias prodcopy-db sistematickets_prodcopy_isolated sistematickets-db-1
+#
+# Migrate clone after network setup:
+# docker compose -p sistematickets -f docker-compose.prodcopy.yml run --rm --no-deps backend-prodcopy flask db upgrade
+# Start:
+# docker compose -p sistematickets -f docker-compose.prodcopy.yml up -d --build backend-prodcopy frontend-prodcopy
+# Visit http://localhost:8081
+services:
+  backend-prodcopy:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      SUITE_PRODCOPY_LOCAL_ONLY: "true"
+      STORAGE_BACKEND: "local"
+      LOCAL_UPLOAD_DIR: "/uploads/reportes"
+      PUBLIC_BASE_URL: "http://localhost:8081"
+      TICKET_ATTACHMENT_DIR: "/app/runtime/ticket-attachments"
+      E4_UPLOAD_DIR: "/app/runtime/inventario-e4"
+      ROUTINE_CONTROL_ARTIFACT_DIR: "/app/runtime/routine-control/artifacts"
+    entrypoint:
+      - python
+      - /app/scripts/prodcopy_local_entrypoint.py
+    command:
+      - gunicorn
+      - --workers
+      - "3"
+      - --worker-class
+      - sync
+      - --timeout
+      - "300"
+      - --graceful-timeout
+      - "30"
+      - --keep-alive
+      - "5"
+      - --max-requests
+      - "1000"
+      - --max-requests-jitter
+      - "100"
+      - --access-logfile
+      - "-"
+      - --error-logfile
+      - "-"
+      - --capture-output
+      - -b
+      - 0.0.0.0:5000
+      - app.wsgi:app
+    networks:
+      - prodcopy-isolated
+    volumes:
+      - prodcopy_uploads:/uploads
+      - prodcopy_runtime:/app/runtime
+
+  frontend-prodcopy:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./frontend/nginx.prodcopy.conf:/etc/nginx/conf.d/default.conf:ro
+      - prodcopy_uploads:/usr/share/nginx/html/uploads:ro
+    depends_on:
+      - backend-prodcopy
+    networks:
+      - prodcopy-isolated
+      - backend-net
+
+networks:
+  # The backend has ONLY this network: it cannot reach public providers.
+  prodcopy-isolated:
+    external: true
+    name: sistematickets_prodcopy_isolated
+  # Nginx alone joins this existing network for reliable localhost port mapping.
+  backend-net:
+    external: true
+    name: sistematickets_backend-net
+
+volumes:
+  prodcopy_uploads:
+  prodcopy_runtime:

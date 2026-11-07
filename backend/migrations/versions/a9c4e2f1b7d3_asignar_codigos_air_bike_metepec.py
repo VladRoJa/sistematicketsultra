@@ -19,6 +19,23 @@ SUCURSAL_ID = 25
 TARGET_CODES = ("25ABJW202", "25ABJW203")
 
 
+def _inventory_is_entirely_empty(bind):
+    # Historical data correction: a clean installation has no imported
+    # inventory to correct. Only that exact state is a legitimate no-op.
+    # An incomplete or populated inventory must keep the strict checks below.
+    return bool(
+        bind.execute(
+            sa.text(
+                """
+                SELECT
+                    NOT EXISTS (SELECT 1 FROM inventario_general)
+                    AND NOT EXISTS (SELECT 1 FROM inventario_sucursal)
+                """
+            )
+        ).scalar_one()
+    )
+
+
 def _target_ids(bind):
     rows = bind.execute(
         sa.text(
@@ -47,6 +64,8 @@ def _target_ids(bind):
 
 def upgrade():
     bind = op.get_bind()
+    if _inventory_is_entirely_empty(bind):
+        return
 
     collisions = bind.execute(
         sa.text(
