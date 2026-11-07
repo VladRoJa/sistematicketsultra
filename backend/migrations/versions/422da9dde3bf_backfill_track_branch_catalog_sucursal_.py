@@ -21,6 +21,9 @@ depends_on = None
 # at this point 24 is METEPEC and 25 is SALTILLO VILLALTA. The later
 # migrations swap them into their official final IDs 25 and 24.
 # Never seed final IDs 24/25 here: that would reassign business identity.
+# The historical migrations also compare the unaccented name SERRANIA;
+# the accented display label from the 2026 production snapshot is not yet
+# applicable at this earlier migration stage.
 _CLEAN_BOOTSTRAP_SUCURSALES_PRE_C9 = (
     (1, "VREY", "Villas del rey", "Baja California", "Mexicali", "CALZADA XOCHIMILCO #200"),
     (2, "VVER", "Villa verde mexicali", "Baja California", "Mexicali", "BLV. LAZARO CARDENAS COL. DIEZ DIVISION DOS"),
@@ -47,7 +50,7 @@ _CLEAN_BOOTSTRAP_SUCURSALES_PRE_C9 = (
     (23, "TLAL", "Tlalnepantla", "Mexico", "s/m", "-"),
     (24, "METE", "Metepec", "Mexico", "Toluca", "-"),
     (25, "SVIL", "Saltillo Villalta", "Monterrey", "Saltillo", "-"),
-    (26, "SERR", "Serranía", "Nuevo Leon", "Monterrey", "Plaza Serrania / Cumbres Monterrey"),
+    (26, "SERR", "Serrania", "Nuevo Leon", "Monterrey", "Plaza Serrania / Cumbres Monterrey"),
 )
 
 
