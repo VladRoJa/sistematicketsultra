@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 MIGRATION_PATH = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[1]
     / "migrations"
     / "versions"
     / "840a64d2ee63_add_serrania_to_track_catalog.py"
