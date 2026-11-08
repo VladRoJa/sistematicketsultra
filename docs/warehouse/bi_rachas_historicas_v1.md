@@ -685,3 +685,24 @@ de renovación de Gasca en cada movimiento. Su objetivo es
 explorar continuidad al corte, con calidad visible para dirección.
 Mantener la salida con datos de socios en carpeta local privada
 y fuera de GitHub.
+
+
+### Corrección UX: meses prepagados en la columna de cobertura (2026-11-07)
+
+La columna final `Meses estimados en cadena` se prestaba a una
+interpretación equivocada porque solo contaba extensiones inferidas
+desde Venta Total (`E`); mostraba **0** para una anualidad activa
+sin movimientos anteriores, aun cuando el padrón demostraba
+vigencia de meses. Ahora se llama
+`Meses respaldados por padron al corte` y suma las celdas `V`
+del intervalo vigente que termina al 31 de octubre.
+
+Caso revisado: Nelly Gómez Sánchez, vigencia del padrón
+18-dic-2025 a 02-feb-2027. Al corte de octubre de 2026:
+**racha vigente estimada 11, meses respaldados por padrón 11**.
+Los meses futuros incluidos en el prepago permanecen en la fecha
+de vencimiento, pero no adelantan la racha del corte. El
+histórico `E` no se pierde y continúa representado en las
+columnas mensuales. No se añaden hojas ni se modifican las
+reglas de tarifa. Para conservar el archivo anterior, exportar
+con nombre `Activos_Racha_al_2026-10-31_v2.xlsx`.
