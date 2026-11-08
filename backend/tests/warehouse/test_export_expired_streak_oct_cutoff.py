@@ -90,6 +90,28 @@ def _database(path):
         ])
 
 
+
+def _raw_venta_total(root):
+    # El RAW real contiene Socio y IDSocio en la misma fila.
+    rows = [
+        ("2025-12", "C", "PERSONA RAW C", "ANUALIDAD SIN CONTRATO"),
+        ("2026-03", "D", "PERSONA RAW D", "MENSUAL SIN CONTRATO"),
+        ("2026-08", "E", "PERSONA RAW E", "MENSUAL SIN CONTRATO"),
+        ("2026-09", "D", "PERSONA RAW D ACTUALIZADA", "MENSUAL SIN CONTRATO"),
+        ("2026-10", "A", "ACTIVO DESDE RAW", "MENSUAL SIN CONTRATO"),
+    ]
+    for month, member, name, kind in rows:
+        folder = root / month
+        folder.mkdir(parents=True, exist_ok=True)
+        filename = f"venta_total_{month.replace('-', '_')}_gasca_original.xlsx"
+        wb = xlsxwriter.Workbook(str(folder / filename))
+        ws = wb.add_worksheet()
+        ws.write("A1", "Reporte Venta Total")
+        ws.write_row("A2", ["IDSocio", "Socio", "Tipo"])
+        ws.write_row("A3", [member, name, kind])
+        wb.close()
+
+
 def test_best_historical_streak_not_anchored_to_october():
     blocks = [
         (date(2024, 1, 1), add_months(date(2024, 1, 1), 3), "VENTA_INFERIDA"),
@@ -111,16 +133,20 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
     _roster(active)
     _vencidos(expired)
     _database(db)
+    root = tmp_path / "venta_total_raw"
+    _raw_venta_total(root)
     assert sum(1 for _ in iter_expired_roster(expired)) == 3
     result = generate(
         database=db, active_xlsx=active, expired_xlsx=expired, output=dest,
+        raw_root=root,
     )
     assert result["historicos_sin_activo"] == 4
     assert result["activos_excluidos"] == 2  # Excluye KPI=Si y KPI=No
     assert result["con_mejor_racha"] == 2  # C y D
     assert result["sin_racha_inferible"] == 2  # E cancelado y F semanal
-    assert result["nombres_recuperados"] == 1
-    assert result["nombres_no_disponibles"] == 3
+    assert result["nombres_recuperados"] == 3
+    assert result["nombres_venta_total_raw"]["ids_con_nombre_raw"] == 3
+    assert result["nombres_no_disponibles"] == 1
     assert result["muestra_vencidos"]["sin_id_unico"] == 1
     assert result["muestra_vencidos"]["coincidentes_con_activos_excluidos"] == 1
     assert result["movimientos_inferidos"] == 4
@@ -128,7 +154,10 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
         workbook = archive.read("xl/workbook.xml").decode()
         sheet = archive.read("xl/worksheets/sheet1.xml").decode()
         assert workbook.count("<sheet ") == 1
-        assert "PERSONA HISTORICA C" in sheet
+        assert "PERSONA RAW C" in sheet
+        assert "PERSONA RAW D ACTUALIZADA" in sheet
+        assert "PERSONA RAW E" in sheet
+        assert "PERSONA HISTORICA C" not in sheet
         assert "NOMBRE NO CONFIABLE" not in sheet
         assert "ACTIVO VISTO EN MUESTRA" not in sheet
         assert "ACTIVO SI" not in sheet
@@ -148,6 +177,7 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
     with pytest.raises(FileExistsError):
         generate(
             database=db, active_xlsx=active, expired_xlsx=expired, output=dest,
+            raw_root=root,
         )
 
 
@@ -158,9 +188,11 @@ def test_optional_expired_report_and_missing_source(tmp_path):
     )
     _roster(active)
     _database(db)
-    result = generate(database=db, active_xlsx=active, output=dest)
+    root = tmp_path / "venta_total_raw"
+    _raw_venta_total(root)
+    result = generate(database=db, active_xlsx=active, output=dest, raw_root=root)
     assert result["historicos_sin_activo"] == 4
-    assert result["nombres_recuperados"] == 0
+    assert result["nombres_recuperados"] == 3
     with pytest.raises(FileNotFoundError):
         generate(
             database=tmp_path/"missing.sqlite", active_xlsx=active,
