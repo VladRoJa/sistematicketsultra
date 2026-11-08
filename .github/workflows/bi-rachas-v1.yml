@@ -21,6 +21,8 @@ on:
       - 'backend/tests/warehouse/test_audit_active_streak_gaps.py'
       - 'backend/scripts/ops/prepare_gasca_sample_review.py'
       - 'backend/tests/warehouse/test_prepare_gasca_sample_review.py'
+      - 'backend/scripts/ops/export_active_streak_oct_cutoff.py'
+      - 'backend/tests/warehouse/test_export_active_streak_oct_cutoff.py'
       - '.github/workflows/bi-rachas-v1.yml'
   workflow_dispatch:
 
@@ -54,6 +56,6 @@ jobs:
           python -m pip install pytest==8.3.5
       - name: Compile
         run: |
-          python -m py_compile app/warehouse/services/member_streak_service.py scripts/ops/profile_member_streak_sources.py scripts/ops/export_member_streaks.py app/warehouse/backfill/redownload_venta_total_history.py scripts/ops/consolidate_gasca_member_sales.py scripts/ops/profile_gasca_member_sales.py scripts/ops/audit_gasca_purchase_cadence.py scripts/ops/export_member_streaks_presentation.py scripts/ops/audit_active_streak_gaps.py scripts/ops/prepare_gasca_sample_review.py tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py tests/warehouse/test_consolidate_gasca_member_sales.py tests/warehouse/test_profile_gasca_member_sales.py tests/warehouse/test_audit_gasca_purchase_cadence.py tests/warehouse/test_export_member_streaks_presentation.py tests/warehouse/test_audit_active_streak_gaps.py tests/warehouse/test_prepare_gasca_sample_review.py
+          python -m py_compile app/warehouse/services/member_streak_service.py scripts/ops/profile_member_streak_sources.py scripts/ops/export_member_streaks.py app/warehouse/backfill/redownload_venta_total_history.py scripts/ops/consolidate_gasca_member_sales.py scripts/ops/profile_gasca_member_sales.py scripts/ops/audit_gasca_purchase_cadence.py scripts/ops/export_member_streaks_presentation.py scripts/ops/audit_active_streak_gaps.py scripts/ops/prepare_gasca_sample_review.py scripts/ops/export_active_streak_oct_cutoff.py tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py tests/warehouse/test_consolidate_gasca_member_sales.py tests/warehouse/test_profile_gasca_member_sales.py tests/warehouse/test_audit_gasca_purchase_cadence.py tests/warehouse/test_export_member_streaks_presentation.py tests/warehouse/test_audit_active_streak_gaps.py tests/warehouse/test_prepare_gasca_sample_review.py tests/warehouse/test_export_active_streak_oct_cutoff.py
       - name: Focal functional tests
         run: python -m pytest -q --tb=short -o addopts= tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py tests/warehouse/test_consolidate_gasca_member_sales.py tests/warehouse/test_profile_gasca_member_sales.py tests/warehouse/test_audit_gasca_purchase_cadence.py tests/warehouse/test_export_member_streaks_presentation.py tests/warehouse/test_audit_active_streak_gaps.py tests/warehouse/test_prepare_gasca_sample_review.py
