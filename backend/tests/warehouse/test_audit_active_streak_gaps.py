@@ -96,8 +96,8 @@ def test_audit_two_non_october_active_kpi_only(tmp_path):
         cases_xml = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
         assert "ANUALIDAD SIN CONTRATO" in cases_xml
         assert "SIN_HISTORIAL" in cases_xml
-        assert "00004" in cases_xml
-        assert "00002" not in cases_xml
+        assert "0000D" in cases_xml
+        assert "0000B" not in cases_xml
 
 
 def test_group_last_payment_never_certifies_coverage():
