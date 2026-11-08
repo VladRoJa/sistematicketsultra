@@ -133,3 +133,24 @@ def test_report_duplicate_active_id_rejected(tmp_path):
             database=tmp_path / "none.sqlite", active_xlsx=path,
             output=tmp_path / "out.xlsx", as_of=date(2026, 11, 7),
         )
+
+
+def test_cli_help_without_flask_secrets(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    env = os.environ.copy()
+    for key in ("SECRET_KEY", "JWT_SECRET_KEY", "SQLALCHEMY_DATABASE_URI"):
+        env.pop(key, None)
+    env["APP_ENV"] = "local"
+    cmd = [
+        sys.executable, "-m",
+        "scripts.ops.export_member_streaks_presentation", "--help",
+    ]
+    result = subprocess.run(
+        cmd, env=env, capture_output=True, text=True, timeout=20,
+        cwd=__import__("pathlib").Path(__file__).resolve().parents[2],
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--active-xlsx" in result.stdout
