@@ -12,9 +12,51 @@ import pytest
 
 from scripts.ops.audit_active_streak_gaps import audit, write_excel, _group
 from scripts.ops.export_member_streaks_presentation import ActiveRow
-from tests.warehouse.test_export_member_streaks_presentation import (
-    _active_xlsx, _database,
-)
+import sqlite3
+import xlsxwriter
+from scripts.ops.consolidate_gasca_member_sales import _db_schema
+
+
+def _active_xlsx(path):
+    book = xlsxwriter.Workbook(str(path))
+    ws = book.add_worksheet()
+    ws.write("A1", "Reporte Socios Activos")
+    ws.write_row("A2", [
+        "#", "Pin", "Nombre", "Fecha Último Pago", "Fecha Vencimiento",
+        "Sucursal", "Tarifa", "Importe Tarifa", "Fecha Ingreso",
+        "Lada", "Teléfono", "Fecha Firma", "Aplica KPI", "Email", "ID Socio",
+    ])
+    for i, (mid, kpi, paid, tariff) in enumerate([
+        ("A", "Si", "02/11/2026", "DOMICILIADO 12 MESES"),
+        ("B", "No", "15/10/2026", "MENSUAL"),
+        ("C", "Si", "25/10/2026", "MENSUAL"),
+        ("D", "Si", "25/10/2026", "ANUALIDAD"),
+    ], start=2):
+        ws.write_row(i, 0, [
+            str(i), "0000"+mid, mid, paid, "25/11/2026",
+            "SUC A", tariff, "", "", "", "", "", kpi, "", mid,
+        ])
+    book.close()
+
+
+def _database(path):
+    with sqlite3.connect(path) as conn:
+        _db_schema(conn)
+        conn.executemany("""
+            INSERT INTO purchase_events
+            (fingerprint, source_month, fecha, sucursal, folio,
+             id_socio, pin, tipo, descripcion, estatus, total)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("a1","2026-09","2026-09-04","SUC A","1","A","0000A",
+             "CONTRATO","DOMICILIADO","ACTIVO","499"),
+            ("a2","2026-10","2026-10-04","SUC A","2","A","0000A",
+             "CONTRATO","DOMICILIADO","ACTIVO","499"),
+            ("b1","2026-10","2026-10-05","SUC A","3","B","0000B",
+             "MENSUAL SIN CONTRATO","MENSUAL","ACTIVO","599"),
+            ("d1","2026-07","2026-07-07","SUC A","4","D","0000D",
+             "ANUALIDAD SIN CONTRATO","ANUALIDAD","ACTIVO","3000"),
+        ])
 
 
 def test_audit_two_non_october_active_kpi_only(tmp_path):
