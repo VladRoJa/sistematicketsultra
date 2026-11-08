@@ -617,3 +617,20 @@ consola `[MUESTRA_GASCA]` no incluye PII.
 revisión humana sin convertir ninguna venta en mes cubierto. La
 certificación, ajuste de reglas de rachas y simulación final
 permanecen pendientes de la comprobación real en Gasca.
+
+
+### Identidad del socio en los Excel de revisión
+
+Se conserva **Nombre** del padrón `Socios Activos` junto a
+`ID Socio` y `PIN` en `Casos` y `Muestra 20` del
+`Auditoria_Activos_Sin_Compra`, y en ambas pestañas
+(`Casos a revisar` / `Movimientos y cobros`) de
+`Revision_12_Casos_Gasca`. Los folios de Venta Total se enriquecen
+por `ID Socio` desde la muestra, **no** haciendo coincidencias
+por nombre ni alterando la base de datos.
+
+Para preservar una revisión ya empezada, emitir una nueva
+salida `Revision_12_Casos_Gasca_con_nombres.xlsx` y evitar
+`--replace`. Mantener estos Excel con nombres de socios solo
+en el directorio privado local ignorado por Git, con acceso
+autorizado. Nunca incluir PII en logs ni en CI.
