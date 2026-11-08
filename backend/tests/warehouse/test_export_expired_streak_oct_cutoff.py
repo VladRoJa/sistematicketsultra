@@ -170,10 +170,10 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
         xml_root = ET.fromstring(sheet)
         rows = xml_root.findall(".//x:sheetData/x:row", ns)
         # Orden por ID: C, D, E, F, primera fila de datos fila 6
-        assert xml_root.find(".//x:c[@r='I6']/x:v", ns).text == "11"
-        assert root.find(".//x:c[@r='I7']/x:v", ns).text == "3"
-        assert root.find(".//x:c[@r='I8']", ns) is None
-        assert root.find(".//x:c[@r='I9']", ns) is None
+        assert xml_xml_root.find(".//x:c[@r='I6']/x:v", ns).text == "11"
+        assert xml_root.find(".//x:c[@r='I7']/x:v", ns).text == "3"
+        assert xml_root.find(".//x:c[@r='I8']", ns) is None
+        assert xml_root.find(".//x:c[@r='I9']", ns) is None
     with pytest.raises(FileExistsError):
         generate(
             database=db, active_xlsx=active, expired_xlsx=expired, output=dest,
