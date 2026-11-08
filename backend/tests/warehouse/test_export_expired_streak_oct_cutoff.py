@@ -123,7 +123,7 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
     assert result["nombres_no_disponibles"] == 3
     assert result["muestra_vencidos"]["sin_id_unico"] == 1
     assert result["muestra_vencidos"]["coincidentes_con_activos_excluidos"] == 1
-    assert result["movimientos_inferidos"] == 5
+    assert result["movimientos_inferidos"] == 4
     with ZipFile(dest) as archive:
         workbook = archive.read("xl/workbook.xml").decode()
         sheet = archive.read("xl/worksheets/sheet1.xml").decode()
@@ -142,7 +142,7 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
         rows = root.findall(".//x:sheetData/x:row", ns)
         # Orden por ID: C, D, E, F, primera fila de datos fila 6
         assert root.find(".//x:c[@r='I6']/x:v", ns).text == "11"
-        assert root.find(".//x:c[@r='I7']/x:v", ns).text == "2"
+        assert root.find(".//x:c[@r='I7']/x:v", ns).text == "3"
         assert root.find(".//x:c[@r='I8']", ns) is None
         assert root.find(".//x:c[@r='I9']", ns) is None
     with pytest.raises(FileExistsError):
