@@ -139,7 +139,7 @@ def active_streak(*, last_paid: str, expires: str,
         nxt = add_months(month, 1)
         if month < end and nxt > start and month <= cutoff:
             # V = intervalo del padrón; E = extendido por ventas estimadas
-            flags[year_month] = "V" if has_roster and start >= date.fromisoformat(last_paid) and (
+            flags[year_month] = "V" if has_roster and (
                 month <= date.fromisoformat(expires) and nxt > date.fromisoformat(last_paid)
             ) else "E"
     return {
@@ -229,6 +229,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
     sheet.set_column(len(BASE_HEADERS), len(BASE_HEADERS) + len(MONTHS)-1, 10)
     sheet.freeze_panes(5, 2)
     stats = Counter()
+    month_column = {month: len(BASE_HEADERS)+i for i, month in enumerate(MONTHS)}
     row_index = 5
     try:
         for mid, person in sorted(eligible.items()):
@@ -248,7 +249,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                 elif value is not None:
                     sheet.write_string(row_index, col, str(value))
             for month, flag in result["months"].items():
-                col = len(BASE_HEADERS) + MONTHS.index(month)
+                col = month_column[month]
                 sheet.write_string(row_index, col, flag,
                                    styles["verified"] if flag == "V" else styles["estimated"])
             stats[result["evidencia"]] += 1
