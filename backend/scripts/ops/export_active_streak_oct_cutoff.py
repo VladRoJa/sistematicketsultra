@@ -73,11 +73,11 @@ def inferred_months(tipo: str, description: str) -> int | None:
     # En prepagos, solo un texto no ambiguo N MESES; "3 MESES DE
     # REGALO" indica regalo adicional, NO duración total.
     title = (description or "").upper()
-    if re.search(r"\\bREGALO\\b|\\bGRATIS\\b", title):
+    if re.search(r"\bREGALO\b|\bGRATIS\b", title):
         return months
     durations = {
         int(m.group(1))
-        for m in re.finditer(r"\\b(\\d{1,2})\\s+MESES?\\b", title)
+        for m in re.finditer(r"\b(\d{1,2})\s+MESES?\b", title)
         if 1 <= int(m.group(1)) <= 24
     }
     return next(iter(durations)) if len(durations) == 1 else months
