@@ -11,6 +11,7 @@ import argparse
 import json
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from datetime import date
 from pathlib import Path
 
@@ -43,7 +44,7 @@ def collect(*, database: Path, active_xlsx: Path, as_of: date,
             FROM purchase_events WHERE id_socio IN ({placeholders})
             ORDER BY id_socio, fecha, folio
         """
-        with sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True) as conn:
+        with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as conn:
             conn.execute("PRAGMA query_only=ON")
             for mid, pin, branch, month, when, folio, kind, desc, status, total in conn.execute(
                 sql, identifiers,
@@ -157,10 +158,10 @@ def write_review(*, output: Path, sample: list[dict],
         events.set_zoom(85)
         events.set_row(0, 31)
         events.merge_range(
-            "A1:P1", "ULTRA GYM  |  Folios de Venta Total para la muestra", title,
+            "A1:O1", "ULTRA GYM  |  Folios de Venta Total para la muestra", title,
         )
         events.merge_range(
-            "A2:P2", "Una venta ACTIVO es solo un movimiento. Confirmar pago y periodo cubierto en Gasca antes de clasificar meses.", desc,
+            "A2:O2", "Una venta ACTIVO es solo un movimiento. Confirmar pago y periodo cubierto en Gasca antes de clasificar meses.", desc,
         )
         evt_cols = [
             ("ID Socio", "id_socio", 17), ("PIN", "pin", 16),
@@ -179,8 +180,7 @@ def write_review(*, output: Path, sample: list[dict],
         ], start=10):
             events.set_column(j, j, width)
             events.write_string(3, j, heading, input_hdr)
-        events.set_column(15, 15, 3)
-        for i, r in enumerate(movements, 4):
+                for i, r in enumerate(movements, 4):
             for j, (_, key, _) in enumerate(evt_cols):
                 events.write_string(i, j, r[key])
             events.write_string(i, 10, "PENDIENTE", pending)
