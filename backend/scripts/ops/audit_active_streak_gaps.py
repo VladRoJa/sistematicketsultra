@@ -177,7 +177,7 @@ def write_excel(*, output: Path, summary: dict, rows_and_sample: list[dict],
     sample = rows_and_sample[-1]["__samples__"]
     output.parent.mkdir(parents=True, exist_ok=True)
     book = xlsxwriter.Workbook(str(partial), {
-        "constant_memory": True, "strings_to_urls": False,
+        "constant_memory": False, "strings_to_urls": False,
     })
     try:
         fmt = {
