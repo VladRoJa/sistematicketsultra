@@ -14,6 +14,7 @@ from scripts.ops.audit_active_streak_gaps import audit, write_excel, _group
 from scripts.ops.export_member_streaks_presentation import ActiveRow
 import sqlite3
 import xlsxwriter
+from openpyxl import load_workbook
 from scripts.ops.consolidate_gasca_member_sales import _db_schema
 
 
@@ -33,7 +34,7 @@ def _active_xlsx(path):
         ("D", "Si", "25/10/2026", "ANUALIDAD"),
     ], start=2):
         ws.write_row(i, 0, [
-            str(i), "0000"+mid, mid, paid, "25/11/2026",
+            str(i), "0000"+mid, "SOCIO PRUEBA "+mid, paid, "25/11/2026",
             "SUC A", tariff, "", "", "", "", "", kpi, "", mid,
         ])
     book.close()
@@ -74,6 +75,7 @@ def test_audit_two_non_october_active_kpi_only(tmp_path):
     assert summary["por_grupo_ultimo_pago_padron"]["SIN_HISTORIAL"] == 1
     assert summary["por_grupo_ultimo_pago_padron"]["PAGO_PADRON_MES_CORTE"] == 1
     assert {row["id_socio"] for row in rows} == {"C", "D"}
+    assert {row["nombre"] for row in rows} == {"SOCIO PRUEBA C", "SOCIO PRUEBA D"}
     assert next(r for r in rows if r["id_socio"] == "D")["tipo_ultima_compra"] == (
         "ANUALIDAD SIN CONTRATO"
     )
@@ -103,6 +105,18 @@ def test_audit_two_non_october_active_kpi_only(tmp_path):
         assert "SIN_HISTORIAL" in all_text
         assert "0000D" in all_text
         assert "0000B" not in all_text
+    workbook = load_workbook(output, read_only=True)
+    try:
+        for tab in ("Casos", "Muestra 20"):
+            ws = workbook[tab]
+            assert ws["A1"].value == "ID Socio"
+            assert ws["B1"].value == "Nombre"
+            listed = {row[0]: row[1] for row in ws.iter_rows(
+                min_row=2, max_col=2, values_only=True
+            )}
+            assert listed == {"C": "SOCIO PRUEBA C", "D": "SOCIO PRUEBA D"}
+    finally:
+        workbook.close()
 
 
 def test_group_last_payment_never_certifies_coverage():
