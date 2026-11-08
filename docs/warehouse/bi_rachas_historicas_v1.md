@@ -426,3 +426,43 @@ se sigue requiriendo cruce de cobro, vigencia y estado con Gasca.
 - Cada mes de historia es filtrable, y el resumen representa niveles
   tentativos sin equiparar ventas a meses de servicio.
 - Ningún dato se escribe en PostgreSQL, snapshots ni RAW.
+
+
+### Ejecución local del Excel de aprobación (2026-11-07)
+
+El operador ejecutó correctamente el exportador sobre su SQLite local
+de 1,503,911 movimientos (79 meses con fuente, faltan 2020-04/05/06)
+y el padrón de Socios Activos al 2026-11-07. Resumen agregado
+comunicado por el operador, sin adjuntar PII ni archivos XLSX:
+
+| Nivel tentativo por compras | Activos KPI=Sí | Históricos ausentes de Activos |
+|---|---:|---:|
+| 0 / sin racha observable | 4,109 | 185 |
+| 1 (1–3 compras mensuales consecutivas) | 10,603 | 159,311 |
+| 2 (4–6) | 3,989 | 26,145 |
+| 3 (7–9) | 4,269 | 11,049 |
+| 4 (10+) | 10,755 | 13,047 |
+| **Total** | **33,725** | **209,737** |
+
+- **135 activos KPI=Sí** no tienen movimientos identificados
+  en Venta Total; quedan visibles sin nivel.
+- **3,974 activos KPI=Sí adicionales** tienen historial observado
+  pero sin compra en octubre de 2026 (último mes del consolidado).
+  No declararlos vencidos ni sin pago; podría haber compra en
+  noviembre, servicio prepagado o cobro distinto.
+- **1,052 activos KPI=No** se excluyen de ambas listas,
+  no migran al grupo histórico.
+- Los **209,737** históricos no en Activos son un universo de
+  identificación, **no** elegibles KPI confirmados. La gran
+  proporción con racha de compra 1 requiere validación comercial.
+- Se generó localmente
+  `data/backfill/gasca_venta_total_enriched/consolidated/UltraGym_Rachas_Direccion.xlsx`;
+  contiene PII y debe permanecer bajo acceso restringido,
+  fuera de GitHub/CI.
+
+**Gate para dirección:** presentar estas cantidades como
+diagnóstico de factibilidad, no como nivel ni tarifa comercial
+definitiva. Antes de aprobar aplicación individual de descuentos:
+validar ciclos de servicio/vigencias y cobros recurrentes con Gasca;
+verificar los 4,109 activos sin compra en el corte; no confundir
+meses sin fuente (2020-04 a 2020-06) con interrupción de pago.
