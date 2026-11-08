@@ -180,7 +180,7 @@ def write_review(*, output: Path, sample: list[dict],
         ], start=10):
             events.set_column(j, j, width)
             events.write_string(3, j, heading, input_hdr)
-                for i, r in enumerate(movements, 4):
+        for i, r in enumerate(movements, 4):
             for j, (_, key, _) in enumerate(evt_cols):
                 events.write_string(i, j, r[key])
             events.write_string(i, 10, "PENDIENTE", pending)
