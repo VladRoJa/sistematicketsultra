@@ -573,3 +573,47 @@ los 366 vencimientos anteriores al corte. Una vez documentada la
 regla de intervalos por producto, corregir el motor *de cobertura* y
 recalcular ambos universos; no asignar niveles desde meros meses
 de compra.
+
+
+## Validación de Gasca: carpeta de evidencia de la muestra
+
+`backend/scripts/ops/prepare_gasca_sample_review.py` toma la **misma
+muestra local** de hasta 20 casos seleccionados por
+`audit_active_streak_gaps.audit` (en el corte 2026-11-07 se
+obtuvieron **12 casos**). No solicita descargar nuevos reportes,
+no consulta el servidor Gasca, no altera eventos ni aplica tarifas.
+
+En PowerShell, desde la carpeta `backend`:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.prepare_gasca_sample_review --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --as-of 2026-11-07 --sales-cutoff 2026-10 --output ".\\data\\backfill\\gasca_venta_total_enriched\\consolidated\\Revision_12_Casos_Gasca.xlsx"
+```
+
+Dos pestañas consultables:
+- **Casos a revisar:** ID Socio, PIN, sucursal, tarifa, último pago y
+  vencimiento del padrón, tipo/fecha/folio de la última venta y grupo.
+  Incluye `Revisión Gasca` editable (valor inicial `PENDIENTE`),
+  resumen de cobro/servicio verificado, referencia y observaciones.
+- **Movimientos y cobros:** *todos* los folios de Venta Total
+  almacenados para esos ID Socio, incluso cancelados, con descripción,
+  importe, tipo, estado y fecha. Cada folio tiene `Cobro validado`
+  (inicia `PENDIENTE`), fechas de cobertura verificadas en Gasca,
+  referencia y observación. Nunca se completan fechas
+  automáticamente desde el plazo del contrato.
+
+Protocolo manual en Gasca: buscar por ID Socio y PIN, revisar
+folio/estatus, comprobar si existe cargo efectivamente liquidado
+(sin reembolso), identificar servicio desde/hasta y registrar la
+referencia original; si no se puede demostrar, dejar
+`SIN_EVIDENCIA` o `PENDIENTE`, sin asignar meses pagados.
+
+La salida XLSX contiene identificadores y folios de socios; está
+ignoradada por Git al guardarse bajo `backend/data/backfill`.
+No subir a PR ni CI ni compartir públicamente. El resumen de
+consola `[MUESTRA_GASCA]` no incluye PII.
+
+**Aceptación:** la herramienta genera evidencia organizada para
+revisión humana sin convertir ninguna venta en mes cubierto. La
+certificación, ajuste de reglas de rachas y simulación final
+permanecen pendientes de la comprobación real en Gasca.
