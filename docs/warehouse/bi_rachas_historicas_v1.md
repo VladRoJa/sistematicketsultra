@@ -363,3 +363,66 @@ domiciliado, convenio, anualidad prepagada, semestral, trimestral,
 semanal, cancelación, cambio de sucursal, doble transacción,
 pago anticipado y huecos de fuente. Crear intervalos pagados
 solo cuando la fuente permita fecharlos con evidencia verificable.
+
+
+## Paquete BI Excel de aprobación — V1 (2026-11-07)
+
+El usuario aprobó entregar un Excel consultable de **dos universos**,
+con `ID Socio` como clave principal:
+1. **Activos:** todos los del reporte `Socios Activos` actual;
+   mostrar solamente `Aplica KPI=Si`. El resto de los activos NO
+   se convierte en vencido.
+2. **Vencidos candidatos:** los `ID Socio` distintos de `Venta Total`
+   no presentes en **ninguno** de los activos, con mejor racha histórica
+   observada. El reporte `Socios Vencidos` del 1 al 7 de noviembre es
+   solo una muestra; no representa la cartera vencida completa y no
+   debe usarse como padrón principal. En la exportación histórica
+   `Aplica KPI=NO DISPONIBLE` porque no existe esa columna en Venta
+   Total; no afirmar elegibilidad comercial.
+
+### Exportador local
+
+El código `backend/scripts/ops/export_member_streaks_presentation.py`
+recorre la SQLite ya consolidada en modo lectura y crea un .xlsx con
+`Resumen`, `Activos`, `Vencidos` y `Reglas`. No sube información
+personal, no consulta Warehouse ni altera snapshots.
+
+En PowerShell, desde `SuiteUltra-BI\\backend`:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.export_member_streaks_presentation --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --as-of 2026-11-07 --output "data\\backfill\\gasca_venta_total_enriched\\consolidated\\Propuesta_Rachas_Ultra.xlsx"
+```
+
+Ajustar `--active-xlsx` a la ruta del archivo local real; el Excel
+no debe subirse a GitHub porque contiene nombre, PIN e ID Socio.
+La salida a `data/backfill/gasca_venta_total_enriched` está
+ignorada por Git y usa el paquete `XlsxWriter` ya presente en
+`requirements.txt`.
+
+**Interpretación de columnas:** los `1` mensuales representan
+`compras observadas` con estatus de movimiento `ACTIVO`;
+no significan que el mes de servicio esté pagado. La racha de
+Activos se ancla al último mes disponible de Venta Total (octubre
+2026); la mejor racha histórica se calcula sin requerir que termine
+en ese corte. Los meses sin archivo verificado (2020-04 a 2020-06)
+permanecen desconocidos y no prueban bajas.
+
+Los precios del escenario $599/$499/$399/$299 por niveles 1–4
+son configurables en hoja `Reglas`; **provisionales**. La salida
+puede apoyar la decisión de aprobar el **proyecto de validación**,
+pero no asignar descuentos reales ni concluir que los vencidos
+históricos son `Aplica KPI=Si`. Para certificar meses pagados
+se sigue requiriendo cruce de cobro, vigencia y estado con Gasca.
+
+### Criterios de aceptación
+
+- Sin duplicados ID Socio en Activos; falla explícitamente si existen.
+- Un ID Socio en Activos `KPI=No` queda fuera de ambas hojas.
+- Un activo `KPI=Si` sin compra en Venta Total sigue en Activos,
+  con racha 0 y aviso para revisar, no desaparece.
+- El resto de ID Socio de Venta Total aparece una sola vez en
+  Vencidos candidatos con racha máxima de compras.
+- Cada mes de historia es filtrable, y el resumen representa niveles
+  tentativos sin equiparar ventas a meses de servicio.
+- Ningún dato se escribe en PostgreSQL, snapshots ni RAW.
