@@ -167,10 +167,10 @@ def test_export_all_historical_ids_unique_names_only(tmp_path):
         # Anualidad de diciembre 2025 a octubre 2026 = 11 meses
         from xml.etree import ElementTree as ET
         ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-        root = ET.fromstring(sheet)
-        rows = root.findall(".//x:sheetData/x:row", ns)
+        xml_root = ET.fromstring(sheet)
+        rows = xml_root.findall(".//x:sheetData/x:row", ns)
         # Orden por ID: C, D, E, F, primera fila de datos fila 6
-        assert root.find(".//x:c[@r='I6']/x:v", ns).text == "11"
+        assert xml_root.find(".//x:c[@r='I6']/x:v", ns).text == "11"
         assert root.find(".//x:c[@r='I7']/x:v", ns).text == "3"
         assert root.find(".//x:c[@r='I8']", ns) is None
         assert root.find(".//x:c[@r='I9']", ns) is None
