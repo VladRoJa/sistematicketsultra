@@ -49,7 +49,7 @@ BASE_HEADERS = (
     "ID Socio", "Nombre", "PIN", "Sucursal", "Tarifa",
     "Ultimo pago padron", "Vencimiento padron",
     "Racha vigente al 31-oct (estimada)", "Inicio racha estimada",
-    "Evidencia", "Meses estimados en cadena",
+    "Evidencia", "Meses respaldados por padron al corte",
 )
 
 
@@ -124,7 +124,7 @@ def active_streak(*, last_paid: str, expires: str,
     if chain is None:
         return {
             "racha": None, "desde": "", "evidencia": "SIN_COBERTURA_OBSERVABLE_AL_CORTE",
-            "estimados": 0, "months": {},
+            "estimados": 0, "padron_meses": 0, "months": {},
         }
     start, end, sources = chain
     month_count = (cutoff.year - start.year) * 12 + cutoff.month - start.month + 1
@@ -145,6 +145,7 @@ def active_streak(*, last_paid: str, expires: str,
     return {
         "racha": month_count, "desde": start.isoformat(), "evidencia": evidence,
         "estimados": sum(flag == "E" for flag in flags.values()),
+        "padron_meses": sum(flag == "V" for flag in flags.values()),
         "months": flags,
     }
 
@@ -241,7 +242,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             row = [
                 mid, person.name, person.pin, person.branch, person.tarifa,
                 person.last_payment, person.expires, racha,
-                result["desde"], result["evidencia"], result["estimados"],
+                result["desde"], result["evidencia"], result["padron_meses"],
             ]
             for col, value in enumerate(row):
                 if col in (7, 10) and value is not None:
