@@ -1,0 +1,63 @@
+name: BI Rachas Historicas V1
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/services/member_streak_service.py'
+      - 'backend/scripts/ops/profile_member_streak_sources.py'
+      - 'backend/scripts/ops/export_member_streaks.py'
+      - 'backend/tests/warehouse/test_member_streak_service.py'
+      - 'backend/app/warehouse/backfill/redownload_venta_total_history.py'
+      - 'backend/tests/warehouse/test_venta_total_enriched_backfill.py'
+      - 'backend/scripts/ops/consolidate_gasca_member_sales.py'
+      - 'backend/tests/warehouse/test_consolidate_gasca_member_sales.py'
+      - 'backend/scripts/ops/profile_gasca_member_sales.py'
+      - 'backend/tests/warehouse/test_profile_gasca_member_sales.py'
+      - 'backend/scripts/ops/audit_gasca_purchase_cadence.py'
+      - 'backend/tests/warehouse/test_audit_gasca_purchase_cadence.py'
+      - 'backend/scripts/ops/export_member_streaks_presentation.py'
+      - 'backend/tests/warehouse/test_export_member_streaks_presentation.py'
+      - 'backend/scripts/ops/audit_active_streak_gaps.py'
+      - 'backend/tests/warehouse/test_audit_active_streak_gaps.py'
+      - 'backend/scripts/ops/prepare_gasca_sample_review.py'
+      - 'backend/tests/warehouse/test_prepare_gasca_sample_review.py'
+      - 'backend/scripts/ops/export_active_streak_oct_cutoff.py'
+      - 'backend/tests/warehouse/test_export_active_streak_oct_cutoff.py'
+      - 'backend/scripts/ops/export_expired_streak_oct_cutoff.py'
+      - 'backend/tests/warehouse/test_export_expired_streak_oct_cutoff.py'
+      - '.github/workflows/bi-rachas-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functional:
+    name: Motor y Excel (datos sinteticos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: bi-rachas-synthetic-only
+      JWT_SECRET_KEY: bi-rachas-synthetic-only
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile
+        run: |
+          python -m py_compile app/warehouse/services/member_streak_service.py scripts/ops/profile_member_streak_sources.py scripts/ops/export_member_streaks.py app/warehouse/backfill/redownload_venta_total_history.py scripts/ops/consolidate_gasca_member_sales.py scripts/ops/profile_gasca_member_sales.py scripts/ops/audit_gasca_purchase_cadence.py scripts/ops/export_member_streaks_presentation.py scripts/ops/audit_active_streak_gaps.py scripts/ops/prepare_gasca_sample_review.py scripts/ops/export_active_streak_oct_cutoff.py scripts/ops/export_expired_streak_oct_cutoff.py tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py tests/warehouse/test_consolidate_gasca_member_sales.py tests/warehouse/test_profile_gasca_member_sales.py tests/warehouse/test_audit_gasca_purchase_cadence.py tests/warehouse/test_export_member_streaks_presentation.py tests/warehouse/test_audit_active_streak_gaps.py tests/warehouse/test_prepare_gasca_sample_review.py tests/warehouse/test_export_active_streak_oct_cutoff.py tests/warehouse/test_export_expired_streak_oct_cutoff.py
+      - name: Focal functional tests
+        run: python -m pytest -q --tb=short -o addopts= tests/warehouse/test_member_streak_service.py tests/warehouse/test_venta_total_enriched_backfill.py tests/warehouse/test_consolidate_gasca_member_sales.py tests/warehouse/test_profile_gasca_member_sales.py tests/warehouse/test_audit_gasca_purchase_cadence.py tests/warehouse/test_export_member_streaks_presentation.py tests/warehouse/test_audit_active_streak_gaps.py tests/warehouse/test_prepare_gasca_sample_review.py tests/warehouse/test_export_active_streak_oct_cutoff.py tests/warehouse/test_export_expired_streak_oct_cutoff.py
