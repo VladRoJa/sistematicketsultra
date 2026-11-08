@@ -151,17 +151,9 @@ def best_historical_streak(
     ])
     best = None
     best_months = 0
-    months_covered: set[str] = set()
-    for start, end, sources in merged:
+    for start, end, _ in merged:
         if end <= start:
             continue
-        current = date(start.year, start.month, 1)
-        while current < end:
-            if add_months(current, 1) > start:
-                token = f"{current.year:04d}-{current.month:02d}"
-                if token in MONTHS:
-                    months_covered.add(token)
-            current = add_months(current, 1)
         last = end - timedelta(days=1)
         months = (last.year - start.year) * 12 + last.month - start.month + 1
         if months > best_months or (
@@ -171,12 +163,22 @@ def best_historical_streak(
     if best is None:
         return {
             "mejor": None, "inicio": "", "fin": "",
-            "meses": months_covered, "calidad": "SIN_RACHA_INFERIBLE",
+            "meses": set(), "calidad": "SIN_RACHA_INFERIBLE",
         }
+    # Como en Activos, las E mensuales representan SOLO la racha
+    # seleccionada, no todos los episodios históricos separados.
+    covered = set()
+    current = date(best[0].year, best[0].month, 1)
+    while current < best[1]:
+        if add_months(current, 1) > best[0]:
+            token = f"{current.year:04d}-{current.month:02d}"
+            if token in MONTHS:
+                covered.add(token)
+        current = add_months(current, 1)
     return {
         "mejor": best_months, "inicio": best[0].isoformat(),
         "fin": (best[1] - timedelta(days=1)).isoformat(),
-        "meses": months_covered, "calidad": "SOLO_VENTAS_ESTIMADAS",
+        "meses": covered, "calidad": "SOLO_VENTAS_ESTIMADAS",
     }
 
 
@@ -270,11 +272,9 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                 if member_id in active_ids:
                     stats["ids_activos_excluidos"] += 1
                     continue
-                events_count = 0
                 last_pin = last_branch = last_product = ""
                 intervals: list[tuple[date, date, str]] = []
                 for _, pin, branch, raw_date, kind, description, status, total in events:
-                    events_count += 1
                     last_pin, last_branch = str(pin or ""), str(branch or "").upper()
                     last_product = str(description or "")
                     if str(status or "").upper() != "ACTIVO":
