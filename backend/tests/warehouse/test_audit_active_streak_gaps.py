@@ -93,11 +93,16 @@ def test_audit_two_non_october_active_kpi_only(tmp_path):
             f"xl/worksheets/sheet{i}.xml" in archive.namelist()
             for i in (1, 2, 3)
         )
-        cases_xml = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
-        assert "ANUALIDAD SIN CONTRATO" in cases_xml
-        assert "SIN_HISTORIAL" in cases_xml
-        assert "0000D" in cases_xml
-        assert "0000B" not in cases_xml
+        case_xml = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
+        shared = (
+            archive.read("xl/sharedStrings.xml").decode("utf-8")
+            if "xl/sharedStrings.xml" in archive.namelist() else ""
+        )
+        all_text = case_xml + shared
+        assert "ANUALIDAD SIN CONTRATO" in all_text
+        assert "SIN_HISTORIAL" in all_text
+        assert "0000D" in all_text
+        assert "0000B" not in all_text
 
 
 def test_group_last_payment_never_certifies_coverage():
