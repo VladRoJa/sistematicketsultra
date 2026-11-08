@@ -261,7 +261,7 @@ def _write_member(ws, rowno: int, *, member_id: str, branch: str, name: str,
         _current_run(months_seen, anchor) if is_active else _best_run(months_seen)
     )
     tier = _tier(streak)
-    quality = "SOLO_COMPRAS_OBSERVADAS" if streak else "SIN_COMPRA_RECIENTE" if is_active else "SIN_COMPRA_ACTIVA"
+    quality = "SOLO_COMPRAS_OBSERVADAS" if streak else "PENDIENTE_VALIDAR_VIGENCIA" if is_active else "SIN_COMPRA_ACTIVA"
     notes = (
         "Sin compra en mes de corte; revisar prepago, vigencia y noviembre."
         if is_active and not streak else
@@ -445,7 +445,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             summary.write_number("B5", counters["historicos_no_en_activos"], styles["kpi"])
             summary.write("A6", "ACTIVOS KPI EXCLUIDOS", styles["rule"])
             summary.write_number("B6", counters["activos_excluidos_kpi"], styles["integer"])
-            summary.write("A7", "SIN COMPRA RECIENTE", styles["rule"])
+            summary.write("A7", "ACTIVOS PENDIENTES VALIDAR VIGENCIA", styles["rule"])
             summary.write_number("B7", levels_active[0], styles["integer"])
             summary.write("A8", "MESES SIN FUENTE", styles["rule"])
             summary.write_number("B8", len(gaps), styles["integer"])
@@ -460,7 +460,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                 summary.write_formula(rr, 4, f"=Reglas!C{level+5}", styles["price"], price)
                 summary.write_formula(rr, 5, f"=C{rr+1}*E{rr+1}", styles["price"], levels_active[level]*price)
                 summary.write_formula(rr, 6, f"=D{rr+1}*E{rr+1}", styles["price"], levels_expired[level]*price)
-            summary.write("A18", "SIN NIVEL OBSERVABLE")
+            summary.write("A18", "SIN NIVEL TENTATIVO / REVISAR")
             summary.write_number("C18", levels_active[0], styles["integer"])
             summary.write_number("D18", levels_expired[0], styles["integer"])
             summary.merge_range("A21:G21", "LECTURA CORRECTA DEL SIMULADOR", styles["rule"])
