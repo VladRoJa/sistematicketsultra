@@ -262,3 +262,37 @@ Próximo gate: definir por producto (mensual, anual, semestral, domiciliado,
 convenio, reactivación, abono, cortes) cómo se atribuye cada cobro al
 **intervalo de servicio** y contrastar una muestra de socios contra
 Gasca antes de usar la simulación de precios.
+
+
+### Resultado real de consolidación comunicado por operador (2026-11-07)
+
+El consolidador local recorrió 82 meses (2020-01 a 2026-10):
+**78 meses OK**, faltan `2020-04`, `2020-05`, `2020-06`
+(descargas parciales de reportes sin filas válidas) y `2024-09`
+(sin archivo verificado). La SQLite tiene **1,474,919 movimientos
+de membresía candidatos distintos**, **242,784 IDSocio observados**
+y **1,428,327 agrupaciones socio-mes-sucursal**. Estas cantidades
+NO equivalen a vigencias mensuales, cuentas activas o miembros
+únicos certificados.
+
+Septiembre 2024 es un hueco recuperable importante para continuidad:
+```powershell
+.\\.venv\\Scripts\\python.exe -m app.warehouse.backfill.redownload_venta_total_history --from-month 2024-09 --to-month 2024-09 --execute
+```
+Si se recupera, reconstruir la SQLite local con salida previa
+reemplazable explícitamente (NO toca RAW ni PostgreSQL):
+```powershell
+.\\.venv\\Scripts\\python.exe -m scripts.ops.consolidate_gasca_member_sales --from-month 2020-01 --to-month 2026-10 --replace
+```
+
+Para examinar la taxonomía de ventas y clases de contratos SIN
+identificadores personales, en la misma carpeta `backend`:
+```powershell
+.\\.venv\\Scripts\\python.exe -m scripts.ops.profile_gasca_member_sales
+```
+
+La herramienta abre SQLite `mode=ro`, informa distribución
+`tipo/estatus`, duración o cobro recurrente sugeridos por
+descripción y repeticiones de venta en un mes, pero **jamás**
+convierte una venta en mes de vigencia. Este es el gate previo a
+resolver vigencias por tipo de producto y constancia efectiva de pago.
