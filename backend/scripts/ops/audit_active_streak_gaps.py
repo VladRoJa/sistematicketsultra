@@ -195,7 +195,7 @@ def write_excel(*, output: Path, summary: dict, rows_and_sample: list[dict],
         main.set_column("B:B", 22)
         main.set_column("D:D", 43)
         main.set_column("E:E", 17)
-        main.merge_range("A1:F1", f"ULTRA GYM  |  {summary[\'activos_sin_compra_mes_corte\']:,} activos sin compra al corte", fmt["title"])
+        main.merge_range("A1:F1", "ULTRA GYM  |  {:,} activos sin compra al corte".format(summary["activos_sin_compra_mes_corte"]), fmt["title"])
         main.merge_range("A2:F2",
                          "Análisis exploratorio de compras y fechas del padrón; NO constancia de meses pagados.",
                          fmt["sub"])
