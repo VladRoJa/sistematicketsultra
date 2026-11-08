@@ -77,6 +77,29 @@ def profile(database: Path) -> dict:
             FROM purchase_events
         """)[0]
 
+        # Cruzar el tipo operativo con el texto de producto. '12 MESES' en
+        # un contrato puede describir plazo, NO meses prepagados.
+        by_type_signals = _query(conn, """
+            SELECT tipo,
+                   COUNT(*) AS movimientos,
+                   SUM(CASE WHEN UPPER(descripcion) LIKE '%12 MESES%'
+                            OR UPPER(descripcion) LIKE '%ANUAL%'
+                            THEN 1 ELSE 0 END) AS texto_12_meses_o_anual,
+                   SUM(CASE WHEN UPPER(descripcion) LIKE '%DOMICILIAD%'
+                            THEN 1 ELSE 0 END) AS texto_domiciliado,
+                   SUM(CASE WHEN UPPER(descripcion) LIKE '%RECURREN%'
+                            THEN 1 ELSE 0 END) AS texto_recurrente,
+                   SUM(CASE WHEN UPPER(descripcion) LIKE '%CONVENIO%'
+                            THEN 1 ELSE 0 END) AS texto_convenio,
+                   SUM(CASE WHEN UPPER(descripcion) LIKE '%INSCRIPC%'
+                            THEN 1 ELSE 0 END) AS texto_inscripcion,
+                   SUM(CASE WHEN estatus = 'CANCELADO'
+                            THEN 1 ELSE 0 END) AS cancelados
+            FROM purchase_events
+            GROUP BY tipo
+            ORDER BY movimientos DESC, tipo
+        """)
+
         duplicated_purchase_months = _query(conn, """
             SELECT COUNT(*) AS socio_meses_con_varias_transacciones,
                    COALESCE(SUM(n - 1), 0) AS transacciones_adicionales,
@@ -114,6 +137,7 @@ def profile(database: Path) -> dict:
         ),
         "totales": totals,
         "por_tipo_y_estatus": by_type_status,
+        "cruce_tipo_descripcion": by_type_signals,
         "senales_no_excluyentes_de_duracion_y_producto": period_signals,
         "repeticiones_mes_de_compra": duplicated_purchase_months,
         "movimientos_entre_sucursales": branch_change_signals,
@@ -142,6 +166,9 @@ def main() -> int:
     }, ensure_ascii=False))
     print("[TIPOS_ESTADOS] " + json.dumps(
         data["por_tipo_y_estatus"], ensure_ascii=False,
+    ))
+    print("[CRUCE_TIPO_DESCRIPCION] " + json.dumps(
+        data["cruce_tipo_descripcion"], ensure_ascii=False,
     ))
     print("[SEÑALES_PRODUCTO] " + json.dumps(
         data["senales_no_excluyentes_de_duracion_y_producto"],
