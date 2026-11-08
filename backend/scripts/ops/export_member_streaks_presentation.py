@@ -6,7 +6,7 @@ incluye en la hoja Activos; los ID no presentes quedan como candidatos
 históricos en Vencidos, con KPI DESCONOCIDO.
 
 Ejemplo PowerShell desde backend:
-.\\.venv\\Scripts\\python.exe -m scripts.ops.export_member_streaks_presentation \\
+.\.venv\\Scripts\\python.exe -m scripts.ops.export_member_streaks_presentation \\
   --active-xlsx "C:\\Users\\USER01\\Downloads\\Reporte Socios Activos.xlsx" \\
   --as-of 2026-11-07 \\
   --output "data\\backfill\\gasca_venta_total_enriched\\consolidated\\Propuesta_Rachas_Ultra.xlsx"
@@ -63,7 +63,7 @@ class ActiveRow:
 
 def _norm_id(raw: str) -> str:
     value = str(raw or "").strip()
-    if re.fullmatch(r"\\d+\\.0+", value):
+    if re.fullmatch(r"\d+\.0+", value):
         return value.split(".")[0]
     return value
 
@@ -145,7 +145,7 @@ def load_active(path: Path) -> tuple[dict[str, ActiveRow], Counter]:
 
 
 def _month_number(value: str) -> int:
-    if not re.fullmatch(r"\\d{4}-(0[1-9]|1[0-2])", value):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", value):
         raise ValueError(f"Mes de compra inválido: {value!r}")
     return int(value[:4]) * 12 + int(value[5:]) - 1
 
