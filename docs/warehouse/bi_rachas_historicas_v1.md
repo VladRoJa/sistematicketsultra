@@ -296,3 +296,70 @@ La herramienta abre SQLite `mode=ro`, informa distribución
 descripción y repeticiones de venta en un mes, pero **jamás**
 convierte una venta en mes de vigencia. Este es el gate previo a
 resolver vigencias por tipo de producto y constancia efectiva de pago.
+
+
+### Cierre de septiembre 2024 y taxonomía de contratos (2026-11-07)
+
+La descarga manual de septiembre 2024 se validó por fecha y estructura
+y se integró SOLO a la SQLite local mediante manifiesto SHA-256.
+El resumen comunicado fue **79/82 meses verificados**: faltan
+2020-04, 2020-05, 2020-06, que son huecos de fuente desconocidos
+(no interrupciones de membresía acreditadas). Hay **1,503,911**
+movimientos de membresía identificada, **243,730** IDSocio históricos
+y **1,456,750** grupos socio-mes-sucursal. Ni estas cantidades ni la
+ausencia de un movimiento son equivalentes a vigencia pagada.
+
+En el cruce `Tipo` × descripción:
+- **CONTRATO**: 821,015 movimientos; 352,736 mencionan anualidad
+  o 12 meses, 511,941 domiciliación, 153,556 recurrencia.
+  Los textos pueden solaparse: el plazo contractual no prueba
+  un pago por adelantado ni 12 cobros liquidados.
+- **MENSUAL SIN CONTRATO**: 594,168 movimientos, de los cuales
+  122,691 mencionan convenio. También requiere acreditar el pago.
+- **ANUALIDAD SIN CONTRATO**: 4,389, con 4,180 menciones
+  explícitas de anualidad o 12 meses.
+- **SEMANAL SIN CONTRATO**: 49,815. No convertir cuatro
+  compras semanales en un mes calendario sin regla de ciclos.
+- `CANCELADO` y `FACTURADO` requieren conciliación:
+  no validar meses únicamente por estas etiquetas.
+
+La SQLite incluye **42,171** socio-meses con varias transacciones,
+**48,123** transacciones adicionales y **11,472** IDSocio vistos
+en más de una sucursal. Los IDSocio no deben reasignarse a una nueva
+identidad sin comprobar su alcance.
+
+#### Diagnóstico adicional de continuidad de COMPRA (no vigencia)
+
+En `backend`:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.audit_gasca_purchase_cadence
+```
+
+Consulta solo la SQLite local en modo lectura; recorre cada IDSocio
+internamente, sin emitirlo, y por cada `Tipo` informa socio-meses
+con venta `ACTIVO`, los que registran compra al mes siguiente
+(igual o distinto tipo) y los que no. Un mes de fuente ausente
+(abril-junio 2020) o el fin de corte no cuenta como abandono.
+**Tampoco cuenta como abandono la falta de otra compra para
+una anualidad ya pagada:** estos son patrones de compra, no
+cobertura de servicio. Nunca exportar sus resultados como
+`mes_cubierto=PAGADO`.
+
+#### Puerta a vigencias reales
+
+Inspeccionar de manera restringida:
+1. Reporte `Socios Activos`, que incluye `ID Socio`, último
+   pago y fecha de vencimiento;
+2. `Cargos Recurrentes`, que incluye `ID Socio`, `PIN`,
+   fecha de inicio, próximo pago, meses pendientes y fecha
+   fin contrato;
+3. Evidencia de pago/estado efectivo por folio, cancelaciones
+   y reembolsos; evitar confundir contrato con cobro.
+
+Cotejar 20 casos representativos en ambiente autorizado: mensual,
+domiciliado, convenio, anualidad prepagada, semestral, trimestral,
+semanal, cancelación, cambio de sucursal, doble transacción,
+pago anticipado y huecos de fuente. Crear intervalos pagados
+solo cuando la fuente permita fecharlos con evidencia verificable.
