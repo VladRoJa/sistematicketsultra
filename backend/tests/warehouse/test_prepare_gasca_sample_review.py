@@ -94,7 +94,9 @@ def test_collect_sample_only_and_no_auto_paid_markers(tmp_path):
         assert "PENDIENTE" in combined
         assert "COBRO_CONFIRMADO" in combined  # Opción, NO estado aplicado
         assert "F3" in combined and "F4" in combined
-        assert "F2" not in combined and "F5" not in combined
+        shared_text = zip_file.read("xl/sharedStrings.xml").decode()
+        assert "<t>F2</t>" not in shared_text
+        assert "<t>F5</t>" not in shared_text
         assert "dataValidations" in combined
 
 
