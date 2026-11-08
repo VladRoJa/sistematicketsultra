@@ -11,6 +11,7 @@ from zipfile import ZipFile
 
 import pytest
 import xlsxwriter
+from openpyxl import load_workbook
 
 from scripts.ops.consolidate_gasca_member_sales import _db_schema
 from scripts.ops.prepare_gasca_sample_review import collect, write_review
@@ -32,7 +33,7 @@ def _active_report(path: Path) -> None:
         (6, "D", "Si", "MENSUAL"),
     ]:
         ws.write_row(index-1, 0, [
-            str(index), "00"+member, member, "25/09/2026", "01/12/2026",
+            str(index), "00"+member, "SOCIO PRUEBA "+member, "25/09/2026", "01/12/2026",
             "SUC A", tariff, "", "", "", "", "", status, "", member,
         ])
     book.close()
@@ -69,7 +70,9 @@ def test_collect_sample_only_and_no_auto_paid_markers(tmp_path):
         as_of=date(2026, 11, 7), sales_cutoff="2026-10",
     )
     assert {c["id_socio"] for c in cases} == {"C", "D"}
+    assert {c["nombre"] for c in cases} == {"SOCIO PRUEBA C", "SOCIO PRUEBA D"}
     assert {m["id_socio"] for m in events} == {"C"}
+    assert {m["nombre"] for m in events} == {"SOCIO PRUEBA C"}
     assert {m["folio"] for m in events} == {"F3", "F4"}
     assert any(m["estatus"] == "CANCELADO" for m in events)
     assert meta["casos"] == 2
@@ -98,6 +101,25 @@ def test_collect_sample_only_and_no_auto_paid_markers(tmp_path):
         assert "<t>F2</t>" not in shared_text
         assert "<t>F5</t>" not in shared_text
         assert "dataValidations" in combined
+    # Verifica valores reales de Excel y su posición junto al ID Socio.
+    book = load_workbook(output, read_only=True, data_only=True)
+    try:
+        for sheet_name in ("Casos a revisar", "Movimientos y cobros"):
+            ws = book[sheet_name]
+            assert ws["A4"].value == "ID Socio"
+            assert ws["B4"].value == "Nombre"
+        case_by_id = {r[0]: r[1] for r in book["Casos a revisar"].iter_rows(
+            min_row=5, max_col=2, values_only=True
+        )}
+        event_by_id = {r[0]: r[1] for r in book["Movimientos y cobros"].iter_rows(
+            min_row=5, max_col=2, values_only=True
+        )}
+        assert case_by_id == {"C": "SOCIO PRUEBA C", "D": "SOCIO PRUEBA D"}
+        assert event_by_id == {"C": "SOCIO PRUEBA C"}
+        assert book["Casos a revisar"]["N5"].value == "PENDIENTE"
+        assert book["Movimientos y cobros"]["L5"].value == "PENDIENTE"
+    finally:
+        book.close()
 
 
 def test_cli_help_is_standalone(tmp_path):
