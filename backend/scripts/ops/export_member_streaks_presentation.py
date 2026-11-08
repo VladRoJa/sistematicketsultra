@@ -320,9 +320,18 @@ def _stream_grouped(conn: sqlite3.Connection):
 
 def generate(*, database: Path, active_xlsx: Path, output: Path,
              as_of: date, start_month: str = MONTH_START,
-             end_month: str = MONTH_END) -> dict:
+             end_month: str = MONTH_END, replace: bool = False) -> dict:
     if output.resolve() in {database.resolve(), active_xlsx.resolve()}:
         raise ValueError("La salida no puede sobrescribir los insumos.")
+    if output.exists() and not replace:
+        raise FileExistsError(
+            f"El Excel ya existe: {output}. Usa otro nombre o --replace."
+        )
+    temp_output = output.with_name(output.stem + ".partial.xlsx")
+    if temp_output.exists():
+        raise FileExistsError(
+            f"Hay una exportación parcial: {temp_output}. Revísala antes de repetir."
+        )
     active, active_counts = load_active(active_xlsx)
     if not database.is_file():
         raise FileNotFoundError(f"No existe histórico local: {database}")
@@ -335,7 +344,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
         gaps = set(months) - source
         if end_month not in source:
             raise ValueError("No hay fuente verificada del mes final solicitado.")
-        book, styles = _create_book(output, months, gaps, as_of)
+        book, styles = _create_book(temp_output, months, gaps, as_of)
         ws_a = book.get_worksheet_by_name("Activos")
         ws_v = book.get_worksheet_by_name("Vencidos")
         counters = Counter(active_counts)
@@ -473,6 +482,9 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             if output_count != counters["activos_kpi_si"]:
                 raise AssertionError("Descuadre: falta un activo KPI SI en Excel.")
             book.close()
+            # Reemplazo explícito permitido solo para el Excel generado,
+            # jamás los RAW ni la SQLite histórica.
+            temp_output.replace(output)
         except BaseException:
             try:
                 book.close()
@@ -501,12 +513,15 @@ def main() -> int:
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
+    parser.add_argument("--replace", action="store_true",
+                        help="Autoriza sustituir únicamente el Excel final previo.")
     parser.add_argument("--from-month", default=MONTH_START)
     parser.add_argument("--to-month", default=MONTH_END)
     args = parser.parse_args()
     result = generate(
         database=args.database, active_xlsx=args.active_xlsx, output=args.output,
         as_of=args.as_of, start_month=args.from_month, end_month=args.to_month,
+        replace=args.replace,
     )
     import json
     print("[SUMMARY] " + json.dumps(result, ensure_ascii=False))
