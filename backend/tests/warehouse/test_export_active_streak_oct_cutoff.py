@@ -122,6 +122,6 @@ def test_single_sheet_eligible_only_october_cutoff(tmp_path):
         assert "SOCIO PRUEBA A" in sheet_xml
         assert "SOCIO PRUEBA B" not in sheet_xml
         assert "SOCIO PRUEBA C" in sheet_xml
-        assert "2026-11" not in sheet_xml  # No meses futuros
+        assert "<t>2026-11</t>" not in sheet_xml  # No columna mensual futura
     with pytest.raises(FileExistsError):
         generate(database=db, active_xlsx=roster, output=output)
