@@ -518,3 +518,58 @@ sin PII, y sirve para decidir cuál segmento contrastar con
 20 casos en Gasca. Solo cuando se obtengan cobros/intervalos
 realmente verificables podrá ajustarse el motor y recalcular
 los niveles. No subir los XLSX privados a GitHub ni a CI.
+
+
+### Resultado real: diagnóstico de 4,109 activos sin compra observada en octubre de 2026
+
+El operador ejecutó `audit_active_streak_gaps` sobre su SQLite y padrón de
+2026-11-07 (solo local, sin incorporar PII en GitHub). Resultado
+`DIAGNOSTICO_COMPRAS_NO_VIGENCIAS`:
+
+| Señal | Socios |
+| --- | ---: |
+| Activos KPI=Sí, total | 33,725 |
+| Activos sin compra ACTIVO en octubre | 4,109 |
+| Último pago del padrón previo a octubre | 3,756 |
+| Último pago del padrón en octubre | 218 |
+| Sin ventas históricas identificadas | 135 |
+| Vencimiento vigente según padrón | 3,743 |
+| Vencimiento anterior al corte del padrón | 366 |
+
+Última transacción `ACTIVO` identificada (tipo):
+`TRIMESTRAL SIN CONTRATO` 1,545;
+`ANUALIDAD SIN CONTRATO` 1,496;
+`CONTRATO` 385;
+`SEMESTRAL SIN CONTRATO` 308;
+`BIMESTRAL SIN CONTRATO` 60;
+`MENSUAL SIN CONTRATO` 144;
+`SEMANAL SIN CONTRATO` 9;
+`SIN VENTA ACTIVA` 162. Los casos sin venta activa incluyen los
+135 sin historial; los otros 27 tienen movimientos sin venta `ACTIVO`
+identificada. **3,409 / 4,109 (83.0%)** tienen modalidad nominal de más
+de un mes (trimestral, anualidad, semestral o bimestral). Esto explica
+por qué medir la racha vigente por presencia de compra exclusivamente
+en octubre subestima periodos de servicio en membresías prepagadas.
+
+La auditoría produce una muestra de **12 casos**, no 20 porque solo se
+presentaron tres grupos de fecha de pago. El archivo generado localmente
+fue `Auditoria_Activos_Sin_Compra_Oct2026.xlsx`.
+
+**Decisión de calidad:** no etiquetar a estos 4,109 como pérdida de
+racha, morosidad o abandono. Mantener `SIN_RACHA_DE_COMPRA_AL_CORTE /
+POR_VALIDAR_VIGENCIA` en análisis ejecutivo. No convertir la
+fecha de vencimiento en prueba de pago ni fijar descuento. La vigencia
+de 3,743 registros y la discrepancia de los 366 vencimientos anteriores
+requieren contraste de producto y ciclos reales. Los 218 con fecha de
+último pago en octubre pero sin movimiento ACTIVO de membresía del mes
+sugieren revisar alcance de ventas filtradas, fechas, estatus o fuentes
+alternativas.
+
+**Siguiente gate focal:** validar primero la muestra de 12 casos en
+Gasca (tipos mensual, trimestral, anualidad, etc.), contrastar
+`Fecha Último Pago`, `Fecha Vencimiento`, folios de Venta Total,
+modalidad comercial y estatus cobrado/ajustado. Verificar expresamente
+los 366 vencimientos anteriores al corte. Una vez documentada la
+regla de intervalos por producto, corregir el motor *de cobertura* y
+recalcular ambos universos; no asignar niveles desde meros meses
+de compra.
