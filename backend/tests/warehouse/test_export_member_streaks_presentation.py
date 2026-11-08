@@ -98,6 +98,13 @@ def test_active_vs_historical_export_does_not_reclassify_kpi_no(tmp_path):
     assert result["niveles_activos"][0] == 2
     assert result["niveles_historicos_provisionales"][1] == 1
     assert out.exists()
+    assert not (tmp_path / "result.partial.xlsx").exists()
+    with pytest.raises(FileExistsError, match="--replace"):
+        generate(
+            database=db, active_xlsx=source, output=out,
+            as_of=date(2026, 11, 7), start_month="2026-07",
+            end_month="2026-10",
+        )
     with ZipFile(out) as archive:
         names = archive.namelist()
         assert "xl/worksheets/sheet1.xml" in names
