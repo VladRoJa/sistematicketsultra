@@ -634,3 +634,54 @@ salida `Revision_12_Casos_Gasca_con_nombres.xlsx` y evitar
 `--replace`. Mantener estos Excel con nombres de socios solo
 en el directorio privado local ignorado por Git, con acceso
 autorizado. Nunca incluir PII en logs ni en CI.
+
+
+## Muestreo de ACTIVOS: racha ininterrumpida al 31-10-2026
+
+Premisa confirmada por el usuario: **Socios Activos** mide SOLO
+la racha de permanencia **continua que alcanza el 31 de octubre de
+2026**, sin premiar meses futuros. NO es la mejor racha histórica
+ni la duración del último plan ni la serie de compras mensuales.
+
+`backend/scripts/ops/export_active_streak_oct_cutoff.py` prepara
+un Excel privado en una **sola pestaña Activos**, conserva nombre,
+ID Socio, PIN, sucursal, tarifa, último pago y vencimiento,
+incluye racha estimada, fecha de comienzo y meses desde 2020.
+
+- Se filtra `Aplica KPI=Sí` (33,725 en el padrón del 2026-11-07).
+- La vigencia actual usa intervalo desde `Fecha Último Pago`
+  hasta `Fecha Vencimiento` del padrón si contiene 31-10-2026.
+- El histórico de Venta Total puede ampliar hacia atrás la
+  secuencia mediante intervalos **estimados** de modalidad
+  (bimestral, trimestral, semestral, anual); nombres expresos
+  `7 MESES`/`13 MESES` ajustan prepagos no ambiguos.
+- Un `CONTRATO` domiciliado **NO** se convierte en 12 meses
+  aunque el producto diga `12 MESES`: los ciclos de cobro
+  se tratan como periodos independientes de un mes.
+- Los intervalos deben unirse sin huecos entre fechas;
+  una interrupción corta la cadena previa. Varios movimientos
+  solapados no duplican meses.
+- Las ventas se identifican como `E` (cobertura inferida
+  de modalidad, no certificada). La vigencia del padrón se
+  marca `V`. Los futuros noviembre/diciembre no incrementan
+  el nivel al corte.
+- Ninguna fuente sin evidencia es interpretada como pago
+  certificado. Racha ausente queda en blanco con
+  `SIN_COBERTURA_OBSERVABLE_AL_CORTE`, nunca cero concluyente.
+- El último periodo de María Magdalena, 11-may a 11-dic 2026,
+  equivale a **6 meses alcanzados** al corte octubre (mayo-octubre),
+  aunque el plan tenga siete meses adquiridos.
+
+PowerShell desde `backend` con SQLite local existente:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.export_active_streak_oct_cutoff --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --output ".\\data\\backfill\\gasca_venta_total_enriched\\consolidated\\Activos_Racha_al_2026-10-31.xlsx"
+```
+
+**NO aplicar descuentos reales con esta estimación.** La
+cobertura histórica inferida sigue sin las fechas precisas
+de renovación de Gasca en cada movimiento. Su objetivo es
+explorar continuidad al corte, con calidad visible para dirección.
+Mantener la salida con datos de socios en carpeta local privada
+y fuera de GitHub.
