@@ -33,6 +33,7 @@ def collect(*, database: Path, active_xlsx: Path, as_of: date,
     )
     sample = all_rows[-1]["__samples__"]
     identifiers = [str(row["id_socio"]) for row in sample]
+    names_by_id = {str(row["id_socio"]): str(row["nombre"]) for row in sample}
     if len(set(identifiers)) != len(identifiers):
         raise ValueError("La muestra contiene ID Socio duplicados.")
     movements: list[dict] = []
@@ -51,6 +52,7 @@ def collect(*, database: Path, active_xlsx: Path, as_of: date,
             ):
                 movements.append({
                     "id_socio": str(mid),
+                    "nombre": names_by_id[str(mid)],
                     "pin": str(pin),
                     "sucursal": str(branch),
                     "mes_venta": str(month),
@@ -109,12 +111,13 @@ def write_review(*, output: Path, sample: list[dict],
         cases.hide_gridlines(2)
         cases.set_zoom(85)
         cases.set_row(0, 32)
-        cases.merge_range("A1:P1", "ULTRA GYM  |  Validación de casos contra Gasca", title)
+        cases.merge_range("A1:Q1", "ULTRA GYM  |  Validación de casos contra Gasca", title)
         cases.merge_range(
-            "A2:P2", "Revisar cobro y vigencia en Gasca. Las fechas del padrón y las ventas NO certifican pago.", desc,
+            "A2:Q2", "Revisar cobro y vigencia en Gasca. Las fechas del padrón y las ventas NO certifican pago.", desc,
         )
         case_cols = [
-            ("ID Socio", "id_socio", 17), ("PIN", "pin", 17),
+            ("ID Socio", "id_socio", 17), ("Nombre", "nombre", 36),
+            ("PIN", "pin", 17),
             ("Sucursal", "sucursal", 23), ("Tarifa padrón", "tarifa", 35),
             ("Último pago padrón", "fecha_ultimo_pago", 19),
             ("Vencimiento padrón", "fecha_vencimiento", 19),
@@ -144,12 +147,12 @@ def write_review(*, output: Path, sample: list[dict],
                     cases.write_number(i, j, int(value or 0), amount)
                 else:
                     cases.write_string(i, j, str(value or ""))
-            cases.write_string(i, 12, "PENDIENTE", pending)
-            cases.write_string(i, 13, "POR_COMPROBAR", pending)
+            cases.write_string(i, len(case_cols), "PENDIENTE", pending)
+            cases.write_string(i, len(case_cols)+1, "POR_COMPROBAR", pending)
         cases.freeze_panes(4, 3)
-        cases.autofilter(3, 0, max(4, len(sample)+3), 15)
+        cases.autofilter(3, 0, max(4, len(sample)+3), len(case_cols)+len(review_cols)-1)
         if sample:
-            cases.data_validation(4, 12, len(sample)+3, 12, {
+            cases.data_validation(4, len(case_cols), len(sample)+3, len(case_cols), {
                 "validate": "list", "source": list(REVIEW_STATUS),
             })
 
@@ -158,13 +161,14 @@ def write_review(*, output: Path, sample: list[dict],
         events.set_zoom(85)
         events.set_row(0, 31)
         events.merge_range(
-            "A1:O1", "ULTRA GYM  |  Folios de Venta Total para la muestra", title,
+            "A1:P1", "ULTRA GYM  |  Folios de Venta Total para la muestra", title,
         )
         events.merge_range(
-            "A2:O2", "Una venta ACTIVO es solo un movimiento. Confirmar pago y periodo cubierto en Gasca antes de clasificar meses.", desc,
+            "A2:P2", "Una venta ACTIVO es solo un movimiento. Confirmar pago y periodo cubierto en Gasca antes de clasificar meses.", desc,
         )
         evt_cols = [
-            ("ID Socio", "id_socio", 17), ("PIN", "pin", 16),
+            ("ID Socio", "id_socio", 17), ("Nombre", "nombre", 36),
+            ("PIN", "pin", 16),
             ("Sucursal venta", "sucursal", 22), ("Mes venta", "mes_venta", 13),
             ("Fecha venta", "fecha_venta", 16), ("Folio", "folio", 22),
             ("Tipo", "tipo", 28), ("Producto / descripción", "descripcion", 48),
@@ -177,20 +181,20 @@ def write_review(*, output: Path, sample: list[dict],
             ("Cobro validado", 25), ("Cobertura desde (AAAA-MM-DD)", 24),
             ("Cobertura hasta (AAAA-MM-DD)", 24),
             ("Referencia cobro Gasca", 25), ("Observación", 40),
-        ], start=10):
+        ], start=len(evt_cols)):
             events.set_column(j, j, width)
             events.write_string(3, j, heading, input_hdr)
         for i, r in enumerate(movements, 4):
             for j, (_, key, _) in enumerate(evt_cols):
                 events.write_string(i, j, r[key])
-            events.write_string(i, 10, "PENDIENTE", pending)
+            events.write_string(i, len(evt_cols), "PENDIENTE", pending)
         events.freeze_panes(4, 3)
-        events.autofilter(3, 0, max(4, len(movements)+3), 14)
+        events.autofilter(3, 0, max(4, len(movements)+3), len(evt_cols)+4)
         if movements:
-            events.data_validation(4, 10, len(movements)+3, 10, {
+            events.data_validation(4, len(evt_cols), len(movements)+3, len(evt_cols), {
                 "validate": "list", "source": list(PAYMENT_STATUS),
             })
-        events.conditional_format(4, 10, max(4, len(movements)+3), 10, {
+        events.conditional_format(4, len(evt_cols), max(4, len(movements)+3), len(evt_cols), {
             "type": "text", "criteria": "containing",
             "value": "COBRO_CONFIRMADO", "format": wb.add_format({
                 "bg_color": "#D9F2E2", "font_color": "#166534",
