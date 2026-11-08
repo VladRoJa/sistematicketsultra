@@ -213,3 +213,52 @@ periodos pagados. El parser de Venta Total hoy conserva PIN y Tipo
 pero no `id_socio` en sus modelos persistidos. **No usar las descargas
 para emitir precios automáticamente.**
 
+
+
+## 2026-11-07: lote histórico recuperado; consolidación local
+
+El operador recuperó diciembre de 2020, luego 2020-01 a 2020-12
+(8 nuevos, 1 omitido, 3 meses sin filas: abril-junio 2020), el 2021 y
+2022 completos, y continuó con históricos hasta el lote final de
+34 meses: 33 descargados, 1 error. **No asumir que todos los meses
+están íntegros**: el último mes fallido se identifica escaneando el
+directorio local. Un mes faltante no implica baja del socio.
+
+### Consolidación de señales comerciales, SIN crear vigencias
+
+Desde **PowerShell** en `SuiteUltra-BI\\backend`, tras actualizar
+la rama del PR #1228:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.consolidate_gasca_member_sales --from-month 2020-01 --to-month 2026-10
+```
+
+No requiere credenciales ni conexión a PostgreSQL. Revisa manifiestos,
+valida SHA-256 del RAW original, lee PIN e IDSocio como texto, identifica
+transacciones con `Tipo` compatible con membresías, y elimina
+renglones exactamente idénticos dentro de la misma fuente. **El hecho
+de ser `Contrato` o `Mensual sin contrato` NO prueba vigencia ni pago
+correspondiente a ese calendario.** Cada registro queda marcado
+`MOVIMIENTO_SIN_VIGENCIA`.
+
+Produce dos archivos locales **fuera de Git**:
+
+- `data/backfill/gasca_venta_total_enriched/consolidated/member_sales_202001_202610.sqlite`
+  contiene `purchase_events` y vista `member_month_sale_signals`, con
+  `id_socio`, PIN, folio, tipo, fecha, estatus y descripción. **Confidencial**.
+- `.../member_sales_202001_202610_quality.json`: reporte agregado
+  por mes, clasificaciones, errores, meses sin fuente y conteos. Este
+  reporte no incluye PII.
+
+El resumen `[SUMMARY]` contiene `meses_ok`, `meses_sin_verificar`,
+`movimientos_candidatos_distintos`, `ids_socios_distintos`, y
+`socios_mes_sucursal`. Se permite repetir con `--replace` para
+**reconstruir solo la SQLite local**, jamás borrar RAW ni alterar
+Warehouse. En el CSV/Excel de rachas no debe aparecer ninguna
+`mes_cubierto=PAGADO` inventada desde esta vista.
+
+Próximo gate: definir por producto (mensual, anual, semestral, domiciliado,
+convenio, reactivación, abono, cortes) cómo se atribuye cada cobro al
+**intervalo de servicio** y contrastar una muestra de socios contra
+Gasca antes de usar la simulación de precios.
