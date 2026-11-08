@@ -16,7 +16,6 @@ Requiere la SQLite local consolidada (no PostgreSQL ni credenciales).
 from __future__ import annotations
 
 import argparse
-import csv
 import itertools
 import re
 import sqlite3
@@ -30,7 +29,6 @@ from zipfile import ZipFile
 import xlsxwriter
 from lxml import etree
 
-from app.warehouse.services.member_streak_service import price_for_streak
 from scripts.ops.consolidate_gasca_member_sales import (
     _cell_text, _column_number, _shared_strings,
     XML_NS,
@@ -288,7 +286,7 @@ def _write_member(ws, rowno: int, *, member_id: str, branch: str, name: str,
                 ws.write_formula(
                     rowno, col,
                     f'=IF(K{excel_row}="","",INDEX(Reglas!$C$6:$C$9,K{excel_row}))',
-                    styles["price"], price_for_streak(streak),
+                    styles["price"], TIERS[tier - 1][1],
                 )
         else:
             ws.write_string(rowno, col, str(value or ""),
