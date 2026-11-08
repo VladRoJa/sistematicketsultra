@@ -4,8 +4,10 @@ Universo: IDs únicos de Venta Total hasta el 31-oct-2026 menos TODOS
 los IDs del padrón Activos (incluso los KPI=No).
 Métrica: MEJOR racha histórica estimada por cobertura de membresía.
 La evidencia E significa inferida desde ventas, NO pago certificado.
-El reporte Vencidos reciente es OPCIONAL y SOLO enriquece nombres cuando
-PIN+sucursal enlazan un único ID; no limita el universo histórico.
+Los Excel originales de Venta Total incluyen "Socio" (nombre), que
+no quedó guardado en la SQLite consolidada. Se recupera por ID Socio
+sin re-descargar Gasca. El reporte Vencidos reciente es OPCIONAL y
+solo sirve como respaldo para nombres faltantes por PIN+sucursal.
 
 PowerShell (desde backend):
   .\\.venv\\Scripts\\python.exe -m scripts.ops.export_expired_streak_oct_cutoff \\
@@ -29,7 +31,8 @@ from lxml import etree
 import xlsxwriter
 
 from scripts.ops.consolidate_gasca_member_sales import (
-    XML_NS, _cell_text, _column_number, _shared_strings,
+    XML_NS, MEMBERSHIP_TYPES, SOURCE_ROOT, _cell_text,
+    _column_number, _shared_strings, paths,
 )
 from scripts.ops.export_active_streak_oct_cutoff import (
     CUTOFF, MONTHS, MONTH_START, add_months, inferred_months, _merge_periods,
@@ -84,6 +87,77 @@ def iter_expired_roster(path: Path) -> Iterator[dict[str, str]]:
                     del row.getparent()[0]
         if not mapping:
             raise ValueError("No se encontraron encabezados del reporte Vencidos.")
+
+
+def names_from_original_venta_total(
+    *, source_root: Path, months: list[str],
+    member_ids: set[str],
+) -> tuple[dict[str, str], Counter]:
+    """Recupera nombre por ID Socio desde RAW ya descargados.
+
+    Los archivos de Venta Total incluyen columnas IDSOCIO/Socio, mientras
+    que la SQLite histórica conserva IDSOCIO pero no Socio.
+    No modifica RAW, SQLite ni consume Gasca. Última observación válida
+    prevalece y los meses faltantes quedan declarados en el resumen.
+    """
+    result: dict[str, str] = {}
+    stats = Counter()
+    for month in sorted(months):
+        raw_path, _ = paths(source_root, month)
+        if not raw_path.is_file():
+            stats["meses_raw_sin_archivo"] += 1
+            continue
+        stats["meses_raw_leidos"] += 1
+        with ZipFile(raw_path) as archive:
+            strings = _shared_strings(archive)
+            if "xl/worksheets/sheet1.xml" not in archive.namelist():
+                raise ValueError(f"RAW Venta Total sin hoja principal: {raw_path.name}")
+            mapping: dict[str, int] = {}
+            used: set[int] = set()
+            with archive.open("xl/worksheets/sheet1.xml") as stream:
+                for _, row in etree.iterparse(
+                    stream, events=("end",), tag=XML_NS + "row",
+                ):
+                    cells = {
+                        _column_number(c.get("r", "")): _cell_text(c, strings)
+                        for c in row.iterchildren(XML_NS + "c")
+                        if not used or _column_number(c.get("r", "")) in used
+                    }
+                    if not mapping:
+                        headers = {
+                            v.upper().strip(): col for col, v in cells.items()
+                        }
+                        if {"IDSOCIO", "SOCIO", "TIPO"}.issubset(headers):
+                            mapping = {
+                                field: headers[field]
+                                for field in ("IDSOCIO", "SOCIO", "TIPO")
+                            }
+                            used = set(mapping.values())
+                        elif int(row.get("r") or 0) > 5:
+                            raise ValueError(
+                                f"RAW Venta Total sin IDSocio/Socio/Tipo: {raw_path.name}"
+                            )
+                    else:
+                        member = _norm_id(cells.get(mapping["IDSOCIO"], ""))
+                        kind = cells.get(mapping["TIPO"], "").upper().strip()
+                        name = " ".join(
+                            cells.get(mapping["SOCIO"], "").split()
+                        )
+                        if member in member_ids and kind in MEMBERSHIP_TYPES and name:
+                            prev = result.get(member)
+                            if prev and prev != name:
+                                stats["variaciones_nombre"] += 1
+                            result[member] = name
+                            stats["filas_nombre_utilizadas"] += 1
+                    row.clear()
+                    while row.getprevious() is not None:
+                        del row.getparent()[0]
+            if not mapping:
+                raise ValueError(
+                    f"RAW Venta Total sin encabezados: {raw_path.name}"
+                )
+    stats["ids_con_nombre_raw"] = len(result)
+    return result, stats
 
 
 def roster_enrichment(
@@ -183,7 +257,8 @@ def best_historical_streak(
 
 
 def generate(*, database: Path, active_xlsx: Path, output: Path,
-             expired_xlsx: Path | None = None, cutoff: date = CUTOFF) -> dict:
+             expired_xlsx: Path | None = None, cutoff: date = CUTOFF,
+             raw_root: Path = SOURCE_ROOT) -> dict:
     if cutoff != CUTOFF:
         raise ValueError("Este muestreo está fijado al 2026-10-31.")
     sources = [database.resolve(), active_xlsx.resolve()]
@@ -209,6 +284,26 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
         ).fetchone():
             raise ValueError("Venta Total no tiene octubre 2026.")
         enrichment, enriched_counts = roster_enrichment(conn, expired_xlsx, active_ids)
+        member_ids = {
+            _norm_id(row[0])
+            for row in conn.execute("SELECT DISTINCT id_socio FROM purchase_events")
+            if _norm_id(row[0]) not in active_ids
+        }
+        source_months = [
+            str(row[0]) for row in conn.execute(
+                "SELECT DISTINCT source_month FROM purchase_events WHERE source_month <= ?",
+                (f"{cutoff:%Y-%m}",),
+            )
+        ]
+        raw_names, raw_stats = names_from_original_venta_total(
+            source_root=raw_root, months=source_months,
+            member_ids=member_ids,
+        )
+        if not raw_stats["meses_raw_leidos"]:
+            raise FileNotFoundError(
+                f"No hay originales Venta Total para recuperar nombres: {raw_root}. "
+                "Indica --raw-root con el directorio del backfill."
+            )
         output.parent.mkdir(parents=True, exist_ok=True)
         wb = xlsxwriter.Workbook(str(temp), {
             "constant_memory": True, "strings_to_urls": False,
@@ -245,7 +340,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
         )
         sheet.merge_range(
             2, 0, 2, len(HEADERS)-1,
-            "Nombre solo si PIN+sucursal coincide de manera unica con muestra reciente Vencidos. El historico no tiene nombres ni KPI.",
+            "Nombre por ID Socio desde Venta Total RAW; muestra Vencidos es respaldo opcional. Elegibilidad KPI historica no disponible.",
             fmt["sub"],
         )
         sheet.set_row(4, 34)
@@ -264,7 +359,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                 SELECT id_socio, pin, sucursal, fecha, tipo, descripcion,
                        estatus, total
                 FROM purchase_events
-                ORDER BY id_socio, fecha, folio
+                ORDER BY CAST(id_socio AS INTEGER), id_socio, fecha, folio
             """)
             for member_id, events in itertools.groupby(
                 cursor, key=lambda x: _norm_id(x[0])
@@ -294,9 +389,14 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                     stats["movimientos_inferidos"] += 1
                 result = best_historical_streak(intervals, cutoff=cutoff)
                 extra = enrichment.get(member_id, {})
-                source_name = "MUESTRA_VENCIDOS" if extra else "NO_DISPONIBLE"
+                original_name = raw_names.get(member_id, "")
+                name = original_name or extra.get("nombre", "")
+                source_name = (
+                    "VENTA_TOTAL_RAW" if original_name else
+                    "MUESTRA_VENCIDOS" if extra else "NO_DISPONIBLE"
+                )
                 values = (
-                    member_id, extra.get("nombre", ""),
+                    member_id, name,
                     last_pin, last_branch, last_product,
                     extra.get("tarifa", ""), extra.get("pago", ""),
                     extra.get("vence", ""), result["mejor"],
@@ -312,7 +412,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
                     sheet.write_string(rowno, month_col[month], "E", fmt["estimated"])
                 stats["historicos_sin_activo"] += 1
                 stats["con_mejor_racha" if result["mejor"] else "sin_racha_inferible"] += 1
-                stats["nombre_enriquecido" if extra else "nombre_no_disponible"] += 1
+                stats["nombre_enriquecido" if name else "nombre_no_disponible"] += 1
                 rowno += 1
             sheet.autofilter(
                 4, 0, max(5, rowno-1),
@@ -337,6 +437,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             "activos_excluidos": stats["ids_activos_excluidos"],
             "movimientos_inferidos": stats["movimientos_inferidos"],
             "muestra_vencidos": dict(enriched_counts),
+            "nombres_venta_total_raw": dict(raw_stats),
             "output": str(output),
             "advertencia": "E es cobertura historica estimada, no vigencia certificada; KPI historico no disponible.",
         }
@@ -349,11 +450,14 @@ def main() -> int:
     cli.add_argument("--active-xlsx", type=Path, required=True)
     cli.add_argument("--expired-xlsx", type=Path, default=None)
     cli.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
+    cli.add_argument("--raw-root", type=Path, default=SOURCE_ROOT,
+                     help="Carpeta local con los XLSX originales de Venta Total.")
     cli.add_argument("--output", type=Path, required=True)
     args = cli.parse_args()
     result = generate(
         database=args.database, active_xlsx=args.active_xlsx,
         expired_xlsx=args.expired_xlsx, output=args.output,
+        raw_root=args.raw_root,
     )
     print("[RESUMEN_RACHA_VENCIDOS] " + json.dumps(result, ensure_ascii=False))
     return 0
