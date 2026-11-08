@@ -761,3 +761,45 @@ No ejecutar sobre producción ni subir el archivo
 con socios al repositorio. La consola muestra
 `[RESUMEN_RACHA_VENCIDOS]` solo con totales agregados.
 No se sobrescribe ningún Excel existente por defecto.
+
+
+### Corrección de identidad y nombres en Vencidos (2026-11-08)
+
+El XLSX inicialmente exportado contenía 209,737 IDs históricos
+(100% numéricos) pero solo 646 nombres. La causa fue real:
+`consolidate_gasca_member_sales.py` mantiene IDSocio y PIN
+en SQLite, pero descarta la columna `Socio` del XLSX RAW
+original de Venta Total. El reporte reciente de Vencidos
+no cubre el histórico completo y el matching PIN+sucursal
+solo recuperó 646 nombres. **No es un problema de Gasca**.
+Se verificaron dos RAW reales `Reporte Venta Total.xlsx`,
+`Reporte Venta Total (1).xlsx`: contienen `IDSocio`
+junto a `Socio` en la misma fila, con más de 55,000
+filas de membresías con nombre entre ambos meses.
+
+`export_expired_streak_oct_cutoff.py` ahora recorre los
+RAW de los meses presentes en la SQLite, reconstruye un
+diccionario de **nombre por IDSocio** para los históricos
+fuera de Activos, y prioriza el nombre tomado directamente
+del RAW. Conserva el reporte Vencidos reciente solo como
+respaldo cuando falta nombre en RAW y PIN+sucursal tienen
+una única asignación. No se modifica la SQLite histórica
+ni se descargan archivos nuevos desde Gasca.
+
+Además, los IDs se ordenan numéricamente:
+antes `10000, 100000, ... 10001` se veían en orden
+lexicográfico como texto; ahora `10000, 10001, ...
+100000` (orden natural). El identificador sigue siendo
+`IDSocio` de Gasca, distinto del `PIN`.
+
+Para regenerar sin tocar el Excel previo desde `backend`:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.export_expired_streak_oct_cutoff --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --expired-xlsx "$HOME\\Downloads\\Reporte Socios Vencidos.xlsx" --raw-root ".\\data\\backfill\\gasca_venta_total_enriched" --output ".\\data\\backfill\\gasca_venta_total_enriched\\consolidated\\Vencidos_Mejor_Racha_2026-10-31_con_nombres.xlsx"
+```
+
+El resumen reporta conteo de nombres recuperados por fuente
+y meses RAW ausentes. Un nombre puede seguir ausente si
+no hay `Socio` identificable en los originales. Nunca
+rellenar por suposición y no enviar el XLSX con PII a GitHub.
