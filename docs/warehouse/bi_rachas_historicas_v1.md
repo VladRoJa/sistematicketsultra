@@ -706,3 +706,58 @@ histórico `E` no se pierde y continúa representado en las
 columnas mensuales. No se añaden hojas ni se modifican las
 reglas de tarifa. Para conservar el archivo anterior, exportar
 con nombre `Activos_Racha_al_2026-10-31_v2.xlsx`.
+
+
+## Vencidos: mejor racha histórica hasta 31-oct-2026
+
+La fuente del universo es **todos los ID Socio históricos de Venta
+Total menos todos los ID del padrón Socios Activos** (también se
+excluyen los activos `Aplica KPI=No`). No se restringe a la
+muestra del reporte Vencidos del 1 al 7 de noviembre.
+
+`backend/scripts/ops/export_expired_streak_oct_cutoff.py` produce
+un Excel **de una sola pestaña Vencidos**, con una fila por
+ID Socio y columnas mensuales 2020-01 a 2026-10. Se selecciona
+el **bloque de cobertura continuo estimado más largo** de toda
+la historia, aunque haya terminado años antes del corte.
+Los meses de esa mejor racha se marcan `E` por inferencia
+de modalidad desde Venta Total. Si no hay movimiento de
+membresía interpretable, dejar racha en blanco; no inventar
+un descuento. No agrega meses posteriores a 2026-10.
+
+Se reutilizan `inferred_months`, `add_months` y
+`_merge_periods` del simulador de Activos, con las
+mismas limitaciones de inferencia (incluyendo que un
+contrato "12 meses" no equivale a 12 prepagos). El cálculo
+usa meses calendario tocados por intervalos en esta V1,
+por lo que es un estimado exploratorio, NO un conteo
+certificado de ciclos facturados. El estatus `ACTIVO`
+en Venta Total solo es estatus del movimiento, no del
+socio ni constancia bancaria. Antes de activar beneficios
+se debe validar monto y vigencia de operaciones atípicas.
+
+**Nombres:** Venta Total y la SQLite consolidada **NO
+contienen nombre**. El XLSX de Vencidos del 1–7 de
+noviembre se puede pasar opcionalmente solo para
+enriquecer los nombres/última tarifa/fechas cuando
+`PIN + sucursal` identifica un solo ID histórico en
+todo el consolidado. Alias ambiguos/no encontrados se
+dejan sin nombre: está prohibido asignar nombres por
+suposición. La ausencia del XLSX de muestra no bloquea
+el universo por ID Socio. La elegibilidad KPI histórica
+no está disponible en estas fuentes.
+
+Ejecutar desde `backend`:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.export_expired_streak_oct_cutoff --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --expired-xlsx "$HOME\\Downloads\\Reporte Socios Vencidos.xlsx" --output ".\\data\\backfill\\gasca_venta_total_enriched\\consolidated\\Vencidos_Mejor_Racha_2026-10-31.xlsx"
+```
+
+Ajustar `--expired-xlsx` a la ruta real del muestreo;
+si no está disponible, eliminar ese argumento y el
+Excel se generará con ID, PIN y sucursal sin nombre.
+No ejecutar sobre producción ni subir el archivo
+con socios al repositorio. La consola muestra
+`[RESUMEN_RACHA_VENCIDOS]` solo con totales agregados.
+No se sobrescribe ningún Excel existente por defecto.
