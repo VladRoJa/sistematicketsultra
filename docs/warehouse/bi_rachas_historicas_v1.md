@@ -466,3 +466,55 @@ definitiva. Antes de aprobar aplicación individual de descuentos:
 validar ciclos de servicio/vigencias y cobros recurrentes con Gasca;
 verificar los 4,109 activos sin compra en el corte; no confundir
 meses sin fuente (2020-04 a 2020-06) con interrupción de pago.
+
+
+## Auditoría focal: activos sin compra en el mes de corte (2026-11-07)
+
+El primer Excel real informó **4,109 socios Activos KPI=Sí** sin
+un movimiento de Venta Total con estatus `ACTIVO` en octubre 2026:
+135 no tienen movimientos identificados; los otros 3,974 sí tienen
+historial pero no compra observada en el corte. No son bajas
+certificadas ni necesariamente morosos.
+
+`backend/scripts/ops/audit_active_streak_gaps.py` usa la SQLite
+local consolidada (modo lectura) y el mismo `Socios Activos.xlsx`
+del primer Excel. **No modifica** universos, tarifas, PostgreSQL,
+Warehouse, eventos históricos ni el Excel original de presentación.
+
+Ejecutar desde la carpeta `backend` en Windows PowerShell:
+
+```powershell
+git pull
+.\\.venv\\Scripts\\python.exe -m scripts.ops.audit_active_streak_gaps --active-xlsx "$HOME\\Downloads\\Reporte Socios Activos.xlsx" --sales-cutoff 2026-10 --as-of 2026-11-07 --output "data\\backfill\\gasca_venta_total_enriched\\consolidated\\Auditoria_Activos_Sin_Compra_Oct2026.xlsx"
+```
+
+La salida local (ignorada por Git) tiene:
+- **Resumen:** motivo descriptivo según `Fecha Último Pago`
+  del padrón y distribución de vencimientos y tipos de la
+  última venta observada.
+- **Casos:** una fila por socio no anclado en octubre,
+  con `ID Socio`, PIN, sucursal, tarifa vigente del padrón,
+  último pago, vencimiento y última venta con estatus
+  `ACTIVO` (mes/fecha/tipo/folio).
+- **Muestra 20:** hasta cuatro casos por grupo y variedad de
+  tipo de venta para contrastar manualmente con Gasca.
+
+Grupos **descriptivos** excluyentes:
+1. `SIN_HISTORIAL`;
+2. `PAGO_PADRON_MES_POSTERIOR` (el mes del último pago
+   del padrón es posterior al mes final de Venta Total);
+3. `PAGO_PADRON_MES_CORTE`;
+4. `PAGO_PADRON_MES_ANTERIOR`;
+5. `FECHA_PAGO_NO_DISPONIBLE`.
+
+El `Fecha Vencimiento` del padrón es una señal de estado
+de servicio, NO evidencia de que el cobro fue liquidado.
+No derivar meses pagados de `Fecha Último Pago` ni de
+un plazo como `DOMICILIADO 12 MESES`. Una anualidad
+puede seguir vigente sin aparecer en compras del mes.
+
+La salida de consola `[RESUMEN_VALIDACION]` es agregada,
+sin PII, y sirve para decidir cuál segmento contrastar con
+20 casos en Gasca. Solo cuando se obtengan cobros/intervalos
+realmente verificables podrá ajustarse el motor y recalcular
+los niveles. No subir los XLSX privados a GitHub ni a CI.
