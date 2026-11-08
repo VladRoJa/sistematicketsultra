@@ -136,6 +136,13 @@ def test_single_sheet_eligible_only_october_cutoff(tmp_path):
         wb_xml = z.read("xl/workbook.xml").decode()
         assert wb_xml.count("<sheet ") == 1
         sheet_xml = z.read("xl/worksheets/sheet1.xml").decode()
+        # La columna K presenta los meses de vigencia, no solo las
+        # extensiones estimadas desde Venta Total (antes daba 0).
+        from xml.etree import ElementTree as ET
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        root = ET.fromstring(sheet_xml)
+        assert root.find(".//x:c[@r='K6']/x:v", ns).text == "6"
+        assert "Meses respaldados por padron al corte" in sheet_xml
         assert "SOCIO PRUEBA A" in sheet_xml
         assert "SOCIO PRUEBA B" not in sheet_xml
         assert "SOCIO PRUEBA C" in sheet_xml
