@@ -40,7 +40,6 @@ from scripts.ops.profile_gasca_member_sales import DEFAULT_DATABASE
 
 MONTH_START = "2020-01"
 MONTH_END = "2026-10"  # El consolidado actual llega hasta octubre.
-KNOWN_SOURCE_GAPS = {"2020-04", "2020-05", "2020-06"}
 TIERS = ((1, 599), (4, 499), (7, 399), (10, 299))
 HEADER = (
     "ID Socio", "Sucursal", "Nombre", "PIN", "Aplica KPI",
@@ -227,6 +226,7 @@ def _create_book(output: Path, months: list[str], source_gaps: set[str], as_of: 
                                   "font_color": "#193A5B"}),
         "bad": book.add_format({"bg_color": "#FBE8E5", "font_color": "#9F3830"}),
     }
+    book.add_worksheet("Resumen")
     for label in ("Activos", "Vencidos"):
         sheet = book.add_worksheet(label)
         sheet.hide_gridlines(2)
@@ -249,6 +249,7 @@ def _create_book(output: Path, months: list[str], source_gaps: set[str], as_of: 
         for col, width in enumerate((15, 22, 34, 14, 12, 14, 14, 17, 13, 13, 16, 16, 14, 17, 23, 34)):
             sheet.set_column(col, col, width)
         sheet.set_column(len(HEADER), len(HEADER)+len(months)-1, 10)
+    book.add_worksheet("Reglas")
     return book, formats
 
 
@@ -395,7 +396,7 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             for ws, last in ((ws_a, row_a), (ws_v, row_v)):
                 ws.autofilter(4, 0, max(5,last - 1), len(HEADER)+len(months)-1)
 
-            rules = book.add_worksheet("Reglas")
+            rules = book.get_worksheet_by_name("Reglas")
             rules.hide_gridlines(2)
             rules.set_column("A:A", 20)
             rules.set_column("B:C", 23)
@@ -419,7 +420,8 @@ def generate(*, database: Path, active_xlsx: Path, output: Path,
             rules.write("A13", "Padrón activos"); rules.write("B13", as_of.isoformat())
             rules.write("A14", "Meses sin RAW"); rules.write("B14", ", ".join(sorted(gaps)))
 
-            summary = book.add_worksheet("Resumen")
+            summary = book.get_worksheet_by_name("Resumen")
+            summary.activate()
             summary.hide_gridlines(2)
             summary.set_column("A:A", 25)
             summary.set_column("B:D", 22)
