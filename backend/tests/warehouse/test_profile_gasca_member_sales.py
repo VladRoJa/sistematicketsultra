@@ -62,6 +62,11 @@ def test_profile_aggregates_without_exposing_personal_identifiers(tmp_path):
     assert result["senales_no_excluyentes_de_duracion_y_producto"][
         "recurrente"
     ] == 1
+    assert result["cruce_tipo_descripcion"][0]["tipo"] == "Contrato"
+    assert result["cruce_tipo_descripcion"][0]["movimientos"] == 2
+    assert result["cruce_tipo_descripcion"][0]["texto_domiciliado"] == 1
+    assert result["cruce_tipo_descripcion"][0]["texto_12_meses_o_anual"] == 1
+    assert result["cruce_tipo_descripcion"][0]["texto_recurrente"] == 1
     assert len(result["por_mes"]) == 2
     assert "MEMBER-X" not in json.dumps(result)
     assert "PIN001" not in json.dumps(result)
