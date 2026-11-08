@@ -117,7 +117,7 @@ def test_active_vs_historical_export_does_not_reclassify_kpi_no(tmp_path):
         assert "GAMMA" in xml_active
         assert "DELTA" in xml_active
         assert "BETA" not in xml_expired
-        assert "SIN_COMPRA_RECIENTE" in xml_active
+        assert "PENDIENTE_VALIDAR_VIGENCIA" in xml_active
         assert "NO DISPONIBLE" in xml_expired
         assert "E" in xml_expired
         assert "KPI" in xml_active
