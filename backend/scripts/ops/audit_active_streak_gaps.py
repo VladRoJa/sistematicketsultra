@@ -113,7 +113,8 @@ def audit(*, database: Path, active_xlsx: Path, sales_cutoff: str,
                 expire_status = "VENCIMIENTO_ANTERIOR_AL_CORTE"
             expirations[expire_status] += 1
             rows.append({
-                "id_socio": mid, "pin": person.pin, "sucursal": person.branch,
+                "id_socio": mid, "nombre": person.name,
+                "pin": person.pin, "sucursal": person.branch,
                 "tarifa": person.tarifa, "fecha_ultimo_pago": person.last_payment,
                 "fecha_vencimiento": person.expires,
                 "ultima_compra_mes": last[0] if last else "",
@@ -234,7 +235,8 @@ def write_excel(*, output: Path, summary: dict, rows_and_sample: list[dict],
                          fmt["sub"])
 
         columns = [
-            ("ID Socio", "id_socio", 17), ("PIN", "pin", 16),
+            ("ID Socio", "id_socio", 17), ("Nombre", "nombre", 36),
+            ("PIN", "pin", 16),
             ("Sucursal", "sucursal", 24), ("Tarifa actual", "tarifa", 33),
             ("Fecha último pago (padrón)", "fecha_ultimo_pago", 19),
             ("Vencimiento (padrón)", "fecha_vencimiento", 19),
