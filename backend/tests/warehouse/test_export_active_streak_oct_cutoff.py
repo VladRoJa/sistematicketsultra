@@ -25,6 +25,7 @@ def test_cutoff_ends_in_october_without_counting_prepaid_future():
     ))
     assert "2026-11" not in last["months"]
     assert last["estimados"] == 0
+    assert last["padron_meses"] == 6
 
     joined = active_streak(
         last_paid="2026-05-11", expires="2026-12-11",
@@ -37,7 +38,23 @@ def test_cutoff_ends_in_october_without_counting_prepaid_future():
     assert joined["months"]["2026-05"] == "V"
     assert joined["months"]["2026-10"] == "V"
     assert joined["evidencia"] == "PADRON_Y_VENTAS_ESTIMADAS"
+    assert joined["padron_meses"] == 6
+    assert joined["estimados"] == 2
 
+
+
+def test_nelly_annual_prepaid_coverage_does_not_show_zero():
+    # Caso de negocio: anualidad 13 meses, vigencia del padrón
+    # 18/dic/2025 a 02/feb/2027; al corte octubre son 11 meses.
+    result = active_streak(
+        last_paid="2025-12-18", expires="2027-02-02", historic=[],
+    )
+    assert result["racha"] == 11
+    assert result["padron_meses"] == 11
+    assert result["estimados"] == 0  # Solo mide extensión anterior desde Venta Total
+    assert result["months"]["2025-12"] == "V"
+    assert result["months"]["2026-10"] == "V"
+    assert "2026-11" not in result["months"]
 
 def test_real_gap_breaks_streak_and_november_purchase_is_not_counted():
     split = active_streak(
