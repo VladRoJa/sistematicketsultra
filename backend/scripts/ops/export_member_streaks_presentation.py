@@ -57,6 +57,7 @@ class ActiveRow:
     kpi: str
     last_payment: str
     expires: str
+    tarifa: str = ""
 
 
 def _norm_id(raw: str) -> str:
@@ -80,7 +81,7 @@ def iter_active_xlsx(path: Path) -> Iterator[dict[str, str]]:
     """Extrae XLSX en streaming; preserva PIN como texto y no reserializa RAW."""
     expected = {
         "ID Socio", "Pin", "Nombre", "Sucursal", "Aplica KPI",
-        "Fecha Último Pago", "Fecha Vencimiento",
+        "Fecha Último Pago", "Fecha Vencimiento", "Tarifa",
     }
     with ZipFile(path) as archive:
         shared = _shared_strings(archive)
@@ -134,6 +135,7 @@ def load_active(path: Path) -> tuple[dict[str, ActiveRow], Counter]:
             "SI" if kpi in {"SI", "SÍ"} else kpi,
             _calendar_date(row["Fecha Último Pago"]),
             _calendar_date(row["Fecha Vencimiento"]),
+            row["Tarifa"],
         )
         counts["activos_en_archivo"] += 1
         counts["activos_kpi_si" if kpi in {"SI", "SÍ"} else "activos_excluidos_kpi"] += 1
