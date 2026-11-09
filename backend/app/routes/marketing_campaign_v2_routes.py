@@ -2209,6 +2209,98 @@ def campaign_v2_background_stop_endpoint(campaign_id: int, job_id: int):
         return _error("No fue posible detener el trabajo.", 500)
 
 
+@marketing_campaign_v2_bp.route(
+    "/campaigns-v2/<int:campaign_id>/dispatch/template-probes", methods=["GET", "POST"]
+)
+@jwt_required()
+def campaign_v2_template_probes_endpoint(campaign_id: int):
+    """Prepare QA cohorts or read their matrix. This route NEVER sends."""
+    from app.services.marketing_campaign_v2_template_probe_service import (
+        prepare_template_probes, template_probe_matrix,
+        TemplateProbeValidation, TemplateProbeConflict,
+    )
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        _require_campaign_v2_send(access)
+        if request.method == "GET":
+            template_id = request.args.get("template_id", type=int)
+            return jsonify(template_probe_matrix(
+                campaign_id=campaign_id, template_id=template_id, session=db.session,
+            )), 200
+        payload = _parse_payload({
+            "template_id", "recipient_name", "phone", "authorization_reference", "confirmed_authorized",
+        })
+        return jsonify(prepare_template_probes(
+            campaign_id=campaign_id, template_id=payload.get("template_id"),
+            recipient_name=payload.get("recipient_name"), phone=payload.get("phone"),
+            authorization_reference=payload.get("authorization_reference"),
+            confirmed_authorized=payload.get("confirmed_authorized"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 200
+    except MarketingCampaignV2DispatchConfigNotFoundError as exc:
+        db.session.rollback()
+        return _error(str(exc), 404)
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (TemplateProbeValidation, MarketingCampaignV2RouteValidationError,
+            MarketingCampaignV2QAManualValidationError,
+            MarketingCampaignV2DispatchConfigValidationError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except (TemplateProbeConflict, MarketingCampaignV2QAManualConflictError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible preparar o consultar pruebas. Actualiza antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.route(
+    "/campaigns-v2/dispatch/template-certifications/<int:template_id>", methods=["GET", "POST"]
+)
+@jwt_required()
+def campaign_v2_catalog_template_certifications_endpoint(template_id: int):
+    """Manage reusable template/channel QA directly from the catalog. Never sends."""
+    from app.services.marketing_campaign_v2_template_probe_service import (
+        prepare_template_probes, template_probe_matrix,
+        TemplateProbeValidation, TemplateProbeConflict,
+    )
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_management(access)
+        _require_campaign_v2_preflight(access)
+        _require_campaign_v2_send(access)
+        if request.method == "GET":
+            return jsonify(template_probe_matrix(
+                campaign_id=None, template_id=template_id, session=db.session,
+            )), 200
+        payload = _parse_payload({
+            "recipient_name", "phone", "authorization_reference", "confirmed_authorized",
+        })
+        return jsonify(prepare_template_probes(
+            campaign_id=None, template_id=template_id,
+            recipient_name=payload.get("recipient_name"), phone=payload.get("phone"),
+            authorization_reference=payload.get("authorization_reference"),
+            confirmed_authorized=payload.get("confirmed_authorized"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (TemplateProbeValidation, MarketingCampaignV2RouteValidationError,
+            MarketingCampaignV2QAManualValidationError,
+            MarketingCampaignV2DispatchConfigValidationError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except (TemplateProbeConflict, MarketingCampaignV2QAManualConflictError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No fue posible consultar o preparar la certificación.", 500)
+
+
 @marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/preview")
 @jwt_required()
 def preview_campaign_v2_qa_http_endpoint():

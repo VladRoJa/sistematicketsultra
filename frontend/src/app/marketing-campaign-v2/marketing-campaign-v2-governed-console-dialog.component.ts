@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -13,6 +13,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom, forkJoin, interval } from 'rxjs';
 
 import {
+  CampaignV2TemplateProbeRow,
   CampaignV2DispatchTemplate,
   CampaignV2GovernedApprovalState, CampaignV2GovernedExecutionReview,
   CampaignV2GovernedExecutionReviewReady, CampaignV2GovernedMonitor,
@@ -24,11 +25,13 @@ import { pendingGovernedBatchIds } from './marketing-campaign-v2-bulk-dispatch.l
 import { BackgroundDispatchJob, BACKGROUND_DISPATCH_ACTIVE, backgroundDispatchLabel,
   backgroundDispatchProgress, newBackgroundRequestKey } from './background-dispatch.model';
 import { BackgroundDispatchActivityService } from './background-dispatch-activity.service';
+import { MarketingCampaignV2TemplateProbesComponent } from './marketing-campaign-v2-template-probes.component';
 
 export interface MarketingCampaignV2GovernedConsoleDialogData {
   campaignId: number;
   campaignName: string;
   jobId?: number;
+  probeTemplateId?: number;
 }
 
 type Action = 'evidence' | 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop';
@@ -42,12 +45,14 @@ type ExecutionReview =
     CommonModule, ReactiveFormsModule, MatButtonModule, MatCheckboxModule,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatProgressSpinnerModule,
+    MarketingCampaignV2TemplateProbesComponent,
   ],
   templateUrl: './marketing-campaign-v2-governed-console-dialog.component.html',
   styleUrls: ['./marketing-campaign-v2-governed-console-dialog.component.css'],
 })
 export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit {
   private readonly api = inject(MarketingCampaignV2Service);
+  private readonly dialogs = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialogRef = inject(MatDialogRef<MarketingCampaignV2GovernedConsoleDialogComponent>);
   private readonly backgroundActivity = inject(BackgroundDispatchActivityService);
@@ -95,6 +100,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   constructor(@Inject(MAT_DIALOG_DATA) readonly data: MarketingCampaignV2GovernedConsoleDialogData) {}
 
   ngOnInit(): void {
+    if (this.data.probeTemplateId) this.templateId.setValue(this.data.probeTemplateId);
     this.templateId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.invalidatePreflight());
     this.destroyRef.onDestroy(() => { this.destroyed = true; this.bulkStopRequested = true; });
@@ -103,6 +109,15 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     this.loadBackgroundJobs();
     interval(10000).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.refreshBackgroundJob());
+  }
+
+  openTemplateProbe(row: CampaignV2TemplateProbeRow): void {
+    if (this.busy || !row.qa_campaign_id || row.stale || !this.templateId.value) return;
+    this.dialogs.open(MarketingCampaignV2GovernedConsoleDialogComponent, {
+      width: '1200px', maxWidth: '96vw', disableClose: true,
+      data: { campaignId: row.qa_campaign_id, campaignName: 'QA · ' + row.sender,
+        probeTemplateId: this.templateId.value },
+    });
   }
 
   get busy(): boolean { return this.working !== null; }

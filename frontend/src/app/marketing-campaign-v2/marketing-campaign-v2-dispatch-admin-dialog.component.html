@@ -36,6 +36,7 @@
               <td>{{ template.compatible_channel_ids.length || 'Sin restricción histórica' }}</td>
               <td><span class="status-pill" [class.is-inactive]="!template.is_active">{{ template.is_active ? 'Activa' : 'Inactiva' }}</span></td>
               <td class="actions">
+                <button *ngIf="template.is_active" mat-stroked-button type="button" (click)="showCertification(template)">Certificar canales</button>
                 <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
                 <button *ngIf="template.is_active" mat-button type="button" (click)="requestDeactivate(template)"
                   [disabled]="savingTemplate">Desactivar</button>
@@ -45,6 +46,15 @@
           </tbody>
         </table>
       </div>
+      <section *ngIf="certificationTemplateId !== null" aria-label="Certificación de plantilla">
+        <h4>Certificación por plantilla y canal emisor</h4>
+        <p>Las certificaciones se reutilizan entre campañas. Preparar no envía WhatsApps;
+          cada QA exige revisión y autorización de envío por separado.</p>
+        <app-campaign-template-probes [catalogMode]="true"
+          [templateId]="certificationTemplateId" [campaignId]="0"
+          (reviewQa)="reviewCertificationQa($event)">
+        </app-campaign-template-probes>
+      </section>
       <div *ngIf="pendingDeactivateId !== null" class="confirm">
         <span>¿Quieres desactivar esta plantilla para futuras preparaciones de envío?</span>
         <button mat-flat-button color="warn" type="button" (click)="confirmDeactivate()"

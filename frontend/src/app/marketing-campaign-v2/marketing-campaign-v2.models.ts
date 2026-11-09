@@ -1545,3 +1545,30 @@ export interface CampaignV2TemplateEvidenceResult {
   send_authorized: false;
   quota_reserved: false;
 }
+export interface CampaignV2TemplateProbeRow {
+  channel_id: string;
+  sender: string;
+  origins: string[];
+  qa_campaign_id: number | null;
+  result: 'PENDIENTE' | 'VALIDADA' | 'INVALIDADA' | 'ACEPTADA POR IVENTAS' | 'RECHAZADA' | 'INCIERTA';
+  recorded_acceptance: string;
+  evidence_current: boolean;
+  evidence_expires_at: string | null;
+  stale: boolean;
+  child_id: number | null;
+  provider_campaign_id: string | null;
+  error_code: string | null;
+  attempted_at: string | null;
+  actor_user_id: number | null;
+  recipient_phone_masked: string | null;
+  delivery_status: string;
+}
+
+export interface CampaignV2TemplateProbeMatrix {
+  campaign_id: number;
+  template_id: number;
+  template_name: string;
+  rows: CampaignV2TemplateProbeRow[];
+  sends_started: false;
+  commercial_dispatch_authorized: false;
+}

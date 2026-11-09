@@ -89,6 +89,16 @@ def verify_outbound_contact_admission(
             "El seguimiento congelado no tiene autorización de recontacto ni envío."
         )
     phones = _claim_phones(child)
+    from app.services.marketing_campaign_v2_template_probe_service import (
+        probe_spec, validate_probe_claim, TemplateProbeValidation,
+    )
+    try:
+        validate_probe_claim(campaign=campaign, child=child, session=session)
+        spec = probe_spec(campaign)
+        if spec is not None and phones != (spec["phone_mx10"],):
+            raise TemplateProbeValidation("Snapshot de prueba contiene otro destinatario.")
+    except TemplateProbeValidation as exc:
+        raise CampaignV2ContactGateConflict(str(exc)) from exc
     desired = set(phones)
     if campaign.source == DERIVED_SOURCE:
         try:
