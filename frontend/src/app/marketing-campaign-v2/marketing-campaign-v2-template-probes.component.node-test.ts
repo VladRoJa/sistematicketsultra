@@ -18,6 +18,14 @@ function harness() {
       calls.push(['read', ...args]);
       const subject = new Subject<any>(); requests.push(subject); return subject;
     },
+    getCatalogTemplateCertifications: (...args: any[]) => {
+      calls.push(['catalog-read', ...args]);
+      const subject = new Subject<any>(); requests.push(subject); return subject;
+    },
+    prepareCatalogTemplateCertifications: (...args: any[]) => {
+      calls.push(['catalog-prepare', ...args]);
+      const subject = new Subject<any>(); requests.push(subject); return subject;
+    },
   };
   const injector = Injector.create({providers: [
     { provide: MarketingCampaignV2Service, useValue: api },
@@ -73,4 +81,20 @@ test('accepted certification from another campaign disables re-preparation', () 
   assert.equal(component.canPrepare, false);
   component.prepare();
   assert.equal(calls.length, 0);
+});
+
+
+test('catalog preparation uses template scope rather than a commercial campaign', () => {
+  const { component, calls, requests } = harness();
+  component.catalogMode = true;
+  component.campaignId = 0;
+  component.refresh();
+  assert.deepEqual(calls[0], ['catalog-read', 7]);
+  requests[0].next({ rows: [{ result: 'PENDIENTE' }] });
+  component.authorized.setValue(true);
+  component.prepare();
+  assert.equal(calls[1][0], 'catalog-prepare');
+  assert.equal(calls[1][1], 7);
+  assert.equal(calls[1][2].confirmed_authorized, true);
+  assert.equal('campaign_id' in calls[1][2], false);
 });

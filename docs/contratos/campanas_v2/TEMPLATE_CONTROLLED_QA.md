@@ -160,3 +160,33 @@ concretos. Preparar la cohorte y revisar su plan no equivalen a esa autorizació
 - **Sin caducidad automática** para certificaciones QA. La atestación manual del PR #1225 conserva su vigencia de 24 horas.
 - El sistema no detecta cambios externos en iVentas: una revocación o rechazo posterior requiere revisión operativa y corrección de la configuración local. No confundir certificación histórica con garantía de disponibilidad externa actual.
 - Este ajuste todavía se presenta desde el Centro de envío de una campaña, como punto de consulta/alta; no añade de momento una pantalla propia en el catálogo administrativo de plantillas.
+
+## Certificación directa desde catálogo (continuación)
+
+Desde **Plantillas, canales y tarifas · iVentas**, el operador puede seleccionar
+**Certificar canales** sobre una plantilla activa. La matriz obtiene los bindings
+iVentas activos/default y resuelve los emisores efectivos sin exigir una campaña
+comercial congelada. INDEPENDENCIA → TEC_MXL se agrupa bajo el emisor TEC_MXL.
+La compatibilidad de la plantilla filtra los canales aplicables.
+
+`GET /api/marketing/campaigns-v2/dispatch/template-certifications/{template_id}`
+consulta el estado. El POST a la misma ruta recibe `recipient_name`, `phone`,
+`authorization_reference`, `confirmed_authorized` y prepara solo QA faltantes.
+No acepta canales arbitrarios, actor, destinatarios comerciales ni instrucciones
+de envío del cliente. Conserva JWT/global/gestión/preflight/envío, bloqueo de
+reintentos, aprobación, cuota, presupuesto y ambos kill switches OFF.
+La revisión y confirmación de cada envío QA sigue utilizando el Centro de envío
+gobernado existente. Preparar o consultar nunca envía mensajes.
+
+La certificación permanece por plantilla/versión + canal efectivo entre campañas.
+Agregar un canal compatible nuevo **no invalida los anteriores**: la firma QA
+solo cambia cuando cambian el nombre exacto, variables o media de plantilla.
+Si hay una alteración externa en iVentas, la certificación histórica no garantiza
+su disponibilidad actual y requiere intervención operativa.
+
+La preparación desde catálogo utiliza únicamente el teléfono expresamente
+autorizado para QA; no extrae destinatarios de ninguna campaña comercial.
+No altera el mecanismo de evidencia manual con vigencia de 24 horas.
+
+Validación: compilación Angular y cinco tests Node focales correctos; pruebas
+backend focales de catálogo/JWT/duplicados y PostgreSQL serán verificadas por CI.

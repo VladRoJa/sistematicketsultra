@@ -75,3 +75,62 @@ def test_matrix_is_read_only_and_explicit_template():
     assert response.status_code == 200
     assert matrix.call_args.kwargs["template_id"] == 7
     prepare.assert_not_called()
+
+
+CATALOG_URL = "/api/marketing/campaigns-v2/dispatch/template-certifications/7"
+
+
+def test_catalog_certification_requires_jwt_and_all_global_gates():
+    api, headers = client()
+    assert api.get(CATALOG_URL).status_code == 401
+    assert api.post(CATALOG_URL, json={
+        "recipient_name": "QA", "phone": "6861000001",
+        "authorization_reference": "QA autorizada",
+        "confirmed_authorized": True,
+    }).status_code == 401
+    for gate in GATES:
+        access = NS(**(GATES | {gate: False}))
+        with patch.object(routes, "_resolve_request_access",
+                          return_value=(NS(id=47), access)), \
+             patch.object(probe, "prepare_template_probes") as prepare, \
+             patch.object(probe, "template_probe_matrix") as matrix:
+            result = api.get(CATALOG_URL, headers=headers)
+            assert result.status_code == 403
+            prepare.assert_not_called()
+            matrix.assert_not_called()
+
+
+def test_catalog_endpoint_scope_does_not_require_commercial_campaign_and_never_dispatches():
+    api, headers = client()
+    body = dict(recipient_name="QA", phone="6861000001",
+                authorization_reference="QA autorizada", confirmed_authorized=True)
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "template_probe_matrix", return_value={
+             "template_id": 7, "rows": [],
+         }) as matrix, \
+         patch.object(probe, "prepare_template_probes", return_value={
+             "template_id": 7, "rows": [], "sends_started": False,
+         }) as prepare:
+        read = api.get(CATALOG_URL, headers=headers)
+        write = api.post(CATALOG_URL, headers=headers, json=body)
+    assert read.status_code == 200
+    assert write.status_code == 200
+    assert matrix.call_args.kwargs["campaign_id"] is None
+    assert prepare.call_args.kwargs["campaign_id"] is None
+    assert prepare.call_args.kwargs["actor_user_id"] == 47
+    assert write.json["sends_started"] is False
+
+
+def test_catalog_rejects_client_actor_and_targets():
+    api, headers = client()
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "prepare_template_probes") as prepare:
+        result = api.post(CATALOG_URL, headers=headers, json={
+            "recipient_name": "QA", "phone": "6861000001",
+            "authorization_reference": "QA autorizada",
+            "confirmed_authorized": True, "provider_channel_id": "other",
+        })
+    assert result.status_code == 400
+    prepare.assert_not_called()

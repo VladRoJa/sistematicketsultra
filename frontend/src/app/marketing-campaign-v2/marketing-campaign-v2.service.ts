@@ -104,6 +104,21 @@ export class MarketingCampaignV2Service {
       `${this.apiUrl}/${campaignId}/dispatch/template-probes`, request,
     );
   }
+  getCatalogTemplateCertifications(templateId: number): Observable<CampaignV2TemplateProbeMatrix> {
+    return this.http.get<CampaignV2TemplateProbeMatrix>(
+      this.apiUrl + '/dispatch/template-certifications/' + templateId,
+    );
+  }
+
+  prepareCatalogTemplateCertifications(templateId: number, request: {
+    recipient_name: string; phone: string;
+    authorization_reference: string; confirmed_authorized: boolean;
+  }): Observable<CampaignV2TemplateProbeMatrix> {
+    return this.http.post<CampaignV2TemplateProbeMatrix>(
+      this.apiUrl + '/dispatch/template-certifications/' + templateId, request,
+    );
+  }
+
   private readonly apiUrl = `${environment.apiUrl}/marketing/campaigns-v2`;
 
   constructor(private readonly http: HttpClient) {}

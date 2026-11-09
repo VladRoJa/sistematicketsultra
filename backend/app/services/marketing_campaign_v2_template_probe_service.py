@@ -9,6 +9,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Any
+from types import SimpleNamespace
 
 from sqlalchemy import text
 
@@ -24,7 +25,6 @@ from app.services.marketing_phone import normalize_phone
 from app.services.marketing_campaign_v2_qa_http_service import preview_qa_manual_http
 from app.services.marketing_campaign_v2_qa_manual_service import freeze_campaign_v2_qa_manual
 from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
-from app.services.marketing_campaign_v2_template_evidence_service import template_signature
 from app.services.marketing_campaign_v2_dispatch_config_service import template_file_url
 
 KEY = "template_probe_v1"
@@ -39,9 +39,13 @@ class TemplateProbeConflict(RuntimeError):
 
 
 def _signature(template):
+    # Certification version is independent of the *list* of allowed channels.
+    # Adding a new sender requires QA only for that sender; existing senders
+    # retain their evidence when name, variables and media remain unchanged.
     return hashlib.sha256(json.dumps(
-        [template_signature(template), template_file_url(template)],
-        separators=(",", ":"), ensure_ascii=False,
+        [int(template.id), str(template.template_name), template.variables_json or {},
+         template_file_url(template)],
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     ).encode()).hexdigest()
 
 
@@ -78,6 +82,8 @@ def _groups(plan, session):
 
 def _context(campaign_id, template_id, session):
     from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
+    if campaign_id is None:
+        return _catalog_context(template_id, session)
     source = _source(campaign_id, session)
     if type(template_id) is not int or template_id <= 0:
         raise TemplateProbeValidation("Plantilla inválida.")
@@ -88,6 +94,49 @@ def _context(campaign_id, template_id, session):
     template = session.get(Template, template_id)
     return source, template, _groups(plan, session)
 
+
+
+def _catalog_context(template_id, session):
+    """Catalog-level scope: active effective senders, without a commercial cohort."""
+    if type(template_id) is not int or template_id <= 0:
+        raise TemplateProbeValidation("Plantilla inválida.")
+    template = session.get(Template, template_id)
+    if template is None or template.provider != "IVENTAS" or not template.is_active:
+        raise TemplateProbeValidation("Plantilla iVentas activa no encontrada.")
+    selected = template.compatible_channel_ids_json or []
+    if not isinstance(selected, list):
+        raise TemplateProbeValidation("Compatibilidad de plantilla inválida.")
+    channels = set(map(str, selected))
+    bindings = (session.query(Binding)
+                .filter(Binding.provider == "IVENTAS",
+                        Binding.is_active.is_(True),
+                        Binding.is_default.is_(True)).all())
+    by_id = {int(b.id): b for b in bindings}
+    groups = {}
+    for origin in bindings:
+        metadata = origin.metadata_json or {}
+        via_id = metadata.get("dispatch_via_binding_id") if isinstance(metadata, dict) else None
+        sender = by_id.get(via_id) if isinstance(via_id, int) else origin
+        if sender is None:
+            raise TemplateProbeValidation("El canal emisor enrutado ya no está activo.")
+        channel = str(sender.provider_channel_id)
+        if channels and channel not in channels:
+            continue
+        group = groups.setdefault(channel, dict(
+            binding_id=int(sender.id), sender_sucursal_id=int(sender.sucursal_id),
+            sender=str(sender.sucursal_canon), origins=[]))
+        if group["binding_id"] != sender.id:
+            raise TemplateProbeValidation("Canales iVentas duplicados o ambiguos.")
+        group["origins"].append(str(origin.sucursal_canon))
+    if not groups:
+        raise TemplateProbeValidation("No hay canales emisores activos compatibles.")
+    for group in groups.values():
+        group["origins"] = sorted(set(group["origins"]))
+    purposes = template.purposes_json or []
+    purpose = purposes[0] if purposes else "UNCLASSIFIED"
+    if purpose not in {"NEW_SALE", "REACTIVATION", "ACTIVE_MEMBERS", "UNCLASSIFIED"}:
+        raise TemplateProbeValidation("Propósito QA de plantilla no admitido.")
+    return SimpleNamespace(purpose=purpose), template, dict(sorted(groups.items()))
 
 
 def _name_prefix(template_id, channel):
@@ -162,7 +211,8 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
             # never to the commercial campaign currently open.
             if _existing(template_id, signature, channel, active):
                 continue
-            _no_commercial_phone(campaign_id, normalized, active)
+            if campaign_id is not None:
+                _no_commercial_phone(campaign_id, normalized, active)
             args = dict(name=_name(template_id, signature, channel), purpose=source.purpose,
                         sucursal_id=group["sender_sucursal_id"], provider_channel_id=channel,
                         recipients=[{"name": recipient_name.strip(), "phone": normalized}], session=active)
@@ -354,6 +404,6 @@ def template_probe_matrix(*, campaign_id, template_id, session=None):
                 if isinstance(spec, dict) and isinstance(spec.get("phone_mx10"), str) else None,
             delivery_status="NO VERIFICADA",
         ))
-    return dict(campaign_id=campaign_id, template_id=template_id,
+    return dict(campaign_id=campaign_id or 0, template_id=template_id,
                 template_name=str(template.template_name), rows=rows,
                 sends_started=False, commercial_dispatch_authorized=False)

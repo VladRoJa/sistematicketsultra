@@ -243,3 +243,69 @@ def test_matrix_reuses_accepted_other_campaign_and_has_no_expiry():
         matrix = probe.template_probe_matrix(campaign_id=999, template_id=7, session=active)
     assert matrix["rows"][0]["result"] == "VALIDADA"
     assert matrix["rows"][0]["evidence_expires_at"] is None
+
+
+def test_catalog_context_deduplicates_routed_origins_without_commercial_campaign():
+    from unittest.mock import MagicMock
+    active = MagicMock()
+    selected = template()
+    selected.provider = "IVENTAS"
+    selected.is_active = True
+    selected.purposes_json = ["REACTIVATION"]
+    selected.compatible_channel_ids_json = ["tec"]
+    sender = NS(id=40, sucursal_id=4, sucursal_canon="TEC_MXL",
+                provider="IVENTAS", provider_channel_id="tec",
+                is_active=True, is_default=True, metadata_json={})
+    origin = NS(id=41, sucursal_id=5, sucursal_canon="INDEPENDENCIA",
+                provider="IVENTAS", provider_channel_id="ind",
+                is_active=True, is_default=True,
+                metadata_json={"dispatch_via_binding_id": 40})
+    active.get.return_value = selected
+    active.query.return_value.filter.return_value.all.return_value = [sender, origin]
+    source, returned_template, groups = probe._context(None, 7, active)
+    assert returned_template is selected
+    assert source.purpose == "REACTIVATION"
+    assert groups["tec"] == group()
+    assert len(groups) == 1
+
+
+def test_catalog_context_rejects_duplicate_real_channel():
+    active = MagicMock()
+    selected = template()
+    selected.provider = "IVENTAS"
+    selected.is_active = True
+    selected.purposes_json = []
+    selected.compatible_channel_ids_json = []
+    active.get.return_value = selected
+    left = NS(id=40, sucursal_id=4, sucursal_canon="TEC_MXL",
+              provider_channel_id="tec", metadata_json={})
+    right = NS(id=42, sucursal_id=6, sucursal_canon="OTHER",
+               provider_channel_id="tec", metadata_json={})
+    active.query.return_value.filter.return_value.all.return_value = [left, right]
+    with pytest.raises(probe.TemplateProbeValidation, match="ambiguos"):
+        probe._catalog_context(7, active)
+
+
+def test_new_channel_does_not_invalidate_existing_template_version():
+    selected = template()
+    signature = probe._signature(selected)
+    selected.compatible_channel_ids_json = ["tec", "san_luis"]
+    assert probe._signature(selected) == signature
+    selected.template_name = "renamed"
+    assert probe._signature(selected) != signature
+
+
+def test_catalog_reuses_existing_qa_without_commercial_source():
+    active = session()
+    existing_qa = campaign()
+    existing_qa.audience_definition_json["source_metadata"][probe.KEY][
+        "source_campaign_id"] = None
+    with patch.object(probe, "_catalog_context", return_value=(
+        NS(purpose="REACTIVATION"), template(), {"tec": group()})), \
+         patch.object(probe, "_existing", return_value=existing_qa), \
+         patch.object(probe, "freeze_campaign_v2_qa_manual") as create, \
+         patch.object(probe, "template_probe_matrix", return_value={"rows": []}):
+        probe.prepare_template_probes(
+            **(prepare_args(active) | {"campaign_id": None}))
+    create.assert_not_called()
+    active.commit.assert_called_once()

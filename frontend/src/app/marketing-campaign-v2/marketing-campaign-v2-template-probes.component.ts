@@ -21,6 +21,7 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
   private readonly api = inject(MarketingCampaignV2Service);
   private readonly destroyRef = inject(DestroyRef);
   @Input() campaignId = 0;
+  @Input() catalogMode = false;
   @Input() templateId: number | null = null;
   @Input() disabled = false;
   @Output() reviewQa = new EventEmitter<CampaignV2TemplateProbeRow>();
@@ -67,11 +68,18 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
     const generation = ++this.generation;
     this.busy = true;
     this.error = '';
-    const result = prepare ? this.api.prepareTemplateProbes(this.campaignId, {
-      template_id: this.templateId, recipient_name: this.name.value.trim(),
-      phone: this.phone.value.trim(), authorization_reference: this.reference.value.trim(),
+    const request = {
+      recipient_name: this.name.value.trim(), phone: this.phone.value.trim(),
+      authorization_reference: this.reference.value.trim(),
       confirmed_authorized: this.authorized.value,
-    }) : this.api.getTemplateProbes(this.campaignId, this.templateId);
+    };
+    const result = this.catalogMode
+      ? (prepare
+        ? this.api.prepareCatalogTemplateCertifications(this.templateId, request)
+        : this.api.getCatalogTemplateCertifications(this.templateId))
+      : (prepare
+        ? this.api.prepareTemplateProbes(this.campaignId, { template_id: this.templateId, ...request })
+        : this.api.getTemplateProbes(this.campaignId, this.templateId));
     result.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: matrix => {
         if (generation !== this.generation) return;
