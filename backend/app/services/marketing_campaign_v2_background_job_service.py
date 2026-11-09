@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_contact_gate_service import acquire_campaign_v2_contact_gate
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2GovernedExecutionORM,
@@ -257,6 +258,141 @@ def enqueue_background_job(
         raise BackgroundJobConflict("Conflicto de persistencia al registrar el trabajo.") from exc
     except Exception:
         session.rollback()
+        raise
+
+
+
+def resolve_unattempted_review(
+    *, campaign_id: int, job_id: int, actor_user_id: int,
+    confirmation: str, session: Any | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Audit-close a failed job ONLY when no provider claim was ever committed.
+
+    This is not a retry, approval, or send. A new approval/execution must pass
+    the existing reauthorization flow before any future dispatch.
+    """
+    if any(type(value) is not int or value <= 0 for value in
+           (campaign_id, job_id, actor_user_id)):
+        raise BackgroundJobValidation("Identificadores inválidos.")
+    if confirmation != f"CONFIRMAR SIN ENVIO {campaign_id} {job_id}":
+        raise BackgroundJobValidation("Confirmación de ausencia de envío incorrecta.")
+    active = session if session is not None else db.session
+    _pg(active)
+    at = _utc(now)
+    try:
+        # Keep the same global gate/campaign lock order as reauthorization and
+        # governed dispatch; this never calls an external provider.
+        acquire_campaign_v2_contact_gate(active)
+        campaign = active.execute(db.text(
+            "SELECT id FROM marketing_campaign_v2_campaigns "
+            "WHERE id = :campaign_id FOR UPDATE"
+        ), {"campaign_id": campaign_id}).first()
+        if campaign is None:
+            raise BackgroundJobNotFound("Campaña no encontrada.")
+        job = _job(active, campaign_id, job_id, actor_user_id, locked=True)
+        if job.status == "STOPPED" and job.stop_reason_code == "NO_ATTEMPT_VERIFIED":
+            active.rollback()
+            return {"job_id": job_id, "campaign_id": campaign_id,
+                    "status": "STOPPED", "already_resolved": True,
+                    "requires_reauthorization": True, "provider_calls": 0}
+        if (job.status != "REVIEW_REQUIRED" or job.last_accepted_child_id is not None
+                or job.finished_at is None or job.worker_lease_until is not None):
+            raise BackgroundJobConflict("El trabajo no admite cierre sin intentos.")
+        ids = job.pending_child_ids
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 30
+                or any(type(value) is not int or value <= 0 for value in ids)
+                or len(set(ids)) != len(ids) or len(ids) != job.initial_pending_count
+                or job.pending_children_digest != hashlib.sha256(
+                    json.dumps(ids, separators=(",", ":")).encode("ascii")
+                ).hexdigest()
+                or (job.current_child_id is not None and
+                    job.current_child_id not in ids)):
+            raise BackgroundJobConflict("El mandato original no es íntegro.")
+
+        execution = active.execute(db.text("""
+            SELECT approval_id, status, last_child_id, expires_at
+            FROM marketing_campaign_v2_governed_executions
+            WHERE id = :execution_id FOR UPDATE
+        """), {"execution_id": job.execution_id}).mappings().one_or_none()
+        approval = active.execute(db.text("""
+            SELECT id, expires_at
+            FROM marketing_campaign_v2_dispatch_approvals
+            WHERE id = :approval_id AND campaign_v2_id = :campaign_id FOR UPDATE
+        """), {"approval_id": job.approval_id,
+               "campaign_id": campaign_id}).mappings().one_or_none()
+        latest = active.execute(db.text("""
+            SELECT id FROM marketing_campaign_v2_dispatch_approvals
+            WHERE campaign_v2_id = :campaign_id
+            ORDER BY revision_no DESC LIMIT 1
+        """), {"campaign_id": campaign_id}).scalar()
+        if (execution is None or approval is None
+                or latest != job.approval_id
+                or execution["approval_id"] != job.approval_id
+                or execution["status"] != "AUTHORIZED"
+                or execution["last_child_id"] is not None
+                or _utc(execution["expires_at"]) > at
+                or _utc(approval["expires_at"]) > at):
+            raise BackgroundJobConflict(
+                "La ejecución no está vencida, íntegra o sin intentos.")
+
+        # FOR UPDATE gives a stable view of ALL children, not just the pending
+        # manifest; a hidden SUBMITTING/uncertain child must fail closed.
+        children = active.execute(db.text("""
+            SELECT id, status, submit_started_at, submitted_at,
+                   submitted_by_user_id, provider_campaign_id, error_code,
+                   support_ref, provider_response_json, retry_history_json,
+                   retry_attempt_count, reconciliation_resolution, reconciled_at,
+                   provider_deduplicated
+            FROM marketing_campaign_v2_provider_campaigns
+            WHERE campaign_v2_id = :campaign_id ORDER BY id FOR UPDATE
+        """), {"campaign_id": campaign_id}).mappings().all()
+        ready = [int(row["id"]) for row in children if row["status"] == "READY"]
+        if (not children or set(ready) != set(ids) or len(ready) != len(ids)
+                or any(row["status"] not in ("READY", "HELD") or
+                    row["submit_started_at"] is not None or
+                    row["submitted_at"] is not None or
+                    row["submitted_by_user_id"] is not None or
+                    row["provider_campaign_id"] is not None or
+                    row["error_code"] is not None or
+                    row["support_ref"] is not None or
+                    bool(row["provider_response_json"]) or
+                    bool(row["retry_history_json"]) or
+                    int(row["retry_attempt_count"] or 0) != 0 or
+                    row["reconciliation_resolution"] is not None or
+                    row["reconciled_at"] is not None or
+                    row["provider_deduplicated"] is not None
+                    for row in children)):
+            raise BackgroundJobConflict(
+                "Hay evidencia de envío o los lotes cambiaron; concilia antes de continuar.")
+
+        events = (active.query(Event).filter(Event.job_id == job.id)
+                  .order_by(Event.event_no).with_for_update().all())
+        kinds = [event.event_kind for event in events]
+        if (kinds not in (["ENQUEUED", "REVIEW_REQUIRED"],
+                          ["ENQUEUED", "STARTED", "REVIEW_REQUIRED"])
+                or [event.event_no for event in events] !=
+                list(range(1, len(events) + 1))):
+            raise BackgroundJobConflict(
+                "El historial indica otra actividad o no está íntegro.")
+
+        job.status = "STOPPED"
+        job.stop_reason_code = "NO_ATTEMPT_VERIFIED"
+        job.current_child_id = None
+        job.worker_lease_until = None
+        job.finished_at = at
+        job.updated_at = at
+        active.add(Event(
+            job_id=job.id, event_no=len(events) + 1,
+            event_kind="STOPPED", actor_user_id=actor_user_id,
+            reason_code="NO_ATTEMPT_VERIFIED", occurred_at=at,
+        ))
+        active.commit()
+        return {"job_id": job_id, "campaign_id": campaign_id,
+                "status": "STOPPED", "already_resolved": False,
+                "requires_reauthorization": True, "provider_calls": 0}
+    except Exception:
+        active.rollback()
         raise
 
 
