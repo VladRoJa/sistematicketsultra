@@ -1,0 +1,41 @@
+name: Nube Corporativa — Fase A A-12/A-13 parity diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "backend/tests/routes/test_internal_documents_sensitive_parity.py"
+      - ".github/workflows/internal-documents-sensitive-parity-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  a12-a13-permissions-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: permissions-phase-a-test-only
+      JWT_SECRET_KEY: permissions-phase-a-test-only
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Diagnose A-12/A-13 plus existing Nube regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/routes/test_internal_documents_sensitive_parity.py \
+            tests/routes/test_internal_documents_agregadoras_visibility.py \
+            tests/utils/test_internal_documents_agregadoras_access.py
