@@ -3,7 +3,8 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { A11yModule } from '@angular/cdk/a11y';
 import { MatIconModule } from '@angular/material/icon';
-import { Subscription } from 'rxjs';
+import { forkJoin, Subscription } from 'rxjs';
+import { CatalogoService, CatalogoElemento } from '../../services/catalogo.service';
 
 import {
   InventarioService, LoteDecisionesInventario, ResolucionHallazgo,
@@ -15,8 +16,8 @@ type Decision = 'APPROVED' | 'REJECTED';
 type EdicionResolucion = {
   accion: 'AJUSTAR_A_CERO' | 'VINCULAR_EXISTENTE' | 'CREAR_NUEVO';
   inventario_id: number | null;
-  categoria: string;
-  marca: string;
+  categoria_inventario_id: number | null;
+  marca_id: number | null;
   descripcion: string;
   familia_equipo_id: number | null;
   stock_esperado: number | null;
@@ -39,6 +40,12 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
     UNREGISTERED_FIND: 'Hallazgo sin registro',
   };
   contexto: RevisionCorreccionesContexto | null = null;
+  categoriasOficiales: CatalogoElemento[] = [];
+  marcasOficiales: CatalogoElemento[] = [];
+  cargandoCatalogos = false;
+  catalogosListos = false;
+  errorCatalogos = '';
+  private subCatalogos?: Subscription;
   iniciando = true;
   cargando = false;
   procesando = false;
@@ -68,12 +75,43 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
   private subDecision?: Subscription;
   private consulta = 0;
 
-  constructor(private readonly inventario: InventarioService) {}
+  constructor(
+    private readonly inventario: InventarioService,
+    private readonly catalogos: CatalogoService,
+  ) {}
+
+  cargarCatalogosAlta(): void {
+    if (this.cargandoCatalogos) return;
+    this.cargandoCatalogos = true;
+    this.catalogosListos = false;
+    this.errorCatalogos = '';
+    this.subCatalogos?.unsubscribe();
+    this.subCatalogos = forkJoin({
+      categorias: this.catalogos.getCategoriasInventario(),
+      marcas: this.catalogos.getMarcas(),
+    }).subscribe({
+      next: ({ categorias, marcas }) => {
+        this.categoriasOficiales = categorias
+          .filter(c => c.nombre.trim() && c.nombre.trim().length <= 100)
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        this.marcasOficiales = marcas
+          .filter(m => m.nombre.trim())
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        this.cargandoCatalogos = false;
+        this.catalogosListos = true;
+      },
+      error: () => {
+        this.cargandoCatalogos = false;
+        this.errorCatalogos = 'No se pudieron consultar categorías y marcas oficiales. Reintenta antes de autorizar.';
+      },
+    });
+  }
 
   ngOnInit(): void {
     this.subContexto = this.inventario.contextoRevisionCorrecciones().subscribe({
       next: contexto => {
         this.contexto = contexto;
+        if (contexto.corporativo) this.cargarCatalogosAlta();
         this.iniciando = false;
         this.cargar();
       },
@@ -86,6 +124,7 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subContexto?.unsubscribe();
+    this.subCatalogos?.unsubscribe();
     this.subListado?.unsubscribe();
     this.subDecision?.unsubscribe();
     ++this.consulta;
@@ -168,9 +207,11 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
       }
       if (s.tipo === 'UNREGISTERED_FIND') {
         if (r.accion === 'CREAR_NUEVO') {
-          return !!this.contexto?.corporativo &&
-            r.categoria.trim().length > 0 && r.categoria.trim().length <= 100 &&
-            r.marca.trim().length <= 100 && r.descripcion.trim().length <= 2000 &&
+          return !!this.contexto?.corporativo && this.catalogosListos &&
+            r.categoria_inventario_id != null &&
+            this.categoriasOficiales.some(c => c.id === r.categoria_inventario_id) &&
+            (r.marca_id == null || this.marcasOficiales.some(m => m.id === r.marca_id)) &&
+            r.descripcion.trim().length <= 2000 &&
             (r.familia_equipo_id == null ||
               (Number.isInteger(r.familia_equipo_id) && r.familia_equipo_id > 0));
         }
@@ -281,7 +322,8 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
           const esperado = s.baseline_canonico['stock'];
           this.resoluciones[s.id] = {
             accion: 'AJUSTAR_A_CERO', inventario_id: null,
-            categoria: '', marca: '', descripcion: '', familia_equipo_id: null,
+            categoria_inventario_id: null, marca_id: null,
+            descripcion: '', familia_equipo_id: null,
             stock_esperado: typeof esperado === 'number' ? esperado : null,
             cantidad_fisica: null, justificacion: '',
           };
@@ -289,7 +331,11 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
           this.resoluciones[s.id] = {
             accion: this.contexto?.corporativo ? 'CREAR_NUEVO' : 'VINCULAR_EXISTENTE',
             inventario_id: null, stock_esperado: null, cantidad_fisica: null,
-            categoria: '', marca: s.hallazgo_provisional?.['marca'] || '',
+            categoria_inventario_id: null,
+            marca_id: this.marcasOficiales.find(m =>
+              m.nombre.trim().toLocaleLowerCase() ===
+              String(s.hallazgo_provisional?.['marca'] || '').trim().toLocaleLowerCase()
+            )?.id ?? null,
             descripcion: s.evidencia_descriptiva || '',
             familia_equipo_id: null, justificacion: '',
           };
@@ -334,8 +380,9 @@ export class RevisionCorreccionesComponent implements OnInit, OnDestroy {
             ? this.motivo.trim() : r.justificacion.trim();
           if (r.accion === 'CREAR_NUEVO') {
             resoluciones[String(s.id)] = {
-              accion: 'CREAR_NUEVO', categoria: r.categoria.trim(),
-              marca: r.marca.trim(), descripcion: r.descripcion.trim(),
+              accion: 'CREAR_NUEVO',
+              categoria_inventario_id: r.categoria_inventario_id!,
+              marca_id: r.marca_id, descripcion: r.descripcion.trim(),
               familia_equipo_id: r.familia_equipo_id,
               justificacion: fundamento,
             };

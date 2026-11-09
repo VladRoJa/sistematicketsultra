@@ -103,6 +103,21 @@ test('E3 muestra contexto en tarjetas y conserva solo el modal de decisión',()=
   assert.match(service,/decidirCorreccionesLote\(payload: LoteDecisionesInventario\)/);
 });
 
+test('E3 alta nueva ofrece sólo categoría y marca de catálogos oficiales',()=>{
+  assert.match(src,/catalogos\.getCategoriasInventario\(\)/);
+  assert.match(src,/catalogos\.getMarcas\(\)/);
+  assert.match(src,/this\.categoriasOficiales\.some\(c => c\.id === r\.categoria_inventario_id\)/);
+  assert.match(src,/this\.marcasOficiales\.some\(m => m\.id === r\.marca_id\)/);
+  assert.match(html,/\[\(ngModel\)\]="resoluciones\[solicitud\.id\]\.categoria_inventario_id"/);
+  assert.match(html,/\[\(ngModel\)\]="resoluciones\[solicitud\.id\]\.marca_id"/);
+  assert.match(html,/\*ngFor="let categoria of categoriasOficiales"/);
+  assert.match(html,/\*ngFor="let marca of marcasOficiales"/);
+  assert.doesNotMatch(html,/\[\(ngModel\)\]="resoluciones\[solicitud\.id\]\.categoria"/);
+  assert.doesNotMatch(html,/\[\(ngModel\)\]="resoluciones\[solicitud\.id\]\.marca"/);
+  assert.match(service,/categoria_inventario_id: number/);
+  assert.match(service,/marca_id: number \| null/);
+});
+
 test('E3 consulta contextual, muestra cambios legibles y filtrar reinicia checks',()=>{
   const {vm,calls}=make();
   assert.equal(vm.contexto.can_review,true);

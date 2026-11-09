@@ -81,7 +81,13 @@ def env():
                 """)
                 con.exec_driver_sql("""
                     CREATE TABLE catalogo_categoria_inventario (
-                        id INTEGER PRIMARY KEY, activo BOOLEAN NOT NULL DEFAULT true
+                        id INTEGER PRIMARY KEY, nombre VARCHAR(120) NOT NULL,
+                        activo BOOLEAN NOT NULL DEFAULT true
+                    )
+                """)
+                con.exec_driver_sql("""
+                    CREATE TABLE marcas (
+                        id INTEGER PRIMARY KEY, nombre VARCHAR(100) NOT NULL UNIQUE
                     )
                 """)
                 con.exec_driver_sql("""
@@ -153,7 +159,11 @@ def env():
                     (68,7),(90,7),(92,7)
                 """)
                 con.exec_driver_sql("""
-                    INSERT INTO catalogo_categoria_inventario VALUES (1,true),(2,false)
+                    INSERT INTO catalogo_categoria_inventario(id,nombre,activo)
+                    VALUES (1,'Fuerza y peso integrado',true),(2,'Categoría inactiva',false)
+                """)
+                con.exec_driver_sql("""
+                    INSERT INTO marcas VALUES (1,'Marca Catalogada'),(2,'Otra Marca')
                 """)
                 con.exec_driver_sql("""
                     INSERT INTO familia_equipo VALUES (1,true),(2,false)
@@ -1050,7 +1060,7 @@ def test_e3_hallazgo_alta_nueva_auditada_sin_entrada_v1(env):
     payload = _payload([req])
     payload["resoluciones"] = {str(req): {
         "accion": "CREAR_NUEVO",
-        "categoria": "Aparatos de fuerza", "marca": "Prueba",
+        "categoria_inventario_id": 1, "marca_id": 1,
         "descripcion": "Aparato nuevo identificado durante levantamiento físico",
         "familia_equipo_id": 1,
         "justificacion": "Alta única verificada y autorizada por corporativo.",
@@ -1061,6 +1071,9 @@ def test_e3_hallazgo_alta_nueva_auditada_sin_entrada_v1(env):
     new_id = effect["inventario_id"]
     assert effect["accion"] == "CREAR_NUEVO"
     assert _sql("SELECT codigo_interno FROM inventario_general WHERE id=:id", {"id": new_id}) == "07PINUEVO55"
+    assert _sql("SELECT categoria_inventario_id FROM inventario_general WHERE id=:id", {"id": new_id}) == 1
+    assert _sql("SELECT categoria FROM inventario_general WHERE id=:id", {"id": new_id}) == "Fuerza y peso integrado"
+    assert _sql("SELECT marca FROM inventario_general WHERE id=:id", {"id": new_id}) == "Marca Catalogada"
     assert _sql("SELECT stock FROM inventario_sucursal WHERE inventario_id=:id AND sucursal_id=7",
                 {"id": new_id}) == 1
     assert _sql("SELECT count(*) FROM inventario_correccion_altas_auditoria "
@@ -1093,10 +1106,49 @@ def test_e3_hallazgo_alta_denegada_sin_facultad_corporativa(env):
     db.session.commit()
     payload = _payload([req])
     payload["resoluciones"] = {str(req): {
-        "accion": "CREAR_NUEVO", "categoria": "Fuerza",
-        "marca": "", "descripcion": "", "familia_equipo_id": None,
+        "accion": "CREAR_NUEVO", "categoria_inventario_id": 1,
+        "marca_id": None, "descripcion": "", "familia_equipo_id": None,
         "justificacion": "Alta que solo puede autorizar corporativo.",
     }}
     result = _post(env, 91, payload)
     assert result.status_code == 403, result.get_json()
     assert _sql("SELECT count(*) FROM inventario_general WHERE codigo_interno='07PINUEVO56'") == 0
+
+
+def test_e3_hallazgo_alta_rechaza_categoria_marca_ajenas_y_texto_libre(env):
+    _grant(47)
+    req = _request("UNREGISTERED_FIND", inv=None)
+    row = db.session.get(InventarioSolicitudCorreccionORM, req)
+    row.hallazgo_provisional = {
+        "nombre": "Equipo clasificado", "tipo": "APARATOS",
+        "codigo_interno": "07CANON01",
+    }
+    db.session.commit()
+    valid = {
+        "accion": "CREAR_NUEVO", "categoria_inventario_id": 1,
+        "marca_id": 1, "descripcion": "Alta controlada mediante catálogos",
+        "familia_equipo_id": None,
+        "justificacion": "Comprobación de referencias canónicas.",
+    }
+    for changes in (
+        {"categoria_inventario_id": 2},   # categoría inactiva
+        {"categoria_inventario_id": 999}, # categoría inventada
+        {"marca_id": 999},                # marca inexistente
+        {"marca_id": "Marca suelta"},     # texto libre
+        {"categoria": "Categoría por error"}, # clave no permitida
+    ):
+        payload = _payload([req])
+        payload["resoluciones"] = {str(req): {**valid, **changes}}
+        res = _post(env, 47, payload)
+        assert res.status_code == 422, res.get_json()
+        assert _sql("SELECT count(*) FROM inventario_general WHERE codigo_interno='07CANON01'") == 0
+        assert _sql("SELECT count(*) FROM inventario_correccion_decisiones") == 0
+    good = _payload([req])
+    good["resoluciones"] = {str(req): {**valid, "marca_id": None}}
+    approved = _post(env, 47, good)
+    assert approved.status_code == 201, approved.get_json()
+    item_id = approved.get_json()["items"][0]["efecto"]["inventario_id"]
+    assert _sql("SELECT categoria_inventario_id FROM inventario_general WHERE id=:id",
+                {"id": item_id}) == 1
+    assert _sql("SELECT marca FROM inventario_general WHERE id=:id",
+                {"id": item_id}) is None
