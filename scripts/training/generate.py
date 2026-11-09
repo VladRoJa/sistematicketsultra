@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 from playwright.sync_api import sync_playwright
 
-from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click
+from scripts.training.recording_focus import install_focus_context, install_focus_page, guided_click, guided_action
 
 ROOT = Path(__file__).resolve().parent
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
@@ -155,34 +155,89 @@ def batch_receive(page, dialog, codes: list[str], received: bool, reason: str = 
             raise RuntimeError(f"Código de demo ambiguo o ausente: {code}")
         check = item.get_by_role("checkbox")
         if received:
-            check.check()
+            guided_action(page, check, "check")
         else:
-            check.uncheck()
+            guided_action(page, check, "uncheck")
             item.get_by_placeholder("Obligatorio para corregir una recepción guardada").fill(reason)
     guided_click(page, dialog.get_by_role("button", name=re.compile("Guardar cambios")))
     dialog.get_by_role("button", name=re.compile("Guardar cambios")).wait_for(state="hidden", timeout=30_000)
 
 
 def login(page, url: str, username: str, password: str):
-    page.goto(url + "/#/login")
-    # Nunca grabar tokens ni guardar storageState; limpieza al alternar cuentas.
-    page.locator("#usuario-login").fill(username)
-    page.locator("#password-login").fill(password)
-    page.get_by_role("button", name="Iniciar sesión").click()
-    page.wait_for_url(re.compile(r"/#/((?!login).)+"), timeout=30_000)
+    """Autenticar fuera del formulario grabado. Solo credenciales sintéticas CI.
+
+    El video jamás muestra campos ni tecleo de contraseñas. El usuario/rol/branch
+    se valida por la respuesta real del backend; no se inventan JWT ni guards.
+    """
+    if username not in ("QA_COORD_CIERRE", "QA_GERENTE_CIERRE"):
+        raise ValueError("CAP-V1: solamente cuentas de capacitación sintética")
+    response = page.context.request.post(
+        url + "/api/auth/login",
+        data={"username": username, "password": password},
+        timeout=20000, max_redirects=0,
+    )
+    if response.status != 200:
+        raise RuntimeError("CAP-V1: login sintético rechazado (HTTP %s)" % response.status)
+    payload = response.json()
+    user = payload.get("user") or {}
+    expected_role = "COMPRAS" if username == "QA_COORD_CIERRE" else "GERENTE"
+    if (user.get("sucursal_id") != 990101
+            or user.get("rol") != expected_role
+            or user.get("username", "").upper() != username
+            or not payload.get("token")):
+        raise RuntimeError("CAP-V1: cuenta/rol/sucursal no corresponden a QA")
+    # El primer documento no graba tecleo alguno; cambios posteriores de
+    # cuenta sustituyen el estado local sin entrar a la pantalla de login.
+    if page.url == "about:blank":
+        page.goto(url + "/", wait_until="domcontentloaded")
+    page.evaluate(
+        """(auth) => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.setItem('token', auth.token);
+            localStorage.setItem('user', JSON.stringify(auth.user));
+            sessionStorage.clear();
+        }""",
+        {"token": payload["token"], "user": user},
+    )
 
 
 def switch_account(page, url: str, username: str, password: str):
-    page.goto(url + "/#/login")
-    page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
     page.context.clear_cookies()
     login(page, url, username, password)
+    # Angular conserva el objeto User/rol si se navega al mismo hash.
+    # Recargar crea una instancia de app vinculada al nuevo localStorage.
+    # El formulario de login nunca aparece con credenciales en la captura.
+    page.reload(wait_until="domcontentloaded")
 
 
 def ticket_page(page, url: str):
     page.goto(url + "/#/main/ver-tickets")
     page.get_by_role("heading", name="Ver Tickets").wait_for(timeout=30_000)
     install_focus_page(page)
+
+
+def observe_ticket_state(page, url: str, ticket_id: int) -> dict:
+    """Diagnóstico de un ticket sintético autorizado, sin exponer el JWT."""
+    if not os.getenv("CAP_V1_SYNTHETIC_CI"):
+        return {}
+    token = page.evaluate("() => localStorage.getItem('token')")
+    response = page.context.request.get(
+        url + "/api/tickets/all?limit=50&offset=0",
+        headers={"Authorization": "Bearer " + token},
+        timeout=15000, max_redirects=0,
+    )
+    if response.status != 200:
+        raise RuntimeError(f"CAP-V1 QA: la bandeja API respondió {response.status}")
+    ticket = next((t for t in response.json().get("tickets", [])
+                   if t.get("id") == ticket_id), None)
+    if not ticket:
+        raise RuntimeError("CAP-V1 QA: ticket sintético fuera de alcance")
+    return {
+        "estado": ticket.get("estado"), "estado_cierre": ticket.get("estado_cierre"),
+        "username": ticket.get("username"),
+        "sucursal_id_destino": ticket.get("sucursal_id_destino"),
+    }
 
 
 def walkthrough(page, args, story: dict) -> list[dict]:
@@ -225,10 +280,22 @@ def walkthrough(page, args, story: dict) -> list[dict]:
         "Recepción de todos los aparatos verificada en capacitación.")
     guided_click(page, finish.get_by_role("button", name="Solicitar conformidad"))
     scene("cierre")
+    after_request = observe_ticket_state(page, args.base_url, args.ticket_id)
+    if after_request and (after_request["estado"] != "por_validar"
+                          or after_request["estado_cierre"] != "pendiente_creador"):
+        raise RuntimeError(
+            "CAP-V1 QA: solicitud no creó pendiente de conformidad: "
+            + str(after_request)
+        )
 
     switch_account(page, args.base_url, reviewer, reviewer_pass)
     ticket_page(page, args.base_url)
     row = find_ticket(page, args.ticket_id)
+    reviewer_status = observe_ticket_state(page, args.base_url, args.ticket_id)
+    if reviewer_status and (reviewer_status["estado"] != "por_validar"
+                            or reviewer_status["estado_cierre"] != "pendiente_creador"):
+        raise RuntimeError("CAP-V1 QA: vista de revisor no está por validar: "
+                           + str(reviewer_status))
     guided_click(page, row.get_by_role("button", name="Rechazar cierre"))
     page.locator(".swal2-textarea").fill("Se detectó un equipo que requiere corregir su recepción.")
     guided_click(page, page.locator(".swal2-confirm"))
