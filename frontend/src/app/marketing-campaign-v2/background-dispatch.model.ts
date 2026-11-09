@@ -10,6 +10,9 @@ export interface BackgroundDispatchJob {
   status: BackgroundDispatchStatus;
   total_pending_at_start: number;
   accepted_by_provider: number;
+  confirmed_rejected: number;
+  uncertain_results: number;
+  unattempted: number;
   current_child_id: number | null;
   stop_requested: boolean;
   reason_code: string | null;
