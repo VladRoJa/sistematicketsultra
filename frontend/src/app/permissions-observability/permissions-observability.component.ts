@@ -283,30 +283,126 @@ export class PermissionsObservabilityComponent implements OnInit {
     }
   }
 
-  // Los payloads de auditoría pueden incluir datos arbitrarios: mostrar solo
-  // metadatos estructurados; el registro íntegro permanece en backend.
-  getGrantAuditSafeSummary(payload: Record<string, unknown> | null | undefined): string {
-    if (!payload) { return 'No registrado'; }
-    const fields = [
-      'principal_type', 'principal_user_id', 'principal_role_key',
-      'action_full_key', 'effect', 'scope_type', 'scope_branch_id',
-      'scope_branch_ids', 'scope_department_id', 'starts_at',
-      'expires_at', 'is_active', 'deleted_at',
-    ];
-    const values = fields.flatMap(key => {
-      const value = payload[key];
-      if (value === null || value === undefined) { return []; }
-      if (Array.isArray(value)) {
-        return [key + ': ' + value.filter(item =>
-          typeof item === 'string' || typeof item === 'number').join(', ')];
+  // Auditoría legible: únicamente campos estructurados de una allowlist.
+  // No se muestran reason, IP, user-agent ni scope_payload dentro de este diff.
+  private readonly grantAuditFields: Array<{ key: string; label: string }> = [
+    { key: 'principal_type', label: 'Tipo de destinatario' },
+    { key: 'principal_user_id', label: 'Usuario' },
+    { key: 'principal_role_key', label: 'Rol' },
+    { key: 'action_full_key', label: 'Acción' },
+    { key: 'effect', label: 'Decisión configurada' },
+    { key: 'scope_type', label: 'Alcance' },
+    { key: 'scope_branch_id', label: 'Sucursal' },
+    { key: 'scope_branch_ids', label: 'Sucursales' },
+    { key: 'scope_department_id', label: 'Departamento' },
+    { key: 'starts_at', label: 'Inicio de vigencia' },
+    { key: 'expires_at', label: 'Fin de vigencia' },
+    { key: 'is_active', label: 'Estado del registro' },
+    { key: 'deleted_at', label: 'Eliminación lógica' },
+  ];
+
+  getGrantAuditEventLabel(eventType: string): string {
+    const labels: Record<string, string> = {
+      created: 'Configuración registrada',
+      updated: 'Configuración modificada',
+      enabled: 'Registro habilitado',
+      disabled: 'Registro deshabilitado',
+      deleted_soft: 'Registro retirado',
+      expired: 'Vigencia concluida',
+    };
+    return labels[eventType] || 'Cambio registrado';
+  }
+
+  private getGrantAuditFieldValue(key: string, value: unknown): string {
+    if (value === null || value === undefined || value === '') {
+      return 'No especificado';
+    }
+    if (key === 'principal_type') {
+      return value === 'user' ? 'Usuario' : value === 'role' ? 'Rol' : 'Tipo no reconocido';
+    }
+    if (key === 'principal_user_id') {
+      const id = Number(value);
+      const matchingUser = this.selectedGrantForAudit?.principal_user;
+      return matchingUser?.id === id
+        ? matchingUser.username + ' (#' + id + ')'
+        : 'Usuario #' + id;
+    }
+    if (key === 'principal_role_key') {
+      return typeof value === 'string' ? value : 'Rol no reconocido';
+    }
+    if (key === 'action_full_key') {
+      return typeof value === 'string' ? this.actionLabel(value) : 'Acción no reconocida';
+    }
+    if (key === 'effect') {
+      return value === 'allow' ? 'Permitir' : value === 'deny' ? 'Denegar' :
+        'Decisión no reconocida';
+    }
+    if (key === 'scope_type') {
+      const scopes: Record<string, string> = {
+        global: 'Global (configuración)',
+        branch: 'Una sucursal',
+        branch_list: 'Varias sucursales',
+        department: 'Departamento',
+        module: 'Módulo (semántica sin certificar)',
+        custom: 'Personalizado (requiere revisión)',
+      };
+      return typeof value === 'string' ? scopes[value] || 'Alcance no reconocido' :
+        'Alcance no reconocido';
+    }
+    if (key === 'scope_branch_id') {
+      return 'Sucursal #' + String(value);
+    }
+    if (key === 'scope_branch_ids') {
+      if (!Array.isArray(value)) { return 'Lista no reconocida'; }
+      const ids = value.filter((item): item is number =>
+        typeof item === 'number' && Number.isSafeInteger(item) && item > 0);
+      return ids.length ? ids.map(id => '#' + id).join(', ') : 'Ninguna sucursal';
+    }
+    if (key === 'scope_department_id') {
+      return 'Departamento #' + String(value);
+    }
+    if (key === 'starts_at' || key === 'expires_at' || key === 'deleted_at') {
+      if (typeof value !== 'string') { return 'Fecha no reconocida'; }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) { return 'Fecha no reconocida'; }
+      return new Intl.DateTimeFormat('es-MX', {
+        dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Tijuana',
+      }).format(parsed) + ' (Tijuana)';
+    }
+    if (key === 'is_active') {
+      return value === true ? 'Activo (registro)' :
+        value === false ? 'Inactivo (registro)' : 'Estado no reconocido';
+    }
+    return 'Valor no reconocido';
+  }
+
+  getGrantAuditChangeRows(log: PermissionGrantAuditLog): Array<{
+    label: string; before: string; after: string;
+  }> {
+    const before = log.before_payload || {};
+    const after = log.after_payload || {};
+    const isCreated = log.event_type === 'created';
+    return this.grantAuditFields.flatMap(field => {
+      const hasBefore = Object.prototype.hasOwnProperty.call(before, field.key);
+      const hasAfter = Object.prototype.hasOwnProperty.call(after, field.key);
+      if (!hasBefore && !hasAfter) { return []; }
+      const previous = before[field.key];
+      const next = after[field.key];
+      if (isCreated && (next === null || next === undefined ||
+          next === '' || (Array.isArray(next) && next.length === 0))) {
+        return [];
       }
-      if (typeof value === 'string' || typeof value === 'boolean' ||
-          typeof value === 'number') {
-        return [key + ': ' + String(value)];
+      if (!isCreated && JSON.stringify(previous) === JSON.stringify(next)) {
+        return [];
       }
-      return [];
+      return [{
+        label: field.label,
+        before: hasBefore ? this.getGrantAuditFieldValue(field.key, previous) :
+          'No registrado',
+        after: hasAfter ? this.getGrantAuditFieldValue(field.key, next) :
+          'No registrado',
+      }];
     });
-    return values.join(' · ') || 'Sin metadatos de cambio estructurados';
   }
 
   getGrantRecordStatus(grant: PermissionGrant): string {
