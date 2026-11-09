@@ -6,10 +6,11 @@ Base inspeccionada: `main`, commit `9dd54eb97a7380d23c6cf3600b72914a7cbbb8cf`
 
 ## Resultado
 
-**NO VERIFICABLE online con los mecanismos confirmados durante esta revisión.**
-No se confirmó un endpoint autenticado de solo lectura para inventario de
-plantillas. Esto no demuestra que iVentas carezca de ese endpoint: falta el
-contrato y una respuesta autorizada que permitan verificarlo.
+**NO VERIFICABLE mediante autenticación de integración confirmada.**
+La continuación aporta una ruta GET observada en el panel autorizado de iVentas.
+Ya no falta una ruta observada: faltan el significado de su ID, autorización
+documentada para credenciales de integración y validación HTTP 200 del alcance
+y completitud. El funcionamiento en el navegador no prueba ese contrato.
 
 El criterio de aceptación del botón automático queda pendiente de esa evidencia
 externa. Este cambio es solo diagnóstico: no añade botón, endpoint, cliente
@@ -18,7 +19,89 @@ exitosa. No se hicieron envíos, campañas en iVentas, cambios productivos,
 migraciones, merge ni despliegue. No se leyeron credenciales ni se reutilizaron
 sesiones del panel.
 
-## Evidencia y límites de la investigación
+## Continuación: GET observado en panel autorizado
+
+Evidencia aportada por el usuario el 2026-11-09, no reproducida por este agente:
+
+```text
+GET https://rest.iventas.mx/whatsappTemplate/6a19b68127a48a00095cdc6b
+Request Headers: incluye Authorization (valor no aportado ni solicitado)
+HTTP observado: 304, validación de caché
+Campos JSON descritos: name, status, channelId, channel.id, channel.name, components
+Sin envíos
+```
+
+### Identidad y alcance del ID: pendiente del proveedor
+
+`6a19b68127a48a00095cdc6b` es por ahora un parámetro opaco de la ruta observada.
+La búsqueda exacta en fuentes, documentación y fixtures versionados no encontró
+referencias previas; tampoco coincide con los canales del seed
+`backend/migrations/versions/f3c8a1b2d4e6_seed_campaign_v2_iventas_channels.py`.
+Eso no descarta un canal configurado fuera de ese seed ni identifica el recurso.
+No hay base para llamarlo sucursal, canal, cuenta, empresa o plantilla.
+
+Los campos descritos no incluyen el JSON completo ni su tipo raíz. No permiten
+resolver si el GET lista plantillas de una cuenta, filtra un canal o devuelve un
+recurso individual. Ni el nombre de la ruta ni el formato del ID lo demuestran.
+No sustituir el ID por IDs de sucursal/canal ni enumerar otros IDs para probar.
+
+### Credenciales existentes: no hay autorización documentada para este GET
+
+| Credencial configurada por el código | Uso respaldado por el contrato actual | Evidencia |
+| --- | --- | --- |
+| `IVENTAS_API_TOKEN` | GET de contactos `/v1/integrations/contacts` | `backend/app/integrations/iventas/client.py`, `IventasClient`; contrato de leads iVentas. |
+| `IVENTAS_CAMPAIGNS_API_KEY` | GET `/v2/broadcast/stats/{campaign_id}`, independiente del token de contactos | `campaigns_client.py`, `IVentasCampaignsClient`; `CONTRATO_CAMPANAS_V2_FASE_2.md`, sección 0.2. |
+| `IVENTAS_CAMPAIGN_SEND_API_KEY` | Adaptador de envío POST `/v2/broadcast`, exige prefijo `ivk_live_` | `broadcast_provider.py`, `IVentasBroadcastProvider`; `CONTRATO_CAMPANAS_V2_FASE_3_M2.md`, sección 24.1, lo describe como write-only. |
+
+Estos son usos respaldados por el repositorio, no una inspección de los permisos
+reales de las claves en iVentas. No se localizaron scopes ni autorización del
+proveedor que habiliten `/whatsappTemplate/...` para ninguna de ellas.
+`Authorization` en la captura no identifica el tipo de credencial ni prueba que
+acepte una integration key. El prefijo `ivk_live_` tampoco acredita ese permiso.
+Las pruebas existentes de estadísticas verifican separación de credenciales y
+ausencia de fallback al token de contactos; no prueban acceso a plantillas.
+
+**Decisión:** detener la integración antes de cualquier GET autenticado.
+No se inspeccionaron valores de claves, archivos de secretos, cookies ni tokens
+del navegador. No se rotaron credenciales ni se ensayaron claves de otros usos.
+Falta evidencia de autorización; no se afirma que el proveedor las haya denegado.
+
+### HTTP 304 y validación aún no realizada
+
+Según [RFC 9110, sección 15.4.5](https://www.rfc-editor.org/rfc/rfc9110.html#section-15.4.5),
+304 corresponde a una validación condicional y no contiene el cuerpo de una
+representación nueva. El JSON visible en el panel puede proceder de la caché;
+esa procedencia no se verificó aquí. No atribuir ese JSON a un nuevo HTTP 200.
+
+Por el bloqueo de autorización no se obtuvo respuesta HTTP 200 desde integración,
+no se ejecutó el parser sobre una respuesta real nueva y no se confirmaron
+completitud, paginación ni cobertura por canal. Los campos descritos coinciden
+con campos que consume el parser, pero este exige un array y concordancia entre
+`channelId` y `channel.id`; listar nombres de campos no valida esas condiciones.
+
+### Dependencia concreta y siguiente comprobación permitida
+
+iVentas debe confirmar qué entidad representa el ID de la URL observada, cómo
+se resuelve para la cuenta autorizada y si la ruta es apta para integración de
+servidor. También debe documentar qué credencial de integración y permiso de
+lectura la habilitan, su alcance por cuenta/canal y si requiere un permiso nuevo.
+No habilitarlo ni cambiar claves o scopes productivos como parte de este PR.
+
+Una vez aportada esa autorización, realizar una sola consulta inicial a la URL
+exacta y al alcance confirmado, con cliente nuevo sin caché ni sesión del
+navegador, sin `If-None-Match`/`If-Modified-Since`, sin seguir redirecciones y con
+timeouts acotados. No enviar el secreto a otro destino ni registrar Authorization.
+Exigir HTTP 200 y JSON sanitizado para validar tipo raíz, registros, identidad
+de canales y señal documentada de completitud. Un 304 sin representación local
+validada, 401/403, fallo de red o listado parcial seguirá siendo NO VERIFICABLE.
+Si el contrato exige páginas adicionales, confirmar primero ese alcance; no
+inventar parámetros ni asumir ausencia por un canal no observado.
+
+La futura matriz debe usar los emisores del preflight vigente, incluida la ruta
+congelada INDEPENDENCIA → TEC_MXL. Esta captura no altera rutas ni campañas.
+Hasta completar esa validación, no se implementa «Comprobar plantillas».
+
+## Evidencia y límites de la investigación inicial
 
 - Se leyó `AGENTS.md`. Solo se encontró ese archivo de instrucciones en el
   checkout; no hay `graphify-out/graph.json`.
@@ -72,8 +155,9 @@ Tampoco debe aplicarse retroactivamente una ruta nueva a campañas ya congeladas
 Obtener del proveedor o de una captura autorizada de una consulta de inventario,
 sin enviar ni guardar cambios en iVentas:
 
-1. Método y URL exactos, documentados u observados; confirmación de que consultar
-   no crea campañas ni consume mensajes.
+1. Ya se aportó método y URL observados en panel. Falta confirmar significado del
+   ID y alcance para integración, y que consultar no crea campañas ni consume
+   mensajes. La captura fue reportada sin envíos.
 2. Mecanismo de autenticación autorizado para integración de servidor, permisos
    necesarios y alcance de cuenta/canal. No aportar tokens, cookies ni claves
    al PR. Una sesión del navegador no autoriza por sí misma su reutilización.
@@ -115,7 +199,34 @@ Esto sigue siendo atestación manual, no satisface el botón automático ni
 demuestra ausencia por canales faltantes. Para otras campañas, conservar la
 verificación externa y las condiciones actuales sin extender el alcance.
 
-## Validaciones ejecutadas
+## Validaciones de la continuación
+
+- `git status --short`, `git branch --show-current`, `git log -1 --format='%H %s'`:
+  checkout inicialmente limpio, misma rama aislada, commit `d8f0ab4` del DRAFT #1229.
+- Lecturas `Get-Content` de `AGENTS.md`, este diagnóstico, los tres clientes, el
+  parser, contratos Fase 2/Fase 3 M2, seed de canales y pruebas de credenciales.
+- `Test-Path graphify-out/graph.json`: False; no corresponde consulta al grafo.
+- `rg --files` y `rg -n --hidden -i` en fuentes, docs, tests y migraciones para
+  localizar instrucciones, ID, ruta, claves y scopes. `git grep -n -i` del ID y
+  `whatsappTemplate` en archivos versionados `.py/.ts/.md/.json`: sin coincidencias
+  previas a esta actualización. No se buscaron valores en secretos ni sesiones.
+- Conector GitHub: lectura del estado de #1229, abierto y DRAFT con head
+  `d8f0ab4`; búsqueda `whatsappTemplate` en la rama por defecto: sin resultados.
+- Búsqueda web de la ruta literal, ID exacto y documentación de autenticación
+  iVentas: no se encontró contrato aplicable en los resultados consultados.
+  Se consultó RFC 9110 para interpretar 304; no sustituye documentación iVentas.
+- Sin GET al endpoint de iVentas: falta autorización documentada de integración.
+  HTTP 200, parser contra respuesta real y cobertura/completitud: pendientes.
+- No se repitieron pruebas Python ni compilación Angular: este cambio solo
+  actualiza documentación. Los resultados aislados siguientes son históricos,
+  no validan la ruta nueva.
+- `git diff --check`: correcto. `git diff --stat` y revisión del diff: un solo
+  archivo documental; sin cambios de ejecución. Publicación mediante conector
+  GitHub en la misma rama, conservando el PR DRAFT; sincronización local con
+  `git fetch origin codex/iventas-template-probe-investigation` y comprobación
+  final con `git status --short`.
+
+## Validaciones de la investigación inicial
 
 - `git clone --single-branch --branch main https://github.com/VladRoJa/sistematicketsultra.git sistematicketsultra`: correcto; checkout inicialmente limpio.
 - `git rev-parse HEAD`, `git rev-parse origin/main` y `git log -1 --format='%H %s'`: base `9dd54eb...`, PR #1226.
