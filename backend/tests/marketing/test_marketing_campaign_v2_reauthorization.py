@@ -16,7 +16,7 @@ QUOTE = "b" * 64
 
 
 def fixture(monkeypatch, *, execution_status="AUTHORIZED", attempt=False,
-            latest_expired=True, revision=1):
+            latest_expired=True, revision=1, background_unresolved=False):
     old = NS(
         id=7, campaign_v2_id=22, revision_no=revision, template_id=1,
         expires_at=NOW - timedelta(minutes=6) if latest_expired else NOW + timedelta(minutes=4),
@@ -40,7 +40,10 @@ def fixture(monkeypatch, *, execution_status="AUTHORIZED", attempt=False,
 
     session = MagicMock()
     session.get_bind.return_value.dialect.name = "postgresql"
-    campaign_q, approval_q, execution_q, child_q = (MagicMock() for _ in range(4))
+    campaign_q, approval_q, execution_q, child_q, background_q = (MagicMock() for _ in range(5))
+    background_q.filter.return_value.first.return_value = (
+        NS(id=3, status="REVIEW_REQUIRED") if background_unresolved else None
+    )
     campaign_q.filter.return_value.with_for_update.return_value.one_or_none.return_value = NS(
         frozen_at=NOW - timedelta(days=1))
     approval_q.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = old
@@ -51,6 +54,7 @@ def fixture(monkeypatch, *, execution_status="AUTHORIZED", attempt=False,
         svc.Approval: approval_q,
         svc.Execution: execution_q,
         svc.Child: child_q,
+        svc.BackgroundJob: background_q,
     }[model]
     revised = NS(id=9, revision_no=revision+1, expires_at=NOW+timedelta(minutes=15),
                  manifest_json=old.manifest_json)
@@ -132,6 +136,15 @@ def test_reauthorization_fails_closed_for_active_or_attempted(monkeypatch, statu
         attempt=attempt, latest_expired=expired,
     )
     with pytest.raises(svc.CampaignV2ReauthorizationError, match=reason):
+        invoke(session)
+    reserve.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_called_once()
+
+
+def test_unresolved_background_job_blocks_fresh_approval(monkeypatch):
+    session, reserve, *_ = fixture(monkeypatch, background_unresolved=True)
+    with pytest.raises(svc.CampaignV2ReauthorizationError, match="revisión de trabajo pendiente"):
         invoke(session)
     reserve.assert_not_called()
     session.commit.assert_not_called()
