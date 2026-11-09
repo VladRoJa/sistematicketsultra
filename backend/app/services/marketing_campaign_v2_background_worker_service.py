@@ -22,6 +22,7 @@ from app.services.marketing_access import (
     MarketingAuthorizationError, resolve_marketing_access,
 )
 from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
+from app.services.marketing_campaign_v2_dispatch_approval_service import CampaignV2ApprovalConflictError
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
     BackgroundDispatchClaim, BackgroundDispatchStoppedBeforeClaim,
     execute_governed_child,
@@ -38,6 +39,28 @@ FLAGS = (
 
 class BackgroundWorkerReview(RuntimeError):
     """No further children may be attempted without manual reconciliation."""
+
+
+# Only fixed, reviewed messages are mapped into durable audit codes.
+# Never include arbitrary exception text, provider payload, phones or tokens.
+_APPROVAL_CONFLICT_CODES = {
+    "Preflight, presupuesto o revisión cambiaron.": "APPROVAL_PREFLIGHT_CHANGED",
+    "No hay evidencia de capacidad completa y vigente para todos los lotes.": "APPROVAL_QUOTA_EVIDENCE_INVALID",
+    "Manifiesto no habilitado para materialización D2b.": "APPROVAL_MANIFEST_VERSION_INVALID",
+    "Lote, identidad o tarifa diferente.": "APPROVAL_BATCH_OR_RATE_CHANGED",
+    "Moneda de aprobación no reconocida.": "APPROVAL_CURRENCY_INVALID",
+    "La estimación USD original cambió.": "APPROVAL_USD_PRICE_CHANGED",
+    "Costo histórico MXN modificado.": "APPROVAL_MXN_PRICE_CHANGED",
+    "Manifiesto de lotes incompleto.": "APPROVAL_MANIFEST_INCOMPLETE",
+    "Sucursales del manifiesto no coinciden.": "APPROVAL_BRANCHES_CHANGED",
+    "Cambió la identidad del lote.": "APPROVAL_CHILD_IDENTITY_CHANGED",
+    "Cambió la asignación de lotes/canales.": "APPROVAL_CHANNEL_SCOPE_CHANGED",
+    "Solo preflight IMMEDIATE totalmente conciliado puede aprobarse.": "APPROVAL_PREFLIGHT_NOT_READY",
+}
+
+
+def _approval_reason(exc: CampaignV2ApprovalConflictError) -> str:
+    return _APPROVAL_CONFLICT_CODES.get(str(exc), "APPROVAL_CONFLICT_OTHER")
 
 
 def _now(value: datetime | None = None) -> datetime:
@@ -366,6 +389,10 @@ def process_claimed_job(*, session: Any, job_id: int, worker_id: str,
             _stopped_before_claim(session, job_id, worker_id, generation, child_id)
     except BackgroundWorkerReview as exc:
         _fail_closed(session, job_id, worker_id, generation, str(exc))
+    except CampaignV2ApprovalConflictError as exc:
+        # D2c rejects pre-HTTP on a changed manifest/quota; leave the
+        # mandate quarantined and record a non-sensitive, actionable reason.
+        _fail_closed(session, job_id, worker_id, generation, _approval_reason(exc))
     except Exception:
         _fail_closed(session, job_id, worker_id, generation, "UNEXPECTED_WORKER_FAILURE")
         raise
