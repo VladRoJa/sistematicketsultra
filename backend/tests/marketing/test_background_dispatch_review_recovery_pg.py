@@ -28,6 +28,10 @@ JOB_ID = 3
 CAMPAIGN_ID = 43
 IDS = list(range(269, 291))
 CONFIRMATION = "CONFIRMAR SIN ENVIO 43 3"
+MANIFEST = {"version": "synthetic-no-http", "send_authorized": False}
+MANIFEST_DIGEST = hashlib.sha256(json.dumps(
+    MANIFEST, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+).encode("utf-8")).hexdigest()
 
 
 @pytest.fixture
@@ -60,10 +64,12 @@ def isolated_pg():
                  sa.Column("id", sa.BigInteger, primary_key=True),
                  sa.Column("campaign_v2_id", sa.BigInteger),
                  sa.Column("revision_no", sa.Integer),
-                 sa.Column("expires_at", sa.DateTime(timezone=True)))
+                 sa.Column("expires_at", sa.DateTime(timezone=True)),
+                 sa.Column("manifest_json", sa.JSON))
         sa.Table("marketing_campaign_v2_governed_executions", meta,
                  sa.Column("id", sa.BigInteger, primary_key=True),
                  sa.Column("approval_id", sa.BigInteger),
+                 sa.Column("manifest_digest", sa.String(64)),
                  sa.Column("status", sa.String(25)),
                  sa.Column("last_child_id", sa.BigInteger),
                  sa.Column("expires_at", sa.DateTime(timezone=True)))
@@ -94,14 +100,14 @@ def isolated_pg():
             ))
             conn.execute(sa.text("""
                 INSERT INTO marketing_campaign_v2_dispatch_approvals
-                (id, campaign_v2_id, revision_no, expires_at)
-                VALUES (20,43,2,now()-interval '2 minutes')
-            """))
+                (id, campaign_v2_id, revision_no, expires_at, manifest_json)
+                VALUES (20,43,2,now()-interval '2 minutes', CAST(:manifest AS json))
+            """), {"manifest": json.dumps(MANIFEST)})
             conn.execute(sa.text("""
                 INSERT INTO marketing_campaign_v2_governed_executions
-                (id, approval_id, status, expires_at)
-                VALUES (30,20,'AUTHORIZED',now()-interval '2 minutes')
-            """))
+                (id, approval_id, status, expires_at, manifest_digest)
+                VALUES (30,20,'AUTHORIZED',now()-interval '2 minutes', :digest)
+            """), {"digest": MANIFEST_DIGEST})
             for child_id in IDS:
                 conn.execute(sa.text("""
                     INSERT INTO marketing_campaign_v2_provider_campaigns
@@ -123,7 +129,7 @@ def isolated_pg():
                         :digest,22,'REVIEW_REQUIRED',
                         now()-interval '2 minutes',now()-interval '4 minutes',
                         now()-interval '3 minutes',269,1,'UNEXPECTED_WORKER_FAILURE')
-            """), {"key": "a"*64, "manifest": "b"*64,
+            """), {"key": "a"*64, "manifest": MANIFEST_DIGEST,
                    "ids": json.dumps(IDS), "digest": digest})
             for idx, kind in enumerate(
                     ("ENQUEUED", "STARTED", "REVIEW_REQUIRED"), start=1):
@@ -195,7 +201,7 @@ def test_can_close_without_sending_and_preserve_event_chain(isolated_pg):
 @pytest.mark.parametrize("mutation", [
     "submitting", "submitted_at", "provider_id", "ambiguous",
     "extra_child", "audit_claim", "last_child", "live_approval",
-    "newer_approval", "other_operator",
+    "newer_approval", "other_operator", "approval_digest_changed",
 ])
 def test_never_close_if_any_sign_of_attempt_or_inconsistent_history(
     isolated_pg, mutation,
@@ -248,6 +254,11 @@ def test_never_close_if_any_sign_of_attempt_or_inconsistent_history(
                 INSERT INTO marketing_campaign_v2_dispatch_approvals
                 (id,campaign_v2_id,revision_no,expires_at)
                 VALUES (21,43,3,now()+interval '10 minutes')
+            """))
+        elif mutation == "approval_digest_changed":
+            conn.execute(sa.text("""
+                UPDATE marketing_campaign_v2_dispatch_approvals
+                SET manifest_json='{"version":"tampered"}'::json WHERE id=20
             """))
     if mutation == "other_operator":
         with pytest.raises(service.BackgroundJobNotFound):
