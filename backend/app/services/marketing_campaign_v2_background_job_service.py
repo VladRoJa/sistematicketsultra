@@ -311,12 +311,12 @@ def resolve_unattempted_review(
             raise BackgroundJobConflict("El mandato original no es íntegro.")
 
         execution = active.execute(db.text("""
-            SELECT approval_id, status, last_child_id, expires_at
+            SELECT approval_id, status, last_child_id, expires_at, manifest_digest
             FROM marketing_campaign_v2_governed_executions
             WHERE id = :execution_id FOR UPDATE
         """), {"execution_id": job.execution_id}).mappings().one_or_none()
         approval = active.execute(db.text("""
-            SELECT id, expires_at
+            SELECT id, expires_at, manifest_json
             FROM marketing_campaign_v2_dispatch_approvals
             WHERE id = :approval_id AND campaign_v2_id = :campaign_id FOR UPDATE
         """), {"approval_id": job.approval_id,
@@ -329,6 +329,8 @@ def resolve_unattempted_review(
         if (execution is None or approval is None
                 or latest != job.approval_id
                 or execution["approval_id"] != job.approval_id
+                or execution["manifest_digest"] != job.manifest_digest
+                or manifest_digest(approval["manifest_json"]) != job.manifest_digest
                 or execution["status"] != "AUTHORIZED"
                 or execution["last_child_id"] is not None
                 or _utc(execution["expires_at"]) > at
