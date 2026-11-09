@@ -84,7 +84,7 @@ def reauthorize_unattempted_dispatch(
             raise CampaignV2ReauthorizationError("La autorización cambió; consulta el estado nuevamente.")
         # An unresolved job cannot be bypassed with a fresh approval even if
         # every child still appears READY. Resolve the job's audit first.
-        pending_review = active.query(BackgroundJob.id).filter(
+        pending_review = active.query(BackgroundJob).filter(
             BackgroundJob.campaign_v2_id == campaign_id,
             BackgroundJob.status.in_((
                 "QUEUED", "RUNNING", "STOP_REQUESTED", "REVIEW_REQUIRED",
