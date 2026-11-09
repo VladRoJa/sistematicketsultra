@@ -33,6 +33,7 @@ from app.services.marketing_campaign_v2_manifest_service import (
     _assert_manifest, _validate_existing, budget_for_existing_approval,
 )
 from app.services.marketing_campaign_v2_governed_dispatch_service import manifest_digest
+from app.models.marketing_campaign_v2_background_job import MarketingCampaignV2BackgroundJobORM as BackgroundJob
 from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
 from app.services.marketing_campaign_v2_query_service import get_campaign_v2
 
@@ -81,6 +82,18 @@ def reauthorize_unattempted_dispatch(
             raise CampaignV2ReauthorizationError("Campaña sin aprobación congelada.")
         if old.id != previous_approval_id or manifest_digest(old.manifest_json) != expected_manifest_digest:
             raise CampaignV2ReauthorizationError("La autorización cambió; consulta el estado nuevamente.")
+        # An unresolved job cannot be bypassed with a fresh approval even if
+        # every child still appears READY. Resolve the job's audit first.
+        pending_review = active.query(BackgroundJob.id).filter(
+            BackgroundJob.campaign_v2_id == campaign_id,
+            BackgroundJob.status.in_((
+                "QUEUED", "RUNNING", "STOP_REQUESTED", "REVIEW_REQUIRED",
+            )),
+        ).first()
+        if pending_review is not None:
+            raise CampaignV2ReauthorizationError(
+                "Hay un envío o revisión de trabajo pendiente; resuélvelo antes de reautorizar."
+            )
         original_exec = active.query(Execution).filter(
             Execution.approval_id == old.id
         ).with_for_update().one_or_none()
