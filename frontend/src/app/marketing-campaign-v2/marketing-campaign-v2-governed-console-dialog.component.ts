@@ -286,6 +286,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get canReauthorize(): boolean {
     const state = this.monitor;
     return !this.busy && !!state && state.status === 'APPROVAL_EXPIRED' &&
+      (!this.backgroundJob ||
+       (!BACKGROUND_DISPATCH_ACTIVE.has(this.backgroundJob.status) &&
+        this.backgroundJob.status !== 'REVIEW_REQUIRED')) &&
       !!state.approval && !!state.execution &&
       state.execution.status === 'AUTHORIZED' &&
       state.execution.last_child_id === null &&
