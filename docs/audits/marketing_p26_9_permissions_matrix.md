@@ -1,6 +1,8 @@
 # Marketing P26.9 — Matriz integral de rutas y permisos (2026-10-26)
 
 ## Fuentes y estado
+- Continuación 2026-11-09: GET/POST `dispatch/template-certifications/<int:template_id>` permite certificar por plantilla desde el catálogo, sin campaña comercial y con JWT/global/gestión/preflight/envío. Censo actualizado: **95 operaciones** y **48 mutaciones**. El recuento histórico P26.9 de abajo se conserva como línea base.
+- Adición 2026-11-09: GET/POST `dispatch/template-probes`, globales y sin envío en la preparación. El censo ejecutable vigente pasa a 93 operaciones y 47 mutaciones; las cifras siguientes describen la revisión histórica P26.9.
 - Referencia: `main` luego de squash P26.8 `61b2213c2576aec81b542062d2fcf6205f7ccef7`.
 - Fuentes: tres blueprints **registrados** en `backend/app/__init__.py::create_app()`: `marketing_bp`, `marketing_campaign_v2_bp`, `marketing_sales_funnel_bp`.
 - Inventario en código: **82 operaciones por método** (GET 40, POST 36, PUT 5, PATCH 1), **42 métodos distintos de GET**; un POST puede ser solo vista previa, y un GET/export puede manejar datos sensibles. Confirmar registro vía `app.url_map` en el test de contrato P26.9.
@@ -54,6 +56,10 @@
 | PATCH | `/api/marketing/campaigns-v2/<int:campaign_id>/purpose` | `update_campaign_v2_purpose_endpoint` | Gestión + alcance | Alto | P26.8 HTTP + AST |
 | PUT | `/api/marketing/campaigns-v2/<int:campaign_id>/provider-binding` | `bind_campaign_v2_provider_endpoint` | Gestión + alcance | Alto | P26.8 HTTP + AST |
 | GET | `/api/marketing/campaigns-v2/dispatch/templates` | `list_campaign_v2_dispatch_templates_endpoint` | Preflight | Medio | AST/JWT + pruebas históricas por módulo |
+| GET | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/template-probes` | `campaign_v2_template_probes_endpoint` | JWT + global/configuración + gestión + preflight + envío | Medio | Pruebas HTTP de probador QA; solo lectura de matriz |
+| POST | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/template-probes` | `campaign_v2_template_probes_endpoint` | JWT + global/configuración + gestión + preflight + envío | Alto | Pruebas HTTP de probador QA; congela QA, nunca envía |
+| GET | `/api/marketing/campaigns-v2/dispatch/template-certifications/<int:template_id>` | `campaign_v2_catalog_template_certifications_endpoint` | JWT + global/configuración + gestión + preflight + envío | Medio | Matriz sin enviar ni escribir |
+| POST | `/api/marketing/campaigns-v2/dispatch/template-certifications/<int:template_id>` | `campaign_v2_catalog_template_certifications_endpoint` | JWT + global/configuración + gestión + preflight + envío | Alto | Congela solo QA faltantes; un teléfono autorizado; nunca envía |
 | GET | `/api/marketing/campaigns-v2/dispatch/templates/admin` | `list_campaign_v2_dispatch_templates_admin_endpoint` | Global + configuración | Medio | AST/JWT + pruebas históricas por módulo |
 | GET | `/api/marketing/campaigns-v2/dispatch/catalog-branches` | `list_campaign_v2_dispatch_catalog_branches_endpoint` | Global + configuración | Medio | AST/JWT + pruebas históricas por módulo |
 | POST | `/api/marketing/campaigns-v2/dispatch/templates` | `create_campaign_v2_dispatch_template_endpoint` | Global + configuración | Alto | AST/JWT + pruebas históricas por módulo |

@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -18,9 +18,12 @@ import {
   CampaignV2ChannelBindingRequest,
   CampaignV2BudgetRateRevision,
   CampaignV2DispatchTemplate,
+  CampaignV2TemplateProbeRow,
   CampaignV2Purpose,
   CampaignV2TemplateConfigRequest,
 } from './marketing-campaign-v2.models';
+import { MarketingCampaignV2TemplateProbesComponent } from './marketing-campaign-v2-template-probes.component';
+import { MarketingCampaignV2GovernedConsoleDialogComponent } from './marketing-campaign-v2-governed-console-dialog.component';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 import { isDispatchTemplateDraftValid } from './marketing-campaign-v2-dispatch-admin.logic';
 import { isCampaignV2MxnUnitCostValid } from './marketing-campaign-v2-admin-validation.logic';
@@ -43,12 +46,14 @@ interface VariableMappingRow {
     MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    MarketingCampaignV2TemplateProbesComponent,
   ],
   templateUrl: './marketing-campaign-v2-dispatch-admin-dialog.component.html',
   styleUrls: ['./marketing-campaign-v2-dispatch-admin-dialog.component.css'],
 })
 export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   private readonly api = inject(MarketingCampaignV2Service);
+  private readonly dialogs = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialogRef = inject(MatDialogRef<MarketingCampaignV2DispatchAdminDialogComponent>);
 
@@ -75,6 +80,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   error = '';
   notice = '';
   editingTemplateId: number | null = null;
+  certificationTemplateId: number | null = null;
   editingBindingId: number | null = null;
   pendingDeactivateId: number | null = null;
   showChannels = false;
@@ -218,6 +224,22 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       }));
     this.notice = '';
     this.error = '';
+  }
+
+  showCertification(template: CampaignV2DispatchTemplate): void {
+    this.certificationTemplateId = this.certificationTemplateId === template.id ? null : template.id;
+  }
+
+  reviewCertificationQa(row: CampaignV2TemplateProbeRow): void {
+    if (!row.qa_campaign_id || !this.certificationTemplateId ||
+        row.stale || row.result === 'VALIDADA' ||
+        row.result === 'RECHAZADA' || row.result === 'INCIERTA') return;
+    this.dialogs.open(MarketingCampaignV2GovernedConsoleDialogComponent, {
+      width: '1200px', maxWidth: '96vw', disableClose: true,
+      data: { campaignId: row.qa_campaign_id,
+              campaignName: 'QA plantilla · ' + row.sender,
+              probeTemplateId: this.certificationTemplateId },
+    });
   }
 
   startNewTemplate(): void {

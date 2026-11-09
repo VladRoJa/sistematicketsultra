@@ -1,0 +1,58 @@
+<details class="probes">
+  <summary>Comprobar plantillas mediante envíos de prueba</summary>
+  <p>Certificación de plantilla por canal emisor. Las validaciones anteriores se reutilizan aunque cambie la campaña. Para combinaciones pendientes se prepara una cohorte QA con un solo teléfono autorizado.
+    Cada envío real requiere revisar destinatario, costo, cuota y confirmar en el Centro de envío QA.
+    Las pruebas no autorizan ni inician el despacho comercial.</p>
+  <p>Una certificación se reutiliza entre campañas de la misma plantilla y canal emisor. Un resultado incierto requiere revisión;
+    no se repite el POST. Los mensajes de prueba pueden generar costo.</p>
+  <p *ngIf="allCertified" role="status">Todos los canales ya están certificados para esta versión de la plantilla. No es necesario volver a probarla.</p>
+  <div class="inputs" *ngIf="!allCertified">
+    <mat-form-field><mat-label>Nombre del destinatario de prueba</mat-label>
+      <input matInput [formControl]="name" maxlength="255" [readonly]="busy || disabled">
+    </mat-form-field>
+    <mat-form-field><mat-label>Teléfono autorizado para pruebas</mat-label>
+      <input matInput type="tel" [formControl]="phone" maxlength="14" [readonly]="busy || disabled">
+    </mat-form-field>
+    <mat-form-field><mat-label>Referencia de autorización del teléfono</mat-label>
+      <input matInput [formControl]="reference" maxlength="255" [readonly]="busy || disabled">
+    </mat-form-field>
+  </div>
+  <mat-checkbox *ngIf="!allCertified" [formControl]="authorized" [disabled]="busy || disabled">
+    Confirmo autorización expresa para probar todos los canales indicados con este teléfono.
+    No es un destinatario de esta campaña comercial.
+  </mat-checkbox>
+  <div class="actions">
+    <button mat-stroked-button type="button" (click)="refresh()"
+      [disabled]="busy || disabled || !templateId">Consultar matriz de canales</button>
+    <button mat-stroked-button type="button" (click)="prepare()" [disabled]="!canPrepare">
+      Preparar pruebas QA (todavía no envía)</button>
+  </div>
+  <p *ngIf="busy" role="status">Consultando o preparando cohortes QA…</p>
+  <p *ngIf="error" role="alert" class="error">{{ error }}</p>
+  <ng-container *ngIf="matrix as state">
+    <strong>{{ state.template_name }}</strong>
+    <div class="table-scroll">
+      <table>
+        <caption>Pruebas por canal emisor · aceptación separada de entrega</caption>
+        <thead><tr><th>Sucursales de origen</th><th>Emisor / canal</th><th>Destinatario QA</th>
+          <th>Aceptación</th><th>Entrega real</th><th>Auditoría</th><th>Acción</th></tr></thead>
+        <tbody><tr *ngFor="let row of state.rows">
+          <td>{{ row.origins.join(', ') }}</td><td>{{ row.sender }}<br>{{ row.channel_id }}</td>
+          <td>{{ row.recipient_phone_masked || 'Sin preparar' }}</td>
+          <td>{{ row.result }}<span *ngIf="row.error_code">: {{ row.error_code }}</span>
+            <p *ngIf="row.result === 'VALIDADA'">Certificación reutilizable, sin vencimiento automático.</p>
+            <strong *ngIf="row.stale"> · Cambió la versión o el canal; esta certificación no aplica.</strong></td>
+          <td>{{ row.delivery_status }}</td>
+          <td>QA #{{ row.qa_campaign_id || '—' }} · intento #{{ row.child_id || '—' }}<br>
+            {{ row.attempted_at | date:'short' }} · actor {{ row.actor_user_id || '—' }}<br>
+            iVentas: {{ row.provider_campaign_id || 'Sin identificador confirmado' }}</td>
+          <td><button mat-stroked-button type="button" (click)="reviewQa.emit(row)"
+            [disabled]="busy || disabled || !row.qa_campaign_id || row.stale || row.result === 'VALIDADA' || row.result === 'RECHAZADA' || row.result === 'INCIERTA'">Revisar QA / confirmar envío</button></td>
+        </tr></tbody>
+      </table>
+    </div>
+    <p>Actualizar la matriz después de revisar cada QA. ACEPTADA POR IVENTAS no significa entregada.
+      La certificación aceptada no caduca automáticamente; solo aplica a la misma versión y canal. Los intentos inciertos no se reenvían.
+      Si faltan variables de la plantilla, el preflight QA bloqueará el envío.</p>
+  </ng-container>
+</details>
