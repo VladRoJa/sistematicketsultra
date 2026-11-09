@@ -46,12 +46,14 @@ solo puede clasificarse como rechazo después de ampliar el contrato y sus prueb
 La entrega se muestra como **NO VERIFICADA**; para acreditarla siguen siendo
 necesarias las estadísticas/observaciones existentes de iVentas.
 
+Una certificación QA aceptada para la misma plantilla/versión y canal emisor es reutilizable entre campañas sin volver a enviar. No caduca automáticamente a las 24 horas; esa vigencia continúa aplicando por separado a la evidencia manual del proveedor del PR #1225. Un cambio en la firma de la plantilla genera una nueva versión de certificación. La disponibilidad externa no está garantizada indefinidamente.
+
 Para recuperación fallida, una QA aceptada puede satisfacer únicamente
-`PROVIDER_TEMPLATE_UNVERIFIED` de su canal. Reutiliza las 24 horas de vigencia de
-la evidencia actual. Se exigen firma de plantilla/variables/compatibilidad/media,
-orígenes y binding emisor exactos, actor, snapshot de un único teléfono autorizado,
+`PROVIDER_TEMPLATE_UNVERIFIED` de su canal. No reutiliza las 24 horas de vigencia de
+la evidencia manual: se valida por versión y canal. Se exigen firma de plantilla/variables/compatibilidad/media,
+binding emisor exacto, actor, snapshot de un único teléfono autorizado,
 identificador provider y aceptación persistida. No basta la existencia de una QA.
-Un cambio de plantilla/media/ruta, expiración, rechazo o incertidumbre no concede
+Un cambio de plantilla/media/ruta, rechazo o incertidumbre no concede
 el pase. El resto de bloqueos, cuota, presupuesto y autorizaciones permanece.
 Se conserva compatibilidad con la evidencia manual ya existente del PR #1225.
 
@@ -62,12 +64,12 @@ Se conserva compatibilidad con la evidencia manual ya existente del PR #1225.
   campaña comercial, plantilla y su firma, canal/binding, sucursales de origen,
   teléfono autorizado, referencia, actor y fecha de autorización.
 - Nombre QA determinístico por **campaña comercial + template_id + canal real**.
-  Un lock transaccional PostgreSQL por campaña/plantilla serializa preparaciones;
+  Un lock transaccional PostgreSQL por plantilla serializa preparaciones entre campañas;
   todas las cohortes y sus metadatos se confirman en una sola transacción. El
   helper QA existente admite flush sin commit para esta orquestación interna;
   sus consumidores anteriores conservan el comportamiento por defecto.
-- Reintentar la preparación devuelve las mismas cohortes. Cambiar el teléfono
-  no crea otra prueba para el mismo par. Un intento duradero de cualquier
+- Reintentar la preparación desde otra campaña devuelve las mismas cohortes. Cambiar el teléfono
+  no crea otra prueba para la misma versión/canal. Un intento duradero de cualquier
   resultado impide otro POST para esa cohorte, incluso mediante retry legado.
   Expirar la evidencia tampoco habilita reenvíos.
 - El gate compartido de contactos valida contrato y snapshot antes del claim
@@ -149,3 +151,12 @@ Este PR no habilita flags ni ejecuta mensajes reales, merge o despliegue.
 Tras un despliegue autorizado y validación de controles, el propietario deberá
 autorizar expresamente el primer canario para un teléfono, plantilla y canal
 concretos. Preparar la cohorte y revisar su plan no equivalen a esa autorización.
+
+## Ajuste de alcance: certificación reutilizable (2026-11-09)
+
+- Una prueba QA aceptada acredita el par **versión local de plantilla + canal iVentas**, independientemente de la campaña desde la que se preparó originalmente.
+- Una campaña posterior con el mismo par ve **VALIDADA** sin otro envío ni necesidad de preparar una QA nueva. El preflight comercial conserva sus propias aprobaciones y restricciones.
+- La validez se liga a la firma del contrato de plantilla, media y binding emisor. Al cambiar la firma se prepara una versión nueva; el historial anterior permanece.
+- **Sin caducidad automática** para certificaciones QA. La atestación manual del PR #1225 conserva su vigencia de 24 horas.
+- El sistema no detecta cambios externos en iVentas: una revocación o rechazo posterior requiere revisión operativa y corrección de la configuración local. No confundir certificación histórica con garantía de disponibilidad externa actual.
+- Este ajuste todavía se presenta desde el Centro de envío de una campaña, como punto de consulta/alta; no añade de momento una pantalla propia en el catálogo administrativo de plantillas.

@@ -1550,7 +1550,7 @@ export interface CampaignV2TemplateProbeRow {
   sender: string;
   origins: string[];
   qa_campaign_id: number | null;
-  result: 'PENDIENTE' | 'ACEPTADA POR IVENTAS' | 'RECHAZADA' | 'INCIERTA';
+  result: 'PENDIENTE' | 'VALIDADA' | 'INVALIDADA' | 'ACEPTADA POR IVENTAS' | 'RECHAZADA' | 'INCIERTA';
   recorded_acceptance: string;
   evidence_current: boolean;
   evidence_expires_at: string | null;

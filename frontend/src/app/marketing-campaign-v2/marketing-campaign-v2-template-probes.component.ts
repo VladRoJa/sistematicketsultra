@@ -48,8 +48,12 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
     this.authorized.setValue(false);
   }
 
+  get allCertified(): boolean {
+    return !!this.matrix?.rows.length && this.matrix.rows.every(row => row.result === 'VALIDADA');
+  }
+
   get canPrepare(): boolean {
-    return !this.busy && !this.disabled && !!this.templateId && this.authorized.value &&
+    return !this.allCertified && !this.busy && !this.disabled && !!this.templateId && this.authorized.value &&
       this.name.value.trim().length > 0 && this.name.value.trim().length <= 255 &&
       /^[+]?[0-9]{10,13}$/.test(this.phone.value.trim()) &&
       this.reference.value.trim().length >= 8 && this.reference.value.trim().length <= 255;

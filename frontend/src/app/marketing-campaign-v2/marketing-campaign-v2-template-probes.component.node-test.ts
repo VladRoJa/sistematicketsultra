@@ -63,3 +63,14 @@ test('changing template discards stale in-flight results', () => {
   assert.equal(component.matrix, null);
   assert.equal(component.authorized.value, false);
 });
+
+
+test('accepted certification from another campaign disables re-preparation', () => {
+  const { component, calls } = harness();
+  component.matrix = { rows: [{ result: 'VALIDADA' }] } as any;
+  component.authorized.setValue(true);
+  assert.equal(component.allCertified, true);
+  assert.equal(component.canPrepare, false);
+  component.prepare();
+  assert.equal(calls.length, 0);
+});

@@ -24,7 +24,7 @@ from app.services.marketing_phone import normalize_phone
 from app.services.marketing_campaign_v2_qa_http_service import preview_qa_manual_http
 from app.services.marketing_campaign_v2_qa_manual_service import freeze_campaign_v2_qa_manual
 from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
-from app.services.marketing_campaign_v2_template_evidence_service import template_signature, EVIDENCE_VALID_FOR
+from app.services.marketing_campaign_v2_template_evidence_service import template_signature
 from app.services.marketing_campaign_v2_dispatch_config_service import template_file_url
 
 KEY = "template_probe_v1"
@@ -89,18 +89,34 @@ def _context(campaign_id, template_id, session):
     return source, template, _groups(plan, session)
 
 
-def _name(source_id, template_id, channel):
-    digest = hashlib.sha256(channel.encode()).hexdigest()
-    return f"QA Plantilla {source_id}-{template_id}-{digest}"
+
+def _name_prefix(template_id, channel):
+    # Deterministic namespace by local template and effective sender only.
+    # A different campaign/source must never create a second QA for this pair.
+    digest = hashlib.sha256(channel.encode()).hexdigest()[:16]
+    return f"QA Plantilla {template_id}-{digest}-"
 
 
-def _existing(source_id, template_id, channel, session):
+def _name(template_id, signature, channel):
+    # A relevant template/media change creates a new certification version.
+    return _name_prefix(template_id, channel) + signature
+
+
+def _existing(template_id, signature, channel, session):
     rows = session.query(Campaign).filter_by(
-        source="QA_MANUAL", name=_name(source_id, template_id, channel),
+        source="QA_MANUAL", name=_name(template_id, signature, channel),
     ).all()
     if len(rows) > 1:
-        raise TemplateProbeConflict("Prueba duplicada; requiere revisión.")
+        raise TemplateProbeConflict("Certificación QA duplicada; requiere revisión.")
     return rows[0] if rows else None
+
+
+def _previous_version(template_id, channel, session):
+    # For UI only: expose that the prior certification no longer applies.
+    return (session.query(Campaign)
+            .filter(Campaign.source == "QA_MANUAL",
+                    Campaign.name.like(_name_prefix(template_id, channel) + "%"))
+            .order_by(Campaign.id.desc()).first())
 
 
 def _no_commercial_phone(source_id, phone, session):
@@ -110,10 +126,15 @@ def _no_commercial_phone(source_id, phone, session):
         raise TemplateProbeValidation("El teléfono de prueba pertenece a la campaña comercial.")
 
 
+
 def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
                             authorization_reference, confirmed_authorized,
                             actor_user_id, session=None):
-    """Freeze only, atomic and idempotent across UI retries and workers."""
+    """Freeze QA only for missing template-version/sender pairs, atomically.
+
+    Existing certifications are reused across commercial campaigns; neither
+    changing a test phone nor preparing another campaign sends a second QA.
+    """
     active = session if session is not None else db.session
     if confirmed_authorized is not True:
         raise TemplateProbeValidation("Confirma autorización expresa del teléfono para pruebas.")
@@ -130,31 +151,28 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
     if active.get_bind().dialect.name != "postgresql":
         raise TemplateProbeConflict("La preparación idempotente requiere PostgreSQL.")
     try:
-        # Freeze helper flushes without committing; retain this lock across ALL
-        # channel cohorts, metadata and recipients, including crash recovery.
+        # Single lock for this template: serializes QA from any commercial
+        # campaign or worker, even when the channel sets overlap only partly.
         active.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-                       {"scope": f"template-probe:{campaign_id}:{template_id}"})
+                       {"scope": f"template-certification:{template_id}"})
         source, template, groups = _context(campaign_id, template_id, active)
-        _no_commercial_phone(campaign_id, normalized, active)
+        signature = _signature(template)
         for channel, group in groups.items():
-            existing = _existing(campaign_id, template_id, channel, active)
-            if existing:
-                spec = (existing.audience_definition_json or {}).get("source_metadata", {}).get(KEY)
-                if (not isinstance(spec, dict) or spec.get("phone_mx10") != normalized
-                        or spec.get("source_campaign_id") != campaign_id
-                        or spec.get("template_id") != template_id
-                        or spec.get("channel_id") != channel):
-                    raise TemplateProbeConflict("Ya existe una prueba para el par; no puede sustituirse.")
+            # The existing QA belongs to the template version and sender,
+            # never to the commercial campaign currently open.
+            if _existing(template_id, signature, channel, active):
                 continue
-            args = dict(name=_name(campaign_id, template_id, channel), purpose=source.purpose,
+            _no_commercial_phone(campaign_id, normalized, active)
+            args = dict(name=_name(template_id, signature, channel), purpose=source.purpose,
                         sucursal_id=group["sender_sucursal_id"], provider_channel_id=channel,
                         recipients=[{"name": recipient_name.strip(), "phone": normalized}], session=active)
             preview = preview_qa_manual_http(**args)
             spec = dict(source_campaign_id=campaign_id, template_id=template_id,
-                        template_signature=_signature(template), channel_id=channel,
+                        template_signature=signature, channel_id=channel,
                         **group, phone_mx10=normalized, authorized_by_user_id=actor_user_id,
                         authorization_reference=authorization_reference.strip(),
-                        authorized_at=datetime.now(timezone.utc).isoformat())
+                        authorized_at=datetime.now(timezone.utc).isoformat(),
+                        certification_scope="TEMPLATE_VERSION_CHANNEL_V2")
             args.pop("provider_channel_id")
             freeze_campaign_v2_qa_manual(
                 **args, expected_preview_fingerprint=preview["preview_fingerprint"],
@@ -175,8 +193,13 @@ def probe_spec(campaign):
     return metadata.get(KEY) if isinstance(metadata, dict) else None
 
 
+
 def validate_probe_preflight(*, campaign, template_id, session):
-    """Pin template/media, recipient and the CURRENT effective source route."""
+    """Pin QA to its immutable template version, sender and test recipient.
+
+    The commercial campaign originally used to discover this pair is NOT
+    a dependency: other commercial campaigns may share the certification.
+    """
     spec = probe_spec(campaign)
     if spec is None:
         return
@@ -184,16 +207,21 @@ def validate_probe_preflight(*, campaign, template_id, session):
         raise TemplateProbeValidation("Trazabilidad de prueba inválida.")
     if template_id != spec.get("template_id"):
         raise TemplateProbeValidation("La prueba está vinculada a otra plantilla.")
-    _, template, groups = _context(spec["source_campaign_id"], template_id, session)
-    group = groups.get(spec.get("channel_id"))
-    if (group is None or any(group[k] != spec.get(k) for k in group)
+    template = session.get(Template, template_id)
+    binding = session.get(Binding, spec.get("binding_id"))
+    if (template is None or binding is None
+            or int(binding.id) != spec.get("binding_id")
+            or not binding.is_active or not binding.is_default
+            or binding.provider != "IVENTAS"
+            or str(binding.provider_channel_id) != spec.get("channel_id")
+            or int(binding.sucursal_id) != spec.get("sender_sucursal_id")
+            or str(binding.sucursal_canon) != spec.get("sender")
             or _signature(template) != spec.get("template_signature")):
-        raise TemplateProbeValidation("Cambió plantilla o canal de origen; prueba bloqueada.")
+        raise TemplateProbeValidation("Cambió la plantilla o el canal emisor; prueba bloqueada.")
     recipients = session.query(Recipient).filter_by(campaign_id=int(campaign.id)).all()
     if (len(recipients) != 1 or recipients[0].phone_mx10 != spec.get("phone_mx10")
             or not spec.get("authorization_reference") or not spec.get("authorized_by_user_id")):
         raise TemplateProbeValidation("Destinatario de prueba no autorizado o alterado.")
-    _no_commercial_phone(spec["source_campaign_id"], spec["phone_mx10"], session)
 
 
 def validate_probe_claim(*, campaign, child, session):
@@ -222,13 +250,16 @@ def _result(child):
     return "INCIERTA"
 
 
-def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session, now=None):
-    """Read existing accepted QA attempts; never recurse into source preflight.
 
-    Uses the existing evidence validity window, exact current sender identities,
-    and immutable provider snapshots. Acceptance is not delivery or send consent.
+def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session, now=None):
+    """Reusable durable certification for the exact template-version/sender.
+
+    A successful provider POST is evidence of acceptance, not delivery or
+    permanent provider availability. No 24h expiry: that is only for the
+    distinct manual-inventory attestation, not controlled QA certification.
     """
     timestamp = now or datetime.now(timezone.utc)
+    signature = _signature(template)
     required = {}
     for row in outbound_bindings:
         channel = row["provider_channel_id"]
@@ -236,18 +267,17 @@ def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session
         if (not channel or binding is None or not binding.is_active or not binding.is_default
                 or binding.provider != "IVENTAS" or str(binding.provider_channel_id) != channel):
             continue
-        group = required.setdefault(channel, dict(binding_id=int(binding.id),
-            sender_sucursal_id=int(binding.sucursal_id), sender=str(binding.sucursal_canon), origins=[]))
-        group["origins"].append(row["sucursal_canon"])
+        required[channel] = dict(binding_id=int(binding.id),
+            sender_sucursal_id=int(binding.sucursal_id), sender=str(binding.sucursal_canon))
     accepted = set()
     for channel, group in required.items():
-        group["origins"] = sorted(set(group["origins"]))
-        qa = _existing(campaign_id, int(template.id), channel, session)
+        qa = _existing(int(template.id), signature, channel, session)
         spec = probe_spec(qa)
-        if (not isinstance(spec, dict) or spec.get("source_campaign_id") != campaign_id
+        if (not isinstance(spec, dict)
+                or spec.get("certification_scope") != "TEMPLATE_VERSION_CHANNEL_V2"
                 or spec.get("template_id") != template.id or spec.get("channel_id") != channel
-                or spec.get("template_signature") != _signature(template)
-                or any(spec.get(k) != group[k] for k in group)
+                or spec.get("template_signature") != signature
+                or any(spec.get(k) != value for k, value in group.items())
                 or not spec.get("authorization_reference") or not spec.get("authorized_by_user_id")):
             continue
         children = session.query(Child).filter_by(campaign_v2_id=qa.id).all()
@@ -261,8 +291,8 @@ def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session
             continue
         stamp = child.submitted_at
         if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)  # DB timestamps are UTC.
-        if not stamp <= timestamp < stamp + EVIDENCE_VALID_FOR:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        if stamp > timestamp:
             continue
         snapshot = child.request_snapshot_json or {}
         leads = snapshot.get("leads") if isinstance(snapshot, dict) else None
@@ -274,47 +304,54 @@ def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session
                 or snapshot.get("send_at") is not None
                 or normalize_phone(leads[0].get("phone")) != spec.get("phone_mx10")):
             continue
-        try:
-            _no_commercial_phone(campaign_id, spec["phone_mx10"], session)
-        except TemplateProbeValidation:
-            continue
         accepted.add(channel)
     return frozenset(accepted)
+
 
 
 def template_probe_matrix(*, campaign_id, template_id, session=None):
     active = session if session is not None else db.session
     _, template, groups = _context(campaign_id, template_id, active)
+    signature = _signature(template)
+    outbound = [dict(provider_channel_id=channel, channel_binding_id=group["binding_id"])
+                for channel, group in groups.items()]
+    certified = accepted_probe_channels(
+        campaign_id=campaign_id, template=template,
+        outbound_bindings=outbound, session=active,
+    )
     rows = []
     for channel, group in groups.items():
-        qa = _existing(campaign_id, template_id, channel, active)
-        children = active.query(Child).filter_by(campaign_v2_id=qa.id).all() if qa else []
+        qa = _existing(template_id, signature, channel, active)
+        historical = _previous_version(template_id, channel, active) if qa is None else None
+        current_qa = qa is not None
+        visible_qa = qa or historical
+        children = active.query(Child).filter_by(campaign_v2_id=visible_qa.id).all() if visible_qa else []
         child = children[0] if len(children) == 1 else None
-        spec = probe_spec(qa) if qa else None
-        result = "INCIERTA" if len(children) > 1 else _result(child)
-        stale = bool(qa and (not isinstance(spec, dict)
-            or spec.get("template_signature") != _signature(template)
-            or any(spec.get(k) != group[k] for k in group)))
-        expires = None
-        evidence_current = False
-        if result == "ACEPTADA POR IVENTAS":
-            stamp = child.submitted_at
-            if stamp.tzinfo is None:
-                stamp = stamp.replace(tzinfo=timezone.utc)
-            expires = stamp + EVIDENCE_VALID_FOR
-            evidence_current = not stale and stamp <= datetime.now(timezone.utc) < expires
+        spec = probe_spec(visible_qa) if visible_qa else None
+        raw = _result(child) if len(children) <= 1 else "INCIERTA"
+        stale = bool(historical or (qa and (not isinstance(spec, dict)
+            or spec.get("template_signature") != signature
+            or any(spec.get(k) != group[k] for k in ("binding_id", "sender_sucursal_id", "sender")))))
+        if stale:
+            status = "INVALIDADA"
+        elif channel in certified:
+            status = "VALIDADA"
+        elif raw == "ACEPTADA POR IVENTAS":
+            status = "INCIERTA"  # Persisted acceptance lacks valid current proof.
+        else:
+            status = raw
         rows.append(dict(
-            channel_id=channel, **group, qa_campaign_id=int(qa.id) if qa else None,
-            result="INCIERTA" if stale else result,
-            recorded_acceptance=result, stale=stale,
-            evidence_current=evidence_current, evidence_expires_at=expires.isoformat() if expires else None,
+            channel_id=channel, **group, qa_campaign_id=int(visible_qa.id) if visible_qa else None,
+            result=status, recorded_acceptance=raw, stale=stale,
+            evidence_current=channel in certified, evidence_expires_at=None,
             child_id=int(child.id) if child else None,
             provider_campaign_id=child.provider_campaign_id if child else None,
             error_code=child.error_code if child else None,
             attempted_at=child.submit_started_at.isoformat() if child and child.submit_started_at else None,
             actor_user_id=child.submitted_by_user_id if child else None,
             authorized_by_user_id=spec.get("authorized_by_user_id") if isinstance(spec, dict) else None,
-            recipient_phone_masked="******" + spec["phone_mx10"][-4:] if isinstance(spec, dict) else None,
+            recipient_phone_masked="******" + spec["phone_mx10"][-4:]
+                if isinstance(spec, dict) and isinstance(spec.get("phone_mx10"), str) else None,
             delivery_status="NO VERIFICADA",
         ))
     return dict(campaign_id=campaign_id, template_id=template_id,

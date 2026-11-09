@@ -21,7 +21,7 @@ def group():
 
 
 def campaign():
-    spec = dict(source_campaign_id=42, template_id=7, template_signature=probe._signature(template()),
+    spec = dict(source_campaign_id=42, template_id=7, certification_scope="TEMPLATE_VERSION_CHANNEL_V2", template_signature=probe._signature(template()),
                 channel_id="tec", **group(), phone_mx10="6861000001",
                 authorized_by_user_id=47, authorization_reference="Autorización prueba interna")
     return NS(id=80, source="QA_MANUAL", audience_definition_json={"source_metadata": {probe.KEY: spec}})
@@ -90,7 +90,7 @@ def test_explicit_phone_authorization_required_before_any_write(override):
     active.commit.assert_not_called()
 
 
-def test_prepare_twice_reuses_same_cohort_and_never_calls_provider():
+def test_prepare_two_commercial_campaigns_reuse_single_cohort_and_never_call_provider():
     active = session()
     saved = {}
     def freeze(**kwargs):
@@ -105,12 +105,12 @@ def test_prepare_twice_reuses_same_cohort_and_never_calls_provider():
          patch.object(probe, "freeze_campaign_v2_qa_manual", side_effect=freeze) as create, \
          patch.object(probe, "template_probe_matrix", return_value={"rows": []}):
         probe.prepare_template_probes(**prepare_args(active))
-        probe.prepare_template_probes(**prepare_args(active))
+        probe.prepare_template_probes(**(prepare_args(active) | {
+            "campaign_id": 43, "phone": "6861000002",
+        }))
         create.assert_called_once()
-        with pytest.raises(probe.TemplateProbeConflict):
-            probe.prepare_template_probes(**(prepare_args(active) | {"phone": "6861000002"}))
     assert active.commit.call_count == 2
-    active.rollback.assert_called_once()
+    active.rollback.assert_not_called()
     assert "pg_advisory_xact_lock" in str(active.execute.call_args.args[0])
 
 
@@ -128,25 +128,31 @@ def test_commercial_recipient_is_rejected_even_if_explicitly_confirmed():
 def test_preflight_blocks_contract_drift(mutation):
     qa = campaign()
     active = session()
-    source, selected, groups = context()
+    selected = template()
+    binding = NS(id=40, sucursal_id=4, sucursal_canon="TEC_MXL",
+                 provider="IVENTAS", is_active=True, is_default=True,
+                 provider_channel_id="tec")
     requested = 7
     if mutation == "template": requested = 8
     if mutation == "media": selected.metadata_json = {"file_url": "https://example.test/changed.png"}
-    if mutation == "channel": groups["tec"]["binding_id"] = 41
+    if mutation == "channel": binding.id = 41
     if mutation == "phone": probe.probe_spec(qa)["phone_mx10"] = "6861000002"
     if mutation == "authorization": probe.probe_spec(qa)["authorization_reference"] = ""
-    with patch.object(probe, "_context", return_value=(source, selected, groups)), \
-         patch.object(probe, "_no_commercial_phone"):
-        with pytest.raises(probe.TemplateProbeValidation):
-            probe.validate_probe_preflight(campaign=qa, template_id=requested, session=active)
+    active.get.side_effect = lambda model, key: selected if model is probe.Template else binding
+    with pytest.raises(probe.TemplateProbeValidation):
+        probe.validate_probe_preflight(campaign=qa, template_id=requested, session=active)
 
 
 def test_governed_claim_once_then_no_retry_after_any_outcome():
     qa = campaign()
     row = child()
     active = session([row])
-    with patch.object(probe, "_context", return_value=context()), \
-         patch.object(probe, "_no_commercial_phone"):
+    active.get.side_effect = lambda model, key: (
+        template() if model is probe.Template else
+        NS(id=40, sucursal_id=4, sucursal_canon="TEC_MXL",
+           provider="IVENTAS", is_active=True, is_default=True, provider_channel_id="tec")
+    )
+    with patch.object(probe, "_no_commercial_phone"):
         probe.validate_probe_claim(campaign=qa, child=row, session=active)
         for state in ["SUBMITTING", "SUBMITTED", "PROVIDER_ERROR", "RECONCILIATION_REQUIRED", "RETRY_ELIGIBLE"]:
             row.status = state
@@ -180,7 +186,7 @@ def test_matrix_masks_phone_and_marks_stale_acceptance_for_attention():
          patch.object(probe, "_existing", return_value=qa):
         matrix = probe.template_probe_matrix(campaign_id=42, template_id=7, session=session([row]))
     result = matrix["rows"][0]
-    assert result["result"] == "INCIERTA" and result["stale"]
+    assert result["result"] == "INVALIDADA" and result["stale"]
     assert result["recorded_acceptance"] == "ACEPTADA POR IVENTAS"
     assert result["delivery_status"] == "NO VERIFICADA"
     assert result["recipient_phone_masked"] == "******0001"
@@ -188,15 +194,14 @@ def test_matrix_masks_phone_and_marks_stale_acceptance_for_attention():
     assert matrix["commercial_dispatch_authorized"] is False
 
 
-@pytest.mark.parametrize("mutation", [None, "expired", "timeout", "rejected", "route", "phone", "media"])
-def test_only_current_exact_accepted_qa_is_provider_evidence(mutation):
+@pytest.mark.parametrize("mutation", [None, "timeout", "rejected", "route", "phone", "media"])
+def test_only_exact_accepted_qa_is_provider_evidence_without_expiry(mutation):
     qa = campaign()
     selected = template()
     row = child(status="SUBMITTED", provider_campaign_id="iv-1", submitted_at=NOW,
         submit_started_at=NOW, submitted_by_user_id=47)
     row.request_snapshot_json = {"provider": "IVENTAS", "template_name": "selected",
         "provider_channel_id": "tec", "leads": [{"phone": "5216861000001"}]}
-    if mutation == "expired": row.submitted_at = NOW - timedelta(hours=24)
     if mutation == "timeout": row.status = "RECONCILIATION_REQUIRED"
     if mutation == "rejected": row.status = "PROVIDER_ERROR"
     if mutation == "route": probe.probe_spec(qa)["binding_id"] = 41
@@ -207,7 +212,32 @@ def test_only_current_exact_accepted_qa_is_provider_evidence(mutation):
         provider="IVENTAS", is_active=True, is_default=True, provider_channel_id="tec")
     outbound = [dict(provider_channel_id="tec", channel_binding_id=40, sucursal_canon=origin)
                 for origin in ["TEC_MXL", "INDEPENDENCIA"]]
-    with patch.object(probe, "_existing", return_value=qa), patch.object(probe, "_no_commercial_phone"):
-        accepted = probe.accepted_probe_channels(campaign_id=42, template=selected,
-            outbound_bindings=outbound, session=active, now=NOW + timedelta(minutes=1))
+    with patch.object(probe, "_existing", return_value=qa):
+        accepted = probe.accepted_probe_channels(campaign_id=999, template=selected,
+            outbound_bindings=outbound, session=active, now=NOW + timedelta(days=120))
     assert accepted == (frozenset({"tec"}) if mutation is None else frozenset())
+
+
+def test_probe_key_global_and_versioned():
+    name = probe._name(7, "a" * 64, "tec")
+    assert name == probe._name(7, "a" * 64, "tec")
+    assert "42" not in name
+    assert name != probe._name(7, "b" * 64, "tec")
+    assert name != probe._name(7, "a" * 64, "san_luis")
+
+
+def test_matrix_reuses_accepted_other_campaign_and_has_no_expiry():
+    qa = campaign()
+    row = child(status="SUBMITTED", provider_campaign_id="iv-1", submitted_at=NOW,
+        submit_started_at=NOW, submitted_by_user_id=47)
+    row.request_snapshot_json = {"provider": "IVENTAS", "template_name": "selected",
+        "provider_channel_id": "tec", "leads": [{"phone": "5216861000001"}]}
+    active = session([row])
+    active.get.return_value = NS(id=40, sucursal_id=4, sucursal_canon="TEC_MXL",
+        provider="IVENTAS", is_active=True, is_default=True, provider_channel_id="tec")
+    with patch.object(probe, "_context", return_value=context()), \
+         patch.object(probe, "_existing", return_value=qa), \
+         patch.object(probe, "accepted_probe_channels", return_value=frozenset({"tec"})):
+        matrix = probe.template_probe_matrix(campaign_id=999, template_id=7, session=active)
+    assert matrix["rows"][0]["result"] == "VALIDADA"
+    assert matrix["rows"][0]["evidence_expires_at"] is None
