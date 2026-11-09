@@ -48,6 +48,8 @@ def session(rows=None):
             q.all.return_value = [NS(phone_mx10="6861000001")]
         elif model is probe.Child:
             q.all.return_value = rows or []
+        elif model is probe.Campaign:
+            q.all.return_value = []
         else:
             q.first.return_value = (1,)
         return q
