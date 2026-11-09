@@ -450,6 +450,14 @@ export class MarketingCampaignV2Service {
     return this.http.get<BackgroundDispatchJobsResponse>(`${this.apiUrl}/dispatch/jobs/mine`);
   }
 
+  resolveUnattemptedBackgroundJob(campaignId: number, jobId: number, payload: {
+    confirmation: string; operator_password: string;
+  }): Observable<{job_id: number; status: string; requires_reauthorization: boolean; provider_calls: 0}> {
+    return this.http.post<{job_id: number; status: string; requires_reauthorization: boolean; provider_calls: 0}>(
+      `${this.apiUrl}/${campaignId}/dispatch/jobs/${jobId}/resolve-unattempted`, payload,
+    );
+  }
+
   stopBackgroundJob(campaignId: number, jobId: number): Observable<BackgroundDispatchJob> {
     return this.http.post<BackgroundDispatchJob>(
       `${this.apiUrl}/${campaignId}/dispatch/jobs/${jobId}/stop`, {},

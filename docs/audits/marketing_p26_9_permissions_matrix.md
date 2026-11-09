@@ -1,6 +1,7 @@
 # Marketing P26.9 — Matriz integral de rutas y permisos (2026-10-26)
 
 ## Fuentes y estado
+- Actualización 2026-11-09, PR #1231: POST `dispatch/jobs/<int:job_id>/resolve-unattempted` permite únicamente cerrar un trabajo en revisión después de demostrar cero intentos con auditoría inmutable, JWT, guard global de dispatch y verificación de contraseña. No ejecuta HTTP de iVentas. Censo vigente **96 operaciones, 49 mutaciones**; las cifras P26.9 históricas de abajo son una referencia original.
 - Continuación 2026-11-09: GET/POST `dispatch/template-certifications/<int:template_id>` permite certificar por plantilla desde el catálogo, sin campaña comercial y con JWT/global/gestión/preflight/envío. Censo actualizado: **95 operaciones** y **48 mutaciones**. El recuento histórico P26.9 de abajo se conserva como línea base.
 - Adición 2026-11-09: GET/POST `dispatch/template-probes`, globales y sin envío en la preparación. El censo ejecutable vigente pasa a 93 operaciones y 47 mutaciones; las cifras siguientes describen la revisión histórica P26.9.
 - Referencia: `main` luego de squash P26.8 `61b2213c2576aec81b542062d2fcf6205f7ccef7`.
@@ -79,6 +80,7 @@
 | GET | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/execution` | `campaign_v2_execution_review_endpoint` | Global + configuración | Medio | AST/JWT + pruebas históricas por módulo |
 | POST | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/authorize` | `campaign_v2_governed_authorize_endpoint` | Global + configuración | Alto | AST/JWT + pruebas históricas por módulo |
 | POST | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/execute` | `campaign_v2_governed_execute_endpoint` | Global + configuración | Crítico | AST/JWT + pruebas históricas por módulo |
+| POST | `/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>/resolve-unattempted` | `campaign_v2_background_resolve_unattempted_endpoint` | JWT + global/configuración + envío + contraseña del actor | Alto | PG16 sintético: manifest/children/ejecución/eventos + negativas; nunca envía |
 | POST | `/api/marketing/campaigns-v2/qa-manual/preview` | `preview_campaign_v2_qa_http_endpoint` | Global + configuración | Alto | AST/JWT + pruebas históricas por módulo |
 | POST | `/api/marketing/campaigns-v2/qa-manual/freeze` | `freeze_campaign_v2_qa_http_endpoint` | Global + configuración | Alto | AST/JWT + pruebas históricas por módulo |
 | GET | `/api/marketing/campaigns-v2/dispatch/portfolio-review` | `campaign_v2_portfolio_review_endpoint` | Global + configuración | Medio | AST/JWT + pruebas históricas por módulo |

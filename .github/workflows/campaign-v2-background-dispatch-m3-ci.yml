@@ -131,7 +131,8 @@ jobs:
         run: |
           python -m pytest -q --tb=short \
             tests/marketing/test_background_dispatch_m3_postgres.py \
-            tests/marketing/test_background_dispatch_gate_a_pg.py
+            tests/marketing/test_background_dispatch_gate_a_pg.py \
+            tests/marketing/test_background_dispatch_review_recovery_pg.py
 
 
   compose-config-contract:

@@ -28,6 +28,28 @@
     <p *ngIf="job.status === 'REVIEW_REQUIRED'" role="alert" class="error">
       Revisar el resultado en iVentas. No habrá un reintento automático.
     </p>
+    <div *ngIf="job.status === 'REVIEW_REQUIRED' && job.unattempted === job.total_pending_at_start
+                 && job.accepted_by_provider === 0 && job.confirmed_rejected === 0
+                 && job.uncertain_results === 0" class="background-job__stop">
+      <h4>Verificar bloqueo previo al envío · No envía mensajes</h4>
+      <p>El servidor comprobará nuevamente todos los lotes y la auditoría completa.
+         Solo cerrará este trabajo si confirma que ninguno inició una solicitud.
+         Si encuentra cualquier evidencia ambigua, conservará el bloqueo.
+         Después deberás reautorizar con la cuota vigente y confirmar un nuevo envío.</p>
+      <mat-form-field appearance="fill">
+        <mat-label>Escribe {{ resolveBackgroundWord }}</mat-label>
+        <input matInput [formControl]="resolveBackgroundPhrase" autocomplete="off">
+      </mat-form-field>
+      <mat-form-field appearance="fill">
+        <mat-label>Contraseña del operador</mat-label>
+        <input matInput type="password" [formControl]="resolveBackgroundPassword"
+               autocomplete="current-password" maxlength="256">
+      </mat-form-field>
+      <button mat-stroked-button type="button" (click)="resolveUnattemptedBackground()"
+              [disabled]="!canResolveUnattemptedBackground">
+        Verificar y cerrar revisión sin enviar
+      </button>
+    </div>
     <button *ngIf="canRequestBackgroundStop && !stopConfirmationOpen"
       mat-stroked-button type="button" (click)="requestBackgroundStop()">Detener después del lote actual</button>
     <div *ngIf="stopConfirmationOpen" class="background-job__stop">

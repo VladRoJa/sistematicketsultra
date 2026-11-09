@@ -115,7 +115,7 @@ from app.services.marketing_campaign_v2_governed_monitor_service import (
 from app.services.marketing_campaign_v2_background_job_service import (
     BackgroundJobConflict, BackgroundJobDisabled, BackgroundJobNotFound,
     BackgroundJobValidation, enqueue_background_job, get_background_job,
-    list_background_jobs, stop_background_job,
+    list_background_jobs, stop_background_job, resolve_unattempted_review,
 )
 
 from app.services.marketing_campaign_v2_governed_dispatch_service import (
@@ -2299,6 +2299,45 @@ def campaign_v2_catalog_template_certifications_endpoint(template_id: int):
     except Exception:
         db.session.rollback()
         return _error("No fue posible consultar o preparar la certificación.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>/resolve-unattempted"
+)
+@jwt_required()
+def campaign_v2_background_resolve_unattempted_endpoint(campaign_id: int, job_id: int):
+    """Operator-confirmed NO-HTTP evidence; never resumes or sends a job."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({"confirmation", "operator_password"})
+        password = payload.pop("operator_password", None)
+        if not _valid_governed_dispatch_password(user, password):
+            return _error("Contraseña incorrecta o ausente.", 403)
+        get_campaign_v2(
+            campaign_id=campaign_id,
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(resolve_unattempted_review(
+            campaign_id=campaign_id, job_id=job_id,
+            actor_user_id=int(user.id), confirmation=payload.get("confirmation"),
+            session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2NotFoundError:
+        return _error("Campaña no encontrada.", 404)
+    except (MarketingCampaignV2RouteValidationError, BackgroundJobValidation) as exc:
+        return _error(str(exc), 400)
+    except BackgroundJobNotFound as exc:
+        return _error(str(exc), 404)
+    except BackgroundJobConflict as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        return _error("No se pudo verificar la ausencia de envíos.", 500)
 
 
 @marketing_campaign_v2_bp.post("/campaigns-v2/qa-manual/preview")

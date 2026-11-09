@@ -34,7 +34,7 @@ export interface MarketingCampaignV2GovernedConsoleDialogData {
   probeTemplateId?: number;
 }
 
-type Action = 'evidence' | 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop';
+type Action = 'evidence' | 'read' | 'preflight' | 'approve' | 'materialize' | 'authorize' | 'reauthorize' | 'execute' | 'bulk' | 'background' | 'background-stop' | 'background-resolve';
 type ExecutionReview =
   CampaignV2GovernedExecutionReview | CampaignV2GovernedExecutionReviewReady;
 
@@ -68,6 +68,8 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   readonly approvalPhrase = new FormControl('', { nonNullable: true });
   readonly materializePhrase = new FormControl('', { nonNullable: true });
   readonly reauthorizePhrase = new FormControl('', { nonNullable: true });
+  readonly resolveBackgroundPhrase = new FormControl('', { nonNullable: true });
+  readonly resolveBackgroundPassword = new FormControl('', { nonNullable: true });
   readonly authorizationPhrase = new FormControl('', { nonNullable: true });
   readonly executionPhrase = new FormControl('', { nonNullable: true });
   readonly executionPassword = new FormControl('', { nonNullable: true });
@@ -285,6 +287,7 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
     const labels: Record<Action, string> = {
       background: 'Registrando ejecución independiente',
       'background-stop': 'Solicitando detención',
+      'background-resolve': 'Verificando ausencia de intentos',
       read: 'Consultando', preflight: 'Revisando destinatarios', evidence: 'Guardando evidencia de iVentas',
       approve: 'Aprobando costo', materialize: 'Preparando lotes', reauthorize: 'Reautorizando despacho',
       authorize: 'Autorizando', execute: 'Enviando un lote', bulk: 'Enviando lotes pendientes',
@@ -298,6 +301,9 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get canReauthorize(): boolean {
     const state = this.monitor;
     return !this.busy && !!state && state.status === 'APPROVAL_EXPIRED' &&
+      (!this.backgroundJob ||
+       (!BACKGROUND_DISPATCH_ACTIVE.has(this.backgroundJob.status) &&
+        this.backgroundJob.status !== 'REVIEW_REQUIRED')) &&
       !!state.approval && !!state.execution &&
       state.execution.status === 'AUTHORIZED' &&
       state.execution.last_child_id === null &&
@@ -381,6 +387,51 @@ export class MarketingCampaignV2GovernedConsoleDialogComponent implements OnInit
   get canStartBackground(): boolean {
     return this.backgroundAvailable && this.canBulkSend && !this.backgroundBlocksManual;
   }
+  get resolveBackgroundWord(): string {
+    const job = this.backgroundJob;
+    return job ? `CONFIRMAR SIN ENVIO ${job.campaign_id} ${job.job_id}` : '';
+  }
+  get canResolveUnattemptedBackground(): boolean {
+    const job = this.backgroundJob;
+    return !this.busy && !!job && job.status === 'REVIEW_REQUIRED' &&
+      job.total_pending_at_start > 0 &&
+      job.unattempted === job.total_pending_at_start &&
+      job.accepted_by_provider === 0 && job.confirmed_rejected === 0 &&
+      job.uncertain_results === 0 &&
+      this.resolveBackgroundPhrase.value === this.resolveBackgroundWord &&
+      this.resolveBackgroundPassword.value.length > 0 &&
+      this.resolveBackgroundPassword.value.length <= 256;
+  }
+  resolveUnattemptedBackground(): void {
+    if (!this.canResolveUnattemptedBackground || !this.backgroundJob) { return; }
+    const job = this.backgroundJob;
+    const password = this.resolveBackgroundPassword.value;
+    this.resolveBackgroundPassword.setValue('');
+    this.resolveBackgroundPhrase.setValue('');
+    this.working = 'background-resolve';
+    this.error = '';
+    this.notice = '';
+    this.api.resolveUnattemptedBackgroundJob(job.campaign_id, job.job_id, {
+      confirmation: `CONFIRMAR SIN ENVIO ${job.campaign_id} ${job.job_id}`,
+      operator_password: password,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.working = null;
+        this.notice = 'Revisión cerrada con auditoría: sin intentos registrados. ' +
+          'La autorización vencida deberá renovarse antes de cualquier envío.';
+        this.refreshBackgroundJob();
+        this.refresh(true);
+        this.backgroundActivity.notifyChanged();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.working = null;
+        this.error = this.message(err,
+          'No se pudo verificar la ausencia de intentos. Mantén el trabajo en revisión.');
+        this.refreshBackgroundJob();
+      },
+    });
+  }
+
   get canRequestBackgroundStop(): boolean {
     return !this.busy && !!this.backgroundJob &&
       (this.backgroundJob.status === 'RUNNING' || this.backgroundJob.status === 'QUEUED') &&
