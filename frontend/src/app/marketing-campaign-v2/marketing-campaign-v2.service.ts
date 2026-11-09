@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 import {
+  CampaignV2TemplateProbeMatrix,
   CampaignV2ExcelPreview,
   CampaignV2ExcelFrozen,
   CampaignV2AudienceDefinitionRequest,
@@ -88,6 +89,21 @@ import { BackgroundDispatchJob, BackgroundDispatchJobsResponse, BackgroundDispat
   providedIn: 'root',
 })
 export class MarketingCampaignV2Service {
+  getTemplateProbes(campaignId: number, templateId: number): Observable<CampaignV2TemplateProbeMatrix> {
+    return this.http.get<CampaignV2TemplateProbeMatrix>(
+      `${this.apiUrl}/${campaignId}/dispatch/template-probes`,
+      { params: new HttpParams().set('template_id', templateId) },
+    );
+  }
+
+  prepareTemplateProbes(campaignId: number, request: {
+    template_id: number; recipient_name: string; phone: string;
+    authorization_reference: string; confirmed_authorized: boolean;
+  }): Observable<CampaignV2TemplateProbeMatrix> {
+    return this.http.post<CampaignV2TemplateProbeMatrix>(
+      `${this.apiUrl}/${campaignId}/dispatch/template-probes`, request,
+    );
+  }
   private readonly apiUrl = `${environment.apiUrl}/marketing/campaigns-v2`;
 
   constructor(private readonly http: HttpClient) {}

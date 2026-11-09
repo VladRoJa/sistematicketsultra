@@ -1,0 +1,9 @@
+.probes { border: 1px solid #b8bec5; padding: 12px; margin: 12px 0; }
+summary { cursor: pointer; font-weight: 600; }
+.inputs, .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+mat-form-field { flex: 1 1 220px; }
+.table-scroll { overflow-x: auto; margin-top: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+caption { text-align: left; padding: 6px 0; }
+th, td { padding: 8px; text-align: left; vertical-align: top; border-bottom: 1px solid #d3d7dc; }
+.error { color: #a51616; }

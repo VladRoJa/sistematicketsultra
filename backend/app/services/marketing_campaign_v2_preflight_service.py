@@ -131,6 +131,19 @@ def build_campaign_v2_preflight(
         session=active_session,
     )
     campaign = projection["campaign"]
+    # QA probes use the same preflight and send engine, with an immutable
+    # recipient/template/channel contract checked again before every claim.
+    from app.services.marketing_campaign_v2_template_probe_service import (
+        validate_probe_preflight, TemplateProbeValidation,
+    )
+    try:
+        if campaign.get("source") == "QA_MANUAL":
+            validate_probe_preflight(
+                campaign=active_session.get(MarketingCampaignV2ORM, campaign_id),
+                template_id=template_id, session=active_session,
+            )
+    except TemplateProbeValidation as exc:
+        raise MarketingCampaignV2DispatchConfigValidationError(str(exc)) from exc
     routing_snapshot = (campaign.get("audience_definition") or {}).get(ROUTING_SNAPSHOT_KEY)
     if campaign.get("source") == FAILED_RECOVERY_SOURCE:
         derived = active_session.get(MarketingCampaignV2ORM, campaign_id)
@@ -315,6 +328,11 @@ def build_campaign_v2_preflight(
             required_binding_signature=binding_signature(outbound_bindings),
             now=now,
         )
+        from app.services.marketing_campaign_v2_template_probe_service import accepted_probe_channels
+        verified_provider_channels |= accepted_probe_channels(
+            campaign_id=campaign_id, template=template, session=active_session,
+            outbound_bindings=outbound_bindings, now=now,
+        )
 
     batches: list[CampaignV2DispatchBatchPlan] = []
     for (_sucursal_id, _sucursal_canon), group in sorted(
@@ -340,8 +358,8 @@ def build_campaign_v2_preflight(
                 and (binding is None or str(binding.provider_channel_id)
                      not in verified_provider_channels)):
             # Fail closed: a local template catalog is not provider evidence.
-            # A current, operator-attested provider inventory must cover each
-            # exact outbound channel; route/template drift revokes the proof.
+            # Current inventory evidence or an accepted controlled QA attempt
+            # must cover each exact sender; route/template drift revokes proof.
             reasons.append("PROVIDER_TEMPLATE_UNVERIFIED")
 
         if batch_recipient_ids & missing_variable:

@@ -118,6 +118,8 @@ def freeze_campaign_v2_qa_manual(
     created_by_user_id: Any,
     session: Any | None = None,
     now: datetime | None = None,
+    source_metadata: dict[str, Any] | None = None,
+    commit: bool = True,
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
     preview = build_campaign_v2_qa_manual_preview(
@@ -162,6 +164,7 @@ def freeze_campaign_v2_qa_manual(
                 "sucursal_id": preview["sucursal_id"],
             },
             "source_metadata": {
+                **(source_metadata or {}),
                 "qa_manual": True,
                 "sucursal_canon": preview["sucursal_canon"],
                 "track_label": preview["track_label"],
@@ -214,7 +217,8 @@ def freeze_campaign_v2_qa_manual(
     try:
         active_session.add(campaign)
         active_session.flush()
-        active_session.commit()
+        if commit:
+            active_session.commit()
     except IntegrityError as exc:
         active_session.rollback()
         raise MarketingCampaignV2QAManualPersistenceError(
