@@ -1572,3 +1572,28 @@ export interface CampaignV2TemplateProbeMatrix {
   sends_started: false;
   commercial_dispatch_authorized: false;
 }
+
+/** Captura manual de un único inventario de iVentas para todos los emisores. */
+export interface CampaignV2BulkInventoryPreview {
+  template_id: number;
+  template_name: string;
+  rows: Array<{
+    binding_id: number; sucursal_canon: string; channel_id: string;
+    status: string; compatible: boolean;
+  }>;
+  counts: { accepted: number; pending: number; incompatible: number };
+  candidate_fingerprint: string;
+  provider_api_verified: false;
+  send_authorized: false;
+  provider_requests: 0;
+}
+
+export interface CampaignV2BulkInventoryRegistered {
+  template_id: number;
+  recorded: number;
+  pending: number;
+  expires_at: string;
+  provider_api_verified: false;
+  send_authorized: false;
+  quota_reserved: false;
+}

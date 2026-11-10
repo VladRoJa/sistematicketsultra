@@ -37,6 +37,7 @@
               <td><span class="status-pill" [class.is-inactive]="!template.is_active">{{ template.is_active ? 'Activa' : 'Inactiva' }}</span></td>
               <td class="actions">
                 <button *ngIf="template.is_active" mat-stroked-button type="button" (click)="showCertification(template)">Certificar canales</button>
+                <button *ngIf="template.is_active" mat-stroked-button type="button" (click)="openBulkInventory(template)">Inventario masivo</button>
                 <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
                 <button *ngIf="template.is_active" mat-button type="button" (click)="requestDeactivate(template)"
                   [disabled]="savingTemplate">Desactivar</button>
@@ -54,6 +55,67 @@
           [templateId]="certificationTemplateId" [campaignId]="0"
           (reviewQa)="reviewCertificationQa($event)">
         </app-campaign-template-probes>
+      </section>
+      <section *ngIf="bulkTemplateId !== null" class="editor-card bulk-inventory" aria-label="Inventario masivo de plantillas iVentas">
+        <div class="section-heading">
+          <div>
+            <h4>Inventario masivo · {{ bulkTemplateName }}</h4>
+            <p>Un solo inventario con los registros de todos los emisores. No se consultan APIs externas ni se envían mensajes.</p>
+          </div>
+          <button mat-button type="button" (click)="bulkTemplateId = null">Cerrar</button>
+        </div>
+        <p class="muted">Carga un JSON exportado de iVentas o pega su arreglo completo. No inventes estados; las entradas sin aceptación quedan pendientes.</p>
+        <label for="campaign-v2-bulk-json-file" class="muted">Archivo JSON (opcional)</label>
+        <input id="campaign-v2-bulk-json-file" type="file" accept=".json,application/json"
+               (change)="onBulkInventoryFile($event)">
+        <mat-form-field class="full-width" appearance="fill">
+          <mat-label>Inventario JSON de iVentas</mat-label>
+          <textarea matInput rows="4" [formControl]="bulkInventoryJson"></textarea>
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="previewBulkInventory()"
+                [disabled]="bulkBusy || !bulkInventoryJson.value.trim()">
+          {{ bulkBusy ? 'Validando…' : 'Revisar todos los canales (sin envío)' }}
+        </button>
+        <ng-container *ngIf="bulkPreview as preview">
+          <p class="feedback" role="status">{{ preview.counts.accepted }} emisores aprobados ·
+            {{ preview.counts.pending }} sin acreditar · {{ preview.counts.incompatible }} incompatibles.
+            Solo se registrarán los aprobados explícitos.
+          </p>
+          <div class="catalog-table bulk-table">
+            <table>
+              <thead><tr><th>Sucursal emisora</th><th>Canal iVentas</th><th>Estado observado</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let row of preview.rows">
+                  <td>{{ row.sucursal_canon }}</td>
+                  <td class="mono">{{ row.channel_id }}</td>
+                  <td [class.bulk-accepted]="row.status === 'accepted'">{{ row.status === 'accepted' ? 'Aprobada' :
+                        row.status === 'not_observed' ? 'Sin evidencia' :
+                        row.status === 'incompatible' ? 'No compatible' : row.status }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="form-grid">
+            <mat-form-field appearance="fill">
+              <mat-label>Fecha/hora real de consulta (ISO con zona horaria)</mat-label>
+              <input matInput [formControl]="bulkObservedAt" placeholder="2026-11-09T16:00:00-08:00">
+            </mat-form-field>
+            <mat-form-field appearance="fill">
+              <mat-label>Folio o referencia de iVentas</mat-label>
+              <input matInput [formControl]="bulkReference">
+            </mat-form-field>
+          </div>
+          <mat-checkbox [formControl]="bulkConfirmed">Confirmo que obtuve este inventario de iVentas y que los estados son reales.</mat-checkbox>
+          <div class="editor-actions">
+            <button mat-flat-button color="primary" type="button" (click)="registerBulkInventory()"
+                    [disabled]="bulkBusy || !bulkConfirmed.value || !bulkObservedAt.value.trim() ||
+                      !bulkReference.value.trim() || preview.counts.accepted === 0">
+              Registrar aprobadas para futuras campañas (sin envío)
+            </button>
+          </div>
+        </ng-container>
+        <p *ngIf="bulkError" class="error" role="alert">{{ bulkError }}</p>
+        <p *ngIf="bulkMessage" class="feedback" role="status">{{ bulkMessage }}</p>
       </section>
       <div *ngIf="pendingDeactivateId !== null" class="confirm">
         <span>¿Quieres desactivar esta plantilla para futuras preparaciones de envío?</span>

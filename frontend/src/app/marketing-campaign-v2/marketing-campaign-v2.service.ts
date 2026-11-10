@@ -6,6 +6,8 @@ import { environment } from 'src/environments/environment';
 
 import {
   CampaignV2TemplateProbeMatrix,
+  CampaignV2BulkInventoryPreview,
+  CampaignV2BulkInventoryRegistered,
   CampaignV2ExcelPreview,
   CampaignV2ExcelFrozen,
   CampaignV2AudienceDefinitionRequest,
@@ -89,6 +91,25 @@ import { BackgroundDispatchJob, BackgroundDispatchJobsResponse, BackgroundDispat
   providedIn: 'root',
 })
 export class MarketingCampaignV2Service {
+  previewBulkTemplateInventory(
+    templateId: number, inventory: unknown[],
+  ): Observable<CampaignV2BulkInventoryPreview> {
+    return this.http.post<CampaignV2BulkInventoryPreview>(
+      this.apiUrl + '/dispatch/templates/' + templateId + '/inventory/preview',
+      { inventory },
+    );
+  }
+
+  registerBulkTemplateInventory(templateId: number, request: {
+    inventory: unknown[]; observed_at: string; source_reference: string;
+    expected_fingerprint: string; confirmed_provider_capture: true;
+  }): Observable<CampaignV2BulkInventoryRegistered> {
+    return this.http.post<CampaignV2BulkInventoryRegistered>(
+      this.apiUrl + '/dispatch/templates/' + templateId + '/inventory/register',
+      request,
+    );
+  }
+
   getTemplateProbes(campaignId: number, templateId: number): Observable<CampaignV2TemplateProbeMatrix> {
     return this.http.get<CampaignV2TemplateProbeMatrix>(
       `${this.apiUrl}/${campaignId}/dispatch/template-probes`,

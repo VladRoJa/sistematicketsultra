@@ -49,3 +49,11 @@
 .catalog-table th,.catalog-table td { padding: 8px 9px; }
 .editor-card { padding: 12px; }
 .subheading { margin: 12px 0 6px; }
+
+/* Bulk inventory review: compact catalog grid, no new dialog or inline styling. */
+.bulk-inventory { margin: 10px 0; }
+.bulk-inventory input[type="file"] { display: block; margin: 6px 0 12px; max-width: 100%; }
+.bulk-inventory .full-width { margin-top: 8px; }
+.bulk-inventory .bulk-table { max-height: 300px; overflow: auto; border: 1px solid #dce4ee; }
+.bulk-inventory .bulk-accepted { color: #166534; font-weight: 600; }
+.bulk-inventory .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
