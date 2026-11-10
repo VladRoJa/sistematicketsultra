@@ -161,3 +161,15 @@ def test_catalog_passes_only_selected_channels_to_backend():
         result = api.post(CATALOG_URL, headers=headers, json=body)
     assert result.status_code == 200
     assert prepare.call_args.kwargs["selected_channel_ids"] == ["villa", "cul"]
+
+
+def test_campaign_must_require_explicit_channel_selection_before_service():
+    api, headers = client()
+    body = dict(BODY)
+    body.pop("selected_channel_ids")
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "prepare_template_probes") as prepare:
+        result = api.post(URL, headers=headers, json=body)
+    assert result.status_code == 400
+    prepare.assert_not_called()
