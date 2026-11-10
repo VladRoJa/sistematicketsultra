@@ -450,3 +450,44 @@
     box-sizing: border-box;
   }
 }
+
+/* BI Vlad: un ticket puede abarcar varias sucursales autorizadas. */
+.crear-ticket-bi-sucursales {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border: 1px solid var(--mat-sys-outline-variant, #d3d7dd);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-low, #f7f8fa);
+}
+
+.crear-ticket-bi-sucursales__titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.crear-ticket-bi-sucursales__titulo span,
+.crear-ticket-bi-sucursales__ayuda {
+  color: var(--mat-sys-on-surface-variant, #5c6677);
+  font-size: 12px;
+}
+
+.crear-ticket-bi-sucursales__opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+  gap: 2px 16px;
+  max-height: 225px;
+  overflow-y: auto;
+}
+
+.crear-ticket-bi-sucursales__unica {
+  margin: 8px 0;
+  font-weight: 600;
+}
+
+.crear-ticket-bi-sucursales__ayuda {
+  margin: 10px 0 0;
+}
