@@ -6,6 +6,7 @@
 
 from .automation_control import SystemWorkerHeartbeatORM, GascaSmsHealthPulseORM
 from .ticket_model import Ticket
+from .ticket_sucursal_alcance import TicketSucursalAlcanceORM
 from .ticket_attachment import TicketAttachmentORM
 from .ticket_aparato import TicketAparatoORM
 from .user_model import UserORM
@@ -229,6 +230,7 @@ from .purchase_requisition import (
 # -------------------------------------------------------------------------------
 __all__ = [
     "Ticket",
+    "TicketSucursalAlcanceORM",
     "TicketAttachmentORM",
     "TicketAparatoORM",
     "UserORM",
