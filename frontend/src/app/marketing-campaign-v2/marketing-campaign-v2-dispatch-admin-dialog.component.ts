@@ -14,6 +14,8 @@ import { forkJoin } from 'rxjs';
 
 import {
   CampaignV2CatalogBranch,
+  CampaignV2BulkInventoryPreview,
+  CampaignV2BulkInventoryStatus,
   CampaignV2ChannelBinding,
   CampaignV2ChannelBindingRequest,
   CampaignV2BudgetRateRevision,
@@ -87,6 +89,18 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   showTemplateEditor = false;
   showBudgetEditor = false;
 
+  bulkTemplateId: number | null = null;
+  bulkTemplateName = '';
+  bulkPreview: CampaignV2BulkInventoryPreview | null = null;
+  bulkCurrentStatus: CampaignV2BulkInventoryStatus | null = null;
+  bulkBusy = false;
+  bulkError = '';
+  bulkMessage = '';
+  readonly bulkInventoryJson = new FormControl('', { nonNullable: true });
+  readonly bulkObservedAt = new FormControl('', { nonNullable: true });
+  readonly bulkReference = new FormControl('', { nonNullable: true });
+  readonly bulkConfirmed = new FormControl(false, { nonNullable: true });
+
   readonly templateName = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] });
   readonly templateLabel = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(255)] });
   readonly templatePurposes = new FormControl<CampaignV2Purpose[]>([], { nonNullable: true });
@@ -109,6 +123,11 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   private bindingMetadata: Record<string, unknown> = {};
 
   ngOnInit(): void {
+    this.bulkInventoryJson.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.bulkPreview = null;
+        this.bulkMessage = '';
+      });
     this.reload();
   }
 
@@ -202,6 +221,123 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
       error: (error: HttpErrorResponse) => {
         this.loading = false;
         this.error = this.errorMessage(error, 'No se pudo cargar la configuración.');
+      },
+    });
+  }
+
+  closeBulkInventory(): void {
+    this.bulkTemplateId = null;
+    this.bulkPreview = null;
+    this.bulkCurrentStatus = null;
+    this.bulkError = '';
+  }
+
+  loadBulkEvidenceStatus(): void {
+    if (this.bulkTemplateId === null || this.bulkBusy) { return; }
+    this.bulkBusy = true;
+    this.bulkError = '';
+    this.api.getBulkTemplateInventoryStatus(this.bulkTemplateId)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: result => {
+          this.bulkBusy = false;
+          this.bulkCurrentStatus = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.bulkBusy = false;
+          this.bulkError = this.errorMessage(error, 'No se pudo consultar evidencia guardada.');
+        },
+      });
+  }
+
+  openBulkInventory(template: CampaignV2DispatchTemplate): void {
+    this.bulkTemplateId = this.bulkTemplateId === template.id ? null : template.id;
+    this.bulkTemplateName = template.template_name;
+    this.bulkPreview = null;
+    this.bulkInventoryJson.setValue('');
+    this.bulkObservedAt.setValue('');
+    this.bulkReference.setValue('');
+    this.bulkConfirmed.setValue(false);
+    this.bulkError = '';
+    this.bulkMessage = '';
+    if (this.bulkTemplateId !== null) { this.loadBulkEvidenceStatus(); }
+  }
+
+  onBulkInventoryFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) { return; }
+    if (file.size > 750000) {
+      this.bulkError = 'El inventario JSON no puede superar 750 KB.';
+      return;
+    }
+    file.text().then(text => {
+      this.bulkInventoryJson.setValue(text);
+      this.bulkError = '';
+    }).catch(() => {
+      this.bulkError = 'No fue posible leer el archivo JSON.';
+    });
+    input.value = '';
+  }
+
+  private parseBulkInventory(): unknown[] | null {
+    try {
+      const parsed: unknown = JSON.parse(this.bulkInventoryJson.value);
+      if (Array.isArray(parsed)) { return parsed; }
+    } catch {
+      // The validation message below covers invalid JSON.
+    }
+    this.bulkError = 'Se necesita un arreglo JSON válido de iVentas.';
+    return null;
+  }
+
+  previewBulkInventory(): void {
+    if (this.bulkTemplateId === null || this.bulkBusy) { return; }
+    this.bulkError = '';
+    const inventory = this.parseBulkInventory();
+    if (!inventory) { return; }
+    this.bulkBusy = true;
+    this.api.previewBulkTemplateInventory(this.bulkTemplateId, inventory)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: preview => {
+          this.bulkBusy = false;
+          this.bulkPreview = preview;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.bulkBusy = false;
+          this.bulkError = this.errorMessage(error, 'No se pudo revisar el inventario.');
+        },
+      });
+  }
+
+  registerBulkInventory(): void {
+    const templateId = this.bulkTemplateId;
+    const preview = this.bulkPreview;
+    if (templateId === null || !preview || !this.bulkConfirmed.value
+        || this.bulkBusy || !this.bulkObservedAt.value.trim()
+        || !this.bulkReference.value.trim()) { return; }
+    this.bulkError = '';
+    const inventory = this.parseBulkInventory();
+    if (!inventory) { return; }
+    this.bulkBusy = true;
+    this.api.registerBulkTemplateInventory(templateId, {
+      inventory,
+      observed_at: this.bulkObservedAt.value.trim(),
+      source_reference: this.bulkReference.value.trim(),
+      expected_fingerprint: preview.candidate_fingerprint,
+      confirmed_provider_capture: true,
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        this.bulkBusy = false;
+        this.bulkMessage = 'Aprobados: ' + result.recorded +
+          ' · no aprobados: ' + result.revoked +
+          ' · sin dato/incompatibles: ' + result.pending + '. Válida hasta ' +
+          result.expires_at + '. No se enviaron mensajes.';
+        this.bulkConfirmed.setValue(false);
+        this.loadBulkEvidenceStatus();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.bulkBusy = false;
+        this.bulkError = this.errorMessage(error, 'No se pudo registrar el inventario.');
       },
     });
   }

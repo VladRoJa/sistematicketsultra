@@ -16,7 +16,7 @@ from app.config import Config
 
 BLUEPRINTS = {
     "marketing": (7, 1),
-    "marketing_campaign_v2": (85, 48),
+    "marketing_campaign_v2": (88, 50),
     "marketing_sales_funnel": (4, 0),
 }
 HTTP = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -92,8 +92,8 @@ def test_p26_9_active_blueprints_have_exact_reviewed_route_counts():
     for blueprint, (expected_total, expected_mutations) in BLUEPRINTS.items():
         assert counts[blueprint] == expected_total, blueprint
         assert mutations[blueprint] == expected_mutations, blueprint
-    assert len(routes) == 96
-    assert sum(mutations.values()) == 49
+    assert len(routes) == 99
+    assert sum(mutations.values()) == 51
     # Every new endpoint is explicitly accounted for in this reviewed census.
     route_methods = {(method, path) for _, method, path, _ in routes}
     assert {
@@ -106,6 +106,9 @@ def test_p26_9_active_blueprints_have_exact_reviewed_route_counts():
         ("GET", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/failed/preview"),
         ("POST", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/failed/freeze"),
         ("POST", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/template-evidence"),
+        ("GET", "/api/marketing/campaigns-v2/dispatch/templates/<int:template_id>/inventory/status"),
+        ("POST", "/api/marketing/campaigns-v2/dispatch/templates/<int:template_id>/inventory/preview"),
+        ("POST", "/api/marketing/campaigns-v2/dispatch/templates/<int:template_id>/inventory/register"),
         ("POST", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/jobs"),
         ("GET", "/api/marketing/campaigns-v2/<int:campaign_id>/dispatch/jobs/<int:job_id>"),
         ("GET", "/api/marketing/campaigns-v2/dispatch/jobs/mine"),

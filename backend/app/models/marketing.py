@@ -514,6 +514,43 @@ class MarketingCampaignV2TemplateEvidenceORM(db.Model):
     )
 
 
+class MarketingCampaignV2TemplateChannelEvidenceORM(db.Model):
+    """Audited provider inventory proof for one template version and exact sender."""
+
+    __tablename__ = "marketing_campaign_v2_template_channel_evidence"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    template_id = db.Column(db.BigInteger, db.ForeignKey(
+        "marketing_campaign_v2_templates.id", ondelete="RESTRICT"), nullable=False)
+    provider_channel_id = db.Column(db.String(255), nullable=False)
+    sender_binding_id = db.Column(db.BigInteger, db.ForeignKey(
+        "marketing_campaign_v2_channel_bindings.id", ondelete="RESTRICT"), nullable=False)
+    template_signature = db.Column(db.String(64), nullable=False)
+    sender_signature = db.Column(db.String(64), nullable=False)
+    observed_status = db.Column(db.String(40), nullable=False)
+    inventory_sha256 = db.Column(db.String(64), nullable=False)
+    source_reference = db.Column(db.String(500), nullable=False)
+    observed_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    captured_by_user_id = db.Column(db.Integer, db.ForeignKey(
+        "users.id", ondelete="RESTRICT"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                           default=_utc_now, server_default=db.text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        db.Index("ix_mkt_v2_template_channel_evidence_lookup",
+                 "template_id", "provider_channel_id", "id"),
+        db.CheckConstraint(
+            "length(template_signature) = 64 AND length(sender_signature) = 64 "
+            "AND length(inventory_sha256) = 64",
+            name="ck_mkt_v2_template_channel_evidence_hashes"),
+        db.CheckConstraint("length(trim(observed_status)) > 0",
+                           name="ck_mkt_v2_template_channel_evidence_status"),
+        db.CheckConstraint("expires_at > observed_at",
+                           name="ck_mkt_v2_template_channel_evidence_period"),
+    )
+
+
 class MarketingCampaignV2CostRateRevisionORM(db.Model):
     """Append-only *operator* estimates; not provider invoices or Meta quotes."""
 

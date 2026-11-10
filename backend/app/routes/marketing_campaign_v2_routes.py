@@ -2934,6 +2934,96 @@ def campaign_v2_previous_contacts_apply_endpoint(campaign_id: int):
 
 
 
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/dispatch/templates/<int:template_id>/inventory/status"
+)
+@jwt_required()
+def campaign_v2_bulk_template_inventory_status_endpoint(template_id: int):
+    """Read saved evidence by sender; not a live provider status lookup."""
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        BulkInventoryValidation, catalog_bulk_inventory_status,
+    )
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(catalog_bulk_inventory_status(
+            template_id=template_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except BulkInventoryValidation as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Error consultando evidencias de plantillas")
+        return _error("No fue posible consultar evidencia masiva.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/dispatch/templates/<int:template_id>/inventory/preview"
+)
+@jwt_required()
+def campaign_v2_bulk_template_inventory_preview_endpoint(template_id: int):
+    """Preview one inventory against every active sender; no provider call or write."""
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        BulkInventoryValidation, preview_bulk_template_inventory,
+    )
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        if request.content_length is not None and request.content_length > 800_000:
+            return _error("Inventario iVentas demasiado grande.", 413)
+        payload = _parse_payload({"inventory"})
+        return jsonify(preview_bulk_template_inventory(
+            template_id=template_id, inventory=payload.get("inventory"),
+            session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (BulkInventoryValidation, MarketingCampaignV2RouteValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Error en vista previa de inventario iVentas")
+        return _error("No fue posible revisar el inventario masivo.", 500)
+
+
+@marketing_campaign_v2_bp.post(
+    "/campaigns-v2/dispatch/templates/<int:template_id>/inventory/register"
+)
+@jwt_required()
+def campaign_v2_bulk_template_inventory_register_endpoint(template_id: int):
+    """Audit only positively accepted template/channel pairs, never dispatch."""
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        BulkInventoryValidation, register_bulk_template_inventory,
+    )
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        if request.content_length is not None and request.content_length > 800_000:
+            return _error("Inventario iVentas demasiado grande.", 413)
+        payload = _parse_payload({
+            "inventory", "observed_at", "source_reference",
+            "confirmed_provider_capture", "expected_fingerprint",
+        })
+        return jsonify(register_bulk_template_inventory(
+            template_id=template_id, inventory=payload.get("inventory"),
+            observed_at=payload.get("observed_at"),
+            source_reference=payload.get("source_reference"),
+            confirmed_provider_capture=payload.get("confirmed_provider_capture"),
+            expected_fingerprint=payload.get("expected_fingerprint"),
+            actor_user_id=int(user.id), session=db.session,
+        )), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (BulkInventoryValidation, MarketingCampaignV2RouteValidationError) as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Error registrando inventario iVentas")
+        return _error("No fue posible registrar el inventario masivo.", 500)
+
+
 @marketing_campaign_v2_bp.post(
     "/campaigns-v2/<int:campaign_id>/dispatch/template-evidence"
 )

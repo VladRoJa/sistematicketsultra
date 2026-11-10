@@ -144,6 +144,7 @@ def test_preflight_reuses_one_request_scoped_resolver(monkeypatch):
 @pytest.mark.parametrize("accepted", [frozenset(), frozenset({"channel-1"})])
 def test_controlled_qa_evidence_only_clears_its_channel_gate_not_other_blocks(monkeypatch, accepted):
     from app.services import marketing_campaign_v2_template_probe_service as probes
+    from app.services import marketing_campaign_v2_bulk_template_evidence_service as bulk
     _install(monkeypatch, [_recipient(1, "6861000001", 1, name="")])
     original_projection = service.build_campaign_v2_sendable_projection
 
@@ -156,6 +157,8 @@ def test_controlled_qa_evidence_only_clears_its_channel_gate_not_other_blocks(mo
     monkeypatch.setattr(service, "validate_failed_recovery_preflight", lambda **_: None)
     monkeypatch.setattr(service, "accepted_evidence_channels", lambda **_: frozenset())
     monkeypatch.setattr(probes, "accepted_probe_channels", lambda **_: accepted)
+    monkeypatch.setattr(bulk, "bulk_evidence_channel_status",
+                        lambda **_: (frozenset(), frozenset()))
     plan = service.build_campaign_v2_preflight(campaign_id=7, template_id=10,
         allowed_sucursal_keys=None, session=NS(get=lambda *_: NS()))
     reasons = plan.batches[0].blocked_reasons

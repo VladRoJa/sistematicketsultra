@@ -5,6 +5,7 @@ on:
       - "backend/app/services/marketing_campaign_v2*"
       - "backend/app/routes/marketing_campaign_v2_routes.py"
       - "backend/tests/marketing/test_campaign_v2_template_probes*"
+      - "backend/tests/marketing/test_campaign_v2_bulk_template_evidence*"
       - "frontend/src/app/marketing-campaign-v2/**"
       - ".github/workflows/campaign-v2-template-probes-ci.yml"
 permissions:
@@ -46,6 +47,8 @@ jobs:
             tests/marketing/test_campaign_v2_template_probes.py \
             tests/marketing/test_campaign_v2_template_probes_http.py \
             tests/marketing/test_campaign_v2_template_evidence.py \
+            tests/marketing/test_campaign_v2_bulk_template_evidence.py \
+            tests/marketing/test_campaign_v2_bulk_template_evidence_http.py \
             tests/marketing/test_campaign_v2_template_probes_pg.py \
             tests/marketing/test_marketing_campaign_v2_qa_http.py \
             tests/marketing/test_marketing_campaign_v2_qa_manual_service.py \
