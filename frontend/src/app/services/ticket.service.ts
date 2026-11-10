@@ -62,6 +62,17 @@ export class TicketService {
   // ─────────────────────────────────────────────
   // LISTADOS
   // ─────────────────────────────────────────────
+  /** Sucursales autorizadas por el backend para una única solicitud BI Vlad. */
+  getSucursalesBiVladDisponibles(): Observable<{
+    sucursales: { sucursal_id: number; sucursal: string }[];
+  }> {
+    return this.http.get<{
+      sucursales: { sucursal_id: number; sucursal: string }[];
+    }>(`${this.apiUrl}/bi-vlad/sucursales-disponibles`, {
+      headers: this.authJsonHeaders(),
+    });
+  }
+
   getTickets(
     limit: number = 15,
     offset: number = 0,
