@@ -78,3 +78,5 @@ jobs:
         run: |
           node node_modules/esbuild/bin/esbuild src/app/marketing-campaign-v2/marketing-campaign-v2-template-probes.component.node-test.ts --bundle --platform=node --format=esm --external:@angular/* --external:rxjs --external:rxjs/* --outfile=node_modules/.cache/template-probes-tests.mjs
           node node_modules/.cache/template-probes-tests.mjs
+          node node_modules/esbuild/bin/esbuild src/app/marketing-campaign-v2/marketing-campaign-v2-qa-bulk.component.node-test.ts --bundle --platform=node --format=esm --external:@angular/* --external:rxjs --external:rxjs/* --outfile=node_modules/.cache/template-qa-bulk-tests.mjs
+          node node_modules/.cache/template-qa-bulk-tests.mjs

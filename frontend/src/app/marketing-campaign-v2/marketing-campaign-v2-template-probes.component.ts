@@ -9,11 +9,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { CampaignV2TemplateProbeMatrix, CampaignV2TemplateProbeRow } from './marketing-campaign-v2.models';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
+import { MarketingCampaignV2QaBulkComponent } from './marketing-campaign-v2-qa-bulk.component';
 
 @Component({
   selector: 'app-campaign-template-probes', standalone: true,
   imports: [CommonModule, ReactiveFormsModule, MatButtonModule, MatCheckboxModule,
-    MatFormFieldModule, MatInputModule],
+    MatFormFieldModule, MatInputModule, MarketingCampaignV2QaBulkComponent],
   templateUrl: './marketing-campaign-v2-template-probes.component.html',
   styleUrls: ['./marketing-campaign-v2-template-probes.component.css'],
 })

@@ -1,0 +1,9 @@
+.qa-bulk { border-top: 1px solid #cbd0d7; padding: 16px 0; margin-top: 12px; }
+.qa-bulk h4, .qa-bulk h5 { margin: 0 0 8px; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 12px 0; }
+.review { border: 1px solid #cbd0d7; padding: 12px; margin-top: 12px; }
+.review table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
+.review th, .review td { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; }
+.confirmation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.confirmation mat-form-field { flex: 1 1 190px; }
+.error { color: #a51616; }
