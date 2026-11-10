@@ -351,3 +351,24 @@ def test_selection_prepares_only_requested_channel_and_never_another():
     assert {call.kwargs['source_metadata'][probe.KEY]['channel_id'] for call in freeze.call_args_list} == set(chosen)
     assert 'tec' not in str([call.kwargs['source_metadata'] for call in freeze.call_args_list])
     assert set(delivered.call_args.kwargs['groups']) == set(chosen)
+
+
+def test_commercial_rejection_audit_never_claims_a_qa_attempt():
+    rejection = NS(id=290, campaign_v2_id=43, error_code="TEMPLATE_NOT_FOUND",
+                   submit_started_at=NOW, submitted_by_user_id=47)
+    active = session()
+    with patch.object(probe, "_context", return_value=context()), \
+         patch.object(probe, "_existing", return_value=None), \
+         patch.object(probe, "_previous_version", return_value=None), \
+         patch.object(probe, "commercial_certifications", return_value={}), \
+         patch.object(probe, "accepted_probe_channels", return_value=frozenset()), \
+         patch.object(probe, "last_confirmed_template_rejection", return_value=rejection):
+        row = probe.template_probe_matrix(
+            campaign_id=42, template_id=7, session=active)["rows"][0]
+    assert row["result"] == "RECHAZADA"
+    assert row["rejection_source"] == "COMMERCIAL_REJECTION"
+    assert row["rejection_campaign_id"] == 43
+    assert row["qa_campaign_id"] is None
+    assert row["child_id"] == 290
+    assert row["actor_user_id"] == 47
+    assert row["attempted_at"] == NOW.isoformat()
