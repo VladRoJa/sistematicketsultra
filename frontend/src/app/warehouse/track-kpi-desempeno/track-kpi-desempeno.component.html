@@ -627,14 +627,12 @@
           <h2>{{ monthlySection.title }}</h2>
           <p>
             <strong>Periodo: {{ formatMonthYear(monthlySection.target_month) }}</strong>
-            · Corte actual: {{ formatDate(monthlySection.resolved_snapshot?.business_date) }}
-            · Cierre anterior: {{ formatDate(monthlySection.previous_resolved_snapshot?.business_date) }}
-            ({{ formatMonthYear(monthlySection.previous_month) }})
+            · Inicio: {{ formatDate(monthlySection.previous_resolved_snapshot?.business_date) }}
+            · Cierre: {{ formatDate(monthlySection.resolved_snapshot?.business_date) }}
           </p>
           <p>
-            Crecimiento mensual = cierre actual menos cierre del mes anterior.
-            Inicio Gasca y variación contra ese inicio se conservan para conciliación;
-            una diferencia de bases no cambia el crecimiento entre cierres.
+            Crecimiento mensual = cierre de mes menos cierre del mes anterior.
+            Nuevos, reactivaciones y bajas son movimientos del reporte KPI.
           </p>
         </div>
       </div>
@@ -644,16 +642,12 @@
           <thead>
             <tr>
               <th>Sucursal</th>
-              <th title="Socios del último cierre canónico del mes anterior">Cierre anterior</th>
-              <th title="Socios al inicio del mes declarados en el reporte KPI de Gasca">Inicio Gasca</th>
-              <th title="Socios del último cierre canónico del mes consultado">Cierre actual</th>
+              <th title="Cierre canónico del mes anterior; referencia para el crecimiento mensual">Inicio del mes</th>
+              <th title="Cierre canónico del mes seleccionado">Cierre de mes</th>
               <th>Nuevos</th>
               <th>Reactiv.</th>
               <th>Bajas</th>
-              <th title="Cierre actual menos cierre canónico anterior">Crec. mensual</th>
-              <th title="Cierre actual menos inicio declarado por Gasca">Var. vs inicio Gasca</th>
-              <th title="Inicio declarado por Gasca menos cierre canónico anterior">Dif. bases</th>
-              <th title="Diferencia no explicada por nuevos, reactivaciones y bajas dentro del reporte Gasca">Ajuste movimientos</th>
+              <th title="Cierre de mes menos cierre canónico del mes anterior">Crec. mensual</th>
             </tr>
           </thead>
 
@@ -661,22 +655,12 @@
             <tr *ngFor="let row of monthlyRows; trackBy: trackByBranchCanon">
               <td>{{ row.branch.track_label }}</td>
               <td>{{ formatOptionalNumber(row.metrics.socios_activos_cierre_mes_anterior) }}</td>
-              <td>{{ formatNumber(row.metrics.socios_activos_inicio_mes) }}</td>
               <td>{{ formatNumber(row.metrics.socios_activos_cierre_mes) }}</td>
               <td>{{ formatNumber(row.metrics.clientes_nuevos) }}</td>
               <td>{{ formatNumber(row.metrics.reactivaciones) }}</td>
               <td>{{ formatNumber(row.metrics.bajas) }}</td>
               <td [class]="resolveMovementClass(row.metrics.crecimiento_inter_mensual)">
                 {{ formatOptionalSignedNumber(row.metrics.crecimiento_inter_mensual) }}
-              </td>
-              <td [class]="resolveMovementClass(row.metrics.crecimiento_real)">
-                {{ formatSignedNumber(row.metrics.crecimiento_real) }}
-              </td>
-              <td [class]="resolveBaseDifferenceClass(row.metrics.diferencia_bases)">
-                {{ formatOptionalSignedNumber(row.metrics.diferencia_bases) }}
-              </td>
-              <td [class]="resolveMovementClass(row.metrics.ajuste_no_explicado)">
-                {{ formatSignedNumber(row.metrics.ajuste_no_explicado) }}
               </td>
             </tr>
           </tbody>
