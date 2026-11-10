@@ -714,6 +714,38 @@ def _ticket_create_grant_denied(user) -> bool:
     )
 
 
+def _allowed_bi_vlad_branches(user):
+    """None = global administrator; set = server-authorized branch IDs."""
+    role = (user.rol or "").strip().upper()
+    if role in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}:
+        return None
+    assigned = set(get_user_assigned_branch_ids(user))
+    if role == "GERENTE_REGIONAL":
+        return assigned
+    return assigned or ({int(user.sucursal_id)} if user.sucursal_id else set())
+
+
+@ticket_bp.route("/bi-vlad/sucursales-disponibles", methods=["GET"])
+@jwt_required()
+def bi_vlad_available_branches():
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+    if _ticket_create_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para crear tickets."}), 403
+    allowed = _allowed_bi_vlad_branches(user)
+    query = Sucursal.query
+    if allowed is not None:
+        if not allowed:
+            return jsonify({"sucursales": []}), 200
+        query = query.filter(Sucursal.sucursal_id.in_(sorted(allowed)))
+    rows = query.order_by(Sucursal.sucursal.asc()).all()
+    return jsonify({"sucursales": [
+        {"sucursal_id": row.sucursal_id, "sucursal": row.sucursal}
+        for row in rows
+    ]}), 200
+
+
 def _validate_bi_vlad_branch_scope(departamento_id, raw_ids, user):
     """Validate the entire branch set before inserting one BI Vlad ticket.
 
@@ -742,15 +774,9 @@ def _validate_bi_vlad_branch_scope(departamento_id, raw_ids, user):
     if len(set(ids)) != len(ids):
         return None, (jsonify({"mensaje": "No repitas sucursales en la solicitud."}), 400)
 
-    role = (user.rol or "").strip().upper()
-    if role not in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}:
-        assigned = set(get_user_assigned_branch_ids(user))
-        if role == "GERENTE_REGIONAL":
-            allowed = assigned  # Nunca usar sucursal corporativa 100 como fallback
-        else:
-            allowed = assigned or {int(user.sucursal_id)}
-        if not set(ids).issubset(allowed):
-            return None, (jsonify({"mensaje": "Sucursal fuera de tu alcance autorizado."}), 403)
+    allowed = _allowed_bi_vlad_branches(user)
+    if allowed is not None and not set(ids).issubset(allowed):
+        return None, (jsonify({"mensaje": "Sucursal fuera de tu alcance autorizado."}), 403)
 
     found = Sucursal.query.filter(Sucursal.sucursal_id.in_(ids)).count()
     if found != len(ids):
