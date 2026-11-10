@@ -15,6 +15,7 @@ from app.utils.email_sender import send_email_html
 from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
+from app.utils.scope_utils import get_user_assigned_branch_ids
 from app.utils.ticket_aparatos_filters import (
     ticket_relacionado_con_aparato,
     ticket_relacionado_con_alguno,
@@ -58,6 +59,7 @@ from app.services.ticket_attachment_storage_service import resolve_ticket_attach
 from app.services.ticket_attachment_retention_service import schedule_ticket_attachment_retention
 from app.config import Config
 from app.models.ticket_model import Ticket
+from app.models.departamento_model import Departamento
 from app.models.ticket_attachment import TicketAttachmentORM
 from app.models.user_model import UserORM
 from app.extensions import db
@@ -712,6 +714,52 @@ def _ticket_create_grant_denied(user) -> bool:
     )
 
 
+def _resolve_bi_vlad_assignment(departamento_id, clasificacion_id, creator, destination_id):
+    """Use the existing ADMICORP account as BI Vlad's ticket assignee.
+
+    No department, role, or permissions changes to the assignee. Keep this
+    routing decision on the server rather than trusting a submitted username.
+    """
+    department = Departamento.query.get(departamento_id)
+    if not department or (department.nombre or "").strip().casefold() != "bi vlad":
+        return None, None
+
+    # A regional's corporate home branch does not grant arbitrary destinations.
+    if (creator.rol or "").strip().upper() == "GERENTE_REGIONAL":
+        try:
+            authorized_branches = set(get_user_assigned_branch_ids(creator))
+            destination = int(destination_id)
+        except (TypeError, ValueError):
+            destination = None
+            authorized_branches = set()
+        if destination not in authorized_branches:
+            return None, (jsonify({"mensaje": "Sucursal fuera del alcance del regional."}), 403)
+
+    # Ensure the category is an active child of the selected department.
+    # This also rejects a forged classification belonging to another department.
+    if (
+        isinstance(clasificacion_id, bool)
+        or not isinstance(clasificacion_id, (int, str))
+        or not str(clasificacion_id).strip().isdigit()
+        or int(clasificacion_id) <= 0
+    ):
+        return None, (jsonify({"mensaje": "Selecciona una categoría válida de BI Vlad."}), 400)
+    classification = CatalogoClasificacion.query.get(int(clasificacion_id))
+    if (
+        not classification
+        or classification.departamento_id != departamento_id
+        or not classification.activo
+        or classification.parent_id is None
+        or int(classification.nivel or 0) < 2
+    ):
+        return None, (jsonify({"mensaje": "Clasificación inválida para BI Vlad."}), 400)
+
+    assignee = UserORM.get_by_username("ADMICORP")
+    if not assignee or (assignee.rol or "").strip().upper() != "ADMINISTRADOR":
+        return None, (jsonify({"mensaje": "Responsable de BI Vlad no disponible."}), 409)
+    return assignee.username, None
+
+
 @ticket_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_ticket():
@@ -838,6 +886,12 @@ def create_ticket():
         if error_aparato:
             return jsonify({"mensaje": error_aparato}), 400
 
+        asignado_a, bi_vlad_error = _resolve_bi_vlad_assignment(
+            departamento_id, clasificacion_id, user, sucursal_id_destino
+        )
+        if bi_vlad_error is not None:
+            return bi_vlad_error
+
         current_app.logger.info("DEBUG Ticket class: %s.%s", getattr(Ticket, "__module__", "?"), getattr(Ticket, "__name__", "?"))
 
 
@@ -845,6 +899,7 @@ def create_ticket():
         nuevo_ticket = Ticket.create_ticket(
             descripcion=descripcion,
             username=user.username,
+            asignado_a=asignado_a,
             sucursal_id=user.sucursal_id,              # creador
             sucursal_id_destino=sucursal_id_destino,   # destino
             departamento_id=departamento_id,
