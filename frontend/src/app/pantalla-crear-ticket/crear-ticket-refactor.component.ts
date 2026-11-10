@@ -22,6 +22,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { SistemasComponent } from './formularios-crear-ticket/sistemas/sistemas.component';
 import { SucursalesService } from '../services/sucursales.service';
+import { TicketService } from '../services/ticket.service';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 
 
@@ -60,6 +61,10 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
   subs: Subscription[] = [];
   loadingGuardar = false;
   listaSucursales: any[] = [];
+  sucursalesBiVladDisponibles: { sucursal_id: number; sucursal: string }[] = [];
+  sucursalesBiVladSeleccionadas: number[] = [];
+  cargandoSucursalesBiVlad = false;
+  private sucursalesBiVladCargadas = false;
 
   imagenSeleccionada: File | null = null;
   private readonly MAX_IMAGEN_TICKET_BYTES = 15 * 1024 * 1024;
@@ -149,6 +154,7 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     private catalogoService: CatalogoService,
     private sucursalesService: SucursalesService,
+    private ticketService: TicketService,
     private inventarioService: InventarioService, 
   ) {}
 
@@ -165,6 +171,64 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     const rol = (this.userLS?.rol || '').toLowerCase().trim();
     const sucId = Number(this.userLS?.sucursal_id);
     return rol === 'administrador' || sucId === 1000 || sucId === 100;
+  }
+
+  get esBiVladSeleccionado(): boolean {
+    const seleccionado = this.form?.get('nivel_1')?.value;
+    const opcion = this.niveles.find(n => n.nivel === 1)?.opciones
+      .find(o => String(o.id) === String(seleccionado));
+    return this._norm(opcion?.nombre) === 'bi vlad';
+  }
+
+  get todasSucursalesBiVladSeleccionadas(): boolean {
+    return this.sucursalesBiVladDisponibles.length > 0 &&
+      this.sucursalesBiVladDisponibles.every(
+        s => this.sucursalesBiVladSeleccionadas.includes(s.sucursal_id)
+      );
+  }
+
+  alternarSucursalBiVlad(id: number, checked: boolean): void {
+    const elegidas = new Set(this.sucursalesBiVladSeleccionadas);
+    if (checked) elegidas.add(id);
+    else elegidas.delete(id);
+    this.sucursalesBiVladSeleccionadas = [...elegidas];
+  }
+
+  seleccionarTodasSucursalesBiVlad(checked: boolean): void {
+    this.sucursalesBiVladSeleccionadas = checked
+      ? this.sucursalesBiVladDisponibles.map(s => s.sucursal_id)
+      : [];
+  }
+
+  private cargarSucursalesBiVlad(): void {
+    if (this.sucursalesBiVladCargadas || this.cargandoSucursalesBiVlad) return;
+    this.cargandoSucursalesBiVlad = true;
+    this.ticketService.getSucursalesBiVladDisponibles().subscribe({
+      next: res => {
+        this.sucursalesBiVladDisponibles = res?.sucursales || [];
+        this.sucursalesBiVladCargadas = true;
+        this.cargandoSucursalesBiVlad = false;
+        if (this.esBiVladSeleccionado && this.sucursalesBiVladDisponibles.length === 1) {
+          this.sucursalesBiVladSeleccionadas = [this.sucursalesBiVladDisponibles[0].sucursal_id];
+        }
+      },
+      error: () => {
+        this.cargandoSucursalesBiVlad = false;
+        mostrarAlertaToast('No se pudieron cargar las sucursales autorizadas de BI Vlad', 'error');
+      },
+    });
+  }
+
+  private sincronizarSucursalConDepartamento(): void {
+    const sucursal = this.form.get('sucursal_id');
+    if (this.esBiVladSeleccionado) {
+      sucursal?.clearValidators();
+      this.cargarSucursalesBiVlad();
+    } else {
+      this.sucursalesBiVladSeleccionadas = [];
+      sucursal?.setValidators(this.esAdmin() ? [Validators.required] : []);
+    }
+    sucursal?.updateValueAndValidity({ emitEvent: false });
   }
 
 private limpiarRastroDeOtrosSubforms() {
@@ -233,6 +297,7 @@ ngOnInit(): void {
 
     const dep = this.niveles[0]?.opciones.find(x => `${x.id}` === `${depId}`);
     const cat = this.niveles[1]?.opciones.find(x => `${x.id}` === `${catId}`);
+    this.sincronizarSucursalConDepartamento();
 
     const esSisDisp =
       this._norm(dep?.nombre) === 'sistemas' &&
@@ -618,6 +683,10 @@ public mostrarRefaccion: boolean = false;
 
 enviar() {
   this.form.markAllAsTouched();
+  if (this.esBiVladSeleccionado && !this.sucursalesBiVladSeleccionadas.length) {
+    mostrarAlertaToast('Selecciona al menos una sucursal para BI Vlad', 'error');
+    return;
+  }
   const faltantes = this.getCamposInvalidos();
   if (faltantes.length) {
     mostrarAlertaToast(`Faltan campos obligatorios: ${faltantes.join(', ')}`, 'error');
@@ -661,9 +730,9 @@ enviar() {
         : this.form.value.descripcion_general;
 
   // --- sucursal destino ---
-  const sucursalDestino = this.esAdmin()
-    ? this.form.value.sucursal_id
-    : this.sucursalIdUsuario;
+  const sucursalDestino = this.esBiVladSeleccionado
+    ? this.sucursalesBiVladSeleccionadas[0]
+    : this.esAdmin() ? this.form.value.sucursal_id : this.sucursalIdUsuario;
 
   // --- construir body base ---
   const body: any = {
@@ -676,6 +745,10 @@ enviar() {
     necesita_refaccion: this.form.value.necesita_refaccion,
     descripcion_refaccion: this.form.value.descripcion_refaccion,
   };
+
+  if (this.esBiVladSeleccionado) {
+    body.sucursales_alcance_ids = [...this.sucursalesBiVladSeleccionadas];
+  }
 
   // Sólo Tapizado envía el contrato multiaparato; ninguna otra ruta lo hereda.
   if (this.mostrarSubformAparatos && this.form.value.tipo_trabajo === 'TAPIZADO') {
@@ -756,6 +829,7 @@ enviar() {
           aparatos_ids: [],
         });
         this.imagenSeleccionada = null;
+        this.sucursalesBiVladSeleccionadas = [];
         this.nivel2Sub?.unsubscribe();
         this.nivel2Sub = undefined;
         this.niveles = [];
