@@ -333,6 +333,13 @@ def build_campaign_v2_preflight(
             campaign_id=campaign_id, template=template, session=active_session,
             outbound_bindings=outbound_bindings, now=now,
         )
+        from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+            accepted_bulk_evidence_channels,
+        )
+        verified_provider_channels |= accepted_bulk_evidence_channels(
+            template=template, session=active_session,
+            outbound_bindings=outbound_bindings, now=now,
+        )
 
     batches: list[CampaignV2DispatchBatchPlan] = []
     for (_sucursal_id, _sucursal_canon), group in sorted(
