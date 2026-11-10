@@ -190,3 +190,39 @@ No altera el mecanismo de evidencia manual con vigencia de 24 horas.
 
 Validación: compilación Angular y cinco tests Node focales correctos; pruebas
 backend focales de catálogo/JWT/duplicados y PostgreSQL serán verificadas por CI.
+
+
+## Reconocimiento de entregas comerciales (extensión)
+
+La matriz de certificación también aprovecha **evidencia comercial ya persistida**
+en `marketing_campaign_v2_provider_campaigns`,
+`marketing_campaign_v2_provider_stats_snapshots` y
+`marketing_campaign_v2_provider_recipient_observations`.
+
+- Coincidencia obligatoria: `template_id`, nombre exacto, media, binding
+  emisor real y `provider_channel_id`; child `SUBMITTED` con identificador
+  externo, fecha y actor. No se infiere por sucursal de origen.
+- Se exige snapshot iVentas posterior al envío, ligado por campaña e ID del
+  proveedor, con observación `SUCCESSFUL` y `DELIVERED`/`VIEWED` de un
+  destinatario que también figura en el request congelado del child. Un
+  `SUBMITTED` sin entrega asociada **no** certifica.
+- Para childs históricos que no almacenaban firma de plantilla, se exige que
+  el registro local de la plantilla **no haya cambiado después de enviar**;
+  la ausencia de prueba suficiente se considera `PENDIENTE`. No se
+  reescriben ni se marcan retrospectivamente registros productivos.
+- Un rechazo determinístico posterior `TEMPLATE_NOT_FOUND` revoca la prueba
+  previa hasta que exista una entrega nueva verificada; los estados ambiguos
+  no autorizan certificación. No se ignora un rechazo porque otra sucursal
+  del mismo lote haya funcionado.
+- La evidencia en la matriz muestra `COMMERCIAL_DELIVERY`, ID de campaña
+  comercial, child, snapshot y momento de captura. Los teléfonos no se exponen.
+- Las campañas futuras se reconocen automáticamente cuando el proceso ya
+  existente guarda un snapshot que satisface el contrato. No se crea job,
+  endpoint externo, WhatsApp ni lectura live a iVentas desde la matriz.
+- Se mantienen los controles de envío comercial: esta evidencia **no**
+  concede aprobación ni activa flags.
+- La certificación QA `QA_MANUAL` sigue funcionando de forma independiente;
+  las nuevas pruebas se omiten para pares con evidencia comercial suficiente.
+- Sin migraciones: toda la evaluación es de solo lectura sobre estructuras
+  ya existentes. Podrían persistir canales pendientes si no hay observaciones
+  históricas de entrega o la versión local no puede verificarse.
