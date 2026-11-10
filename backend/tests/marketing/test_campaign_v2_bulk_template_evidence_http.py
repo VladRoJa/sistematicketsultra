@@ -74,3 +74,16 @@ def test_register_gets_actor_from_jwt_and_no_dispatch_instruction():
                        json=payload | {"send": True})
         assert bad.status_code == 400
         assert register.call_count == 1
+
+
+def test_saved_status_requires_jwt_and_global_capabilities():
+    api, headers = client()
+    assert api.get(BASE + "status").status_code == 401
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**CAPABILITIES))), \
+         patch.object(bulk, "catalog_bulk_inventory_status",
+                      return_value={"rows": [], "provider_api_verified": False}) as status:
+        result = api.get(BASE + "status", headers=headers)
+        assert result.status_code == 200
+        assert result.json["provider_api_verified"] is False
+        status.assert_called_once()

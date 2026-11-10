@@ -8,6 +8,7 @@ import {
   CampaignV2TemplateProbeMatrix,
   CampaignV2BulkInventoryPreview,
   CampaignV2BulkInventoryRegistered,
+  CampaignV2BulkInventoryStatus,
   CampaignV2ExcelPreview,
   CampaignV2ExcelFrozen,
   CampaignV2AudienceDefinitionRequest,
@@ -91,6 +92,12 @@ import { BackgroundDispatchJob, BackgroundDispatchJobsResponse, BackgroundDispat
   providedIn: 'root',
 })
 export class MarketingCampaignV2Service {
+  getBulkTemplateInventoryStatus(templateId: number): Observable<CampaignV2BulkInventoryStatus> {
+    return this.http.get<CampaignV2BulkInventoryStatus>(
+      this.apiUrl + '/dispatch/templates/' + templateId + '/inventory/status',
+    );
+  }
+
   previewBulkTemplateInventory(
     templateId: number, inventory: unknown[],
   ): Observable<CampaignV2BulkInventoryPreview> {

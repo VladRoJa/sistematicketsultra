@@ -64,6 +64,23 @@
           </div>
           <button mat-button type="button" (click)="closeBulkInventory()">Cerrar</button>
         </div>
+        <button mat-stroked-button type="button" (click)="loadBulkEvidenceStatus()"
+                [disabled]="bulkBusy">Actualizar evidencia guardada (no consulta iVentas)</button>
+        <div class="catalog-table bulk-table" *ngIf="bulkCurrentStatus && !bulkPreview">
+          <p class="muted">Aprobaciones registradas: {{ bulkCurrentStatus.counts.accepted }} · pendientes: {{ bulkCurrentStatus.counts.pending }}. No es una consulta en vivo.</p>
+          <table>
+            <thead><tr><th>Sucursal emisora</th><th>Canal</th><th>Evidencia vigente</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let row of bulkCurrentStatus.rows">
+                <td>{{ row.sucursal_canon }}</td><td class="mono">{{ row.channel_id }}</td>
+                <td>{{ row.status === 'accepted' ? 'Aprobada' :
+                       row.status === 'not_observed' ? 'Sin evidencia' :
+                       row.status === 'expired' ? 'Vencida' :
+                       row.status === 'changed' ? 'Configuración modificada' : row.status }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="muted">Carga un JSON exportado de iVentas o pega su arreglo completo. No inventes estados; las entradas sin aceptación quedan pendientes.</p>
         <label for="campaign-v2-bulk-json-file" class="muted">Archivo JSON (opcional)</label>
         <input id="campaign-v2-bulk-json-file" type="file" accept=".json,application/json"

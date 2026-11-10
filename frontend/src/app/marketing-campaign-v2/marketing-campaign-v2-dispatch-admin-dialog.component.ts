@@ -15,6 +15,7 @@ import { forkJoin } from 'rxjs';
 import {
   CampaignV2CatalogBranch,
   CampaignV2BulkInventoryPreview,
+  CampaignV2BulkInventoryStatus,
   CampaignV2ChannelBinding,
   CampaignV2ChannelBindingRequest,
   CampaignV2BudgetRateRevision,
@@ -91,6 +92,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   bulkTemplateId: number | null = null;
   bulkTemplateName = '';
   bulkPreview: CampaignV2BulkInventoryPreview | null = null;
+  bulkCurrentStatus: CampaignV2BulkInventoryStatus | null = null;
   bulkBusy = false;
   bulkError = '';
   bulkMessage = '';
@@ -226,7 +228,25 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   closeBulkInventory(): void {
     this.bulkTemplateId = null;
     this.bulkPreview = null;
+    this.bulkCurrentStatus = null;
     this.bulkError = '';
+  }
+
+  loadBulkEvidenceStatus(): void {
+    if (this.bulkTemplateId === null || this.bulkBusy) { return; }
+    this.bulkBusy = true;
+    this.bulkError = '';
+    this.api.getBulkTemplateInventoryStatus(this.bulkTemplateId)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: result => {
+          this.bulkBusy = false;
+          this.bulkCurrentStatus = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.bulkBusy = false;
+          this.bulkError = this.errorMessage(error, 'No se pudo consultar evidencia guardada.');
+        },
+      });
   }
 
   openBulkInventory(template: CampaignV2DispatchTemplate): void {
@@ -239,6 +259,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     this.bulkConfirmed.setValue(false);
     this.bulkError = '';
     this.bulkMessage = '';
+    if (this.bulkTemplateId !== null) { this.loadBulkEvidenceStatus(); }
   }
 
   onBulkInventoryFile(event: Event): void {
@@ -312,6 +333,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
           ' · sin dato/incompatibles: ' + result.pending + '. Válida hasta ' +
           result.expires_at + '. No se enviaron mensajes.';
         this.bulkConfirmed.setValue(false);
+        this.loadBulkEvidenceStatus();
       },
       error: (error: HttpErrorResponse) => {
         this.bulkBusy = false;

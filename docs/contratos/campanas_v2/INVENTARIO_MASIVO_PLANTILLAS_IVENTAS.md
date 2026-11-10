@@ -48,3 +48,9 @@ La observación más reciente (fecha e ID) prevalece sobre aceptaciones previas.
 Una negación vigente bloquea incluso QA previamente aceptada para el mismo
 canal/versión; evidencia no observada no equivale a negación. La vigencia sigue
 siendo de 24 horas. La fila negativa se conserva para auditoría.
+
+## Consulta del estado guardado
+
+GET `/api/marketing/campaigns-v2/dispatch/templates/{id}/inventory/status`
+muestra por emisor la evidencia vigente, vencida, modificada o ausente.
+No contacta a iVentas; la matriz se puede consultar sin volver a importar JSON.

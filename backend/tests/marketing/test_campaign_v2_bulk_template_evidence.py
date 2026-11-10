@@ -206,3 +206,25 @@ def test_new_explicit_rejection_revokes_older_acceptance():
     )
     assert accepted == frozenset()
     assert revoked == frozenset({"a"})
+
+
+def test_status_matrix_is_reusable_without_new_inventory():
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        catalog_bulk_inventory_status,
+    )
+    session, selected, rows = make_session(rows=[binding(1, "a"), binding(2, "b")])
+    proof = NS(id=6, template_id=12, provider_channel_id="a",
+               sender_binding_id=1, template_signature=_signature(selected),
+               sender_signature=sender_signature(rows[0]),
+               observed_status="accepted", observed_at=NOW - timedelta(minutes=5),
+               expires_at=NOW + timedelta(hours=23))
+    session.query.side_effect = lambda cls: (
+        Query([selected]) if cls is Template else
+        Query(rows) if cls is Binding else Query([proof])
+    )
+    state = catalog_bulk_inventory_status(template_id=12, session=session, now=NOW)
+    assert {item["channel_id"]: item["status"] for item in state["rows"]} == {
+        "a": "accepted", "b": "not_observed",
+    }
+    assert state["counts"] == {"accepted": 1, "pending": 1}
+    session.commit.assert_not_called()

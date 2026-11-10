@@ -237,3 +237,56 @@ def accepted_bulk_evidence_channels(*, template, session, outbound_bindings, now
         template=template, session=session,
         outbound_bindings=outbound_bindings, now=now,
     )[0]
+
+
+def catalog_bulk_inventory_status(*, template_id, session=None, now=None):
+    """Read persisted signed evidence, never imply a live iVentas query."""
+    active = session if session is not None else db.session
+    timestamp = _utc(now or datetime.now(timezone.utc))
+    if type(template_id) is not int or template_id <= 0:
+        raise BulkInventoryValidation("Plantilla inválida.")
+    template = active.query(Template).filter(Template.id == template_id).one_or_none()
+    if template is None or template.provider != "IVENTAS":
+        raise BulkInventoryValidation("Plantilla local iVentas inexistente.")
+    bindings = active.query(Binding).filter(
+        Binding.provider == "IVENTAS", Binding.is_active.is_(True),
+        Binding.is_default.is_(True),
+    ).order_by(Binding.sucursal_canon, Binding.id).all()
+    channels = sorted({str(binding.provider_channel_id) for binding in bindings})
+    records = active.query(Evidence).filter(
+        Evidence.template_id == template_id,
+        Evidence.provider_channel_id.in_(channels),
+    ).order_by(Evidence.observed_at.desc(), Evidence.id.desc()).all() if channels else []
+    latest = {}
+    for item in records:
+        latest.setdefault((str(item.provider_channel_id), int(item.sender_binding_id)), item)
+    signature = template_version_signature(template)
+    rows = []
+    for binding in bindings:
+        channel = str(binding.provider_channel_id)
+        compatible = template_allows_channel(template, channel)
+        proof = latest.get((channel, int(binding.id)))
+        if not compatible:
+            status = "incompatible"
+        elif proof is None:
+            status = "not_observed"
+        elif (proof.template_signature != signature
+              or proof.sender_signature != sender_signature(binding)):
+            status = "changed"
+        elif _utc(proof.observed_at) > timestamp or _utc(proof.expires_at) <= timestamp:
+            status = "expired"
+        else:
+            status = str(proof.observed_status)
+        rows.append({
+            "sucursal_canon": str(binding.sucursal_canon),
+            "channel_id": channel, "status": status,
+        })
+    return {
+        "template_id": template_id, "template_name": str(template.template_name),
+        "rows": rows,
+        "counts": {
+            "accepted": sum(row["status"] == "accepted" for row in rows),
+            "pending": sum(row["status"] != "accepted" for row in rows),
+        },
+        "provider_api_verified": False, "send_authorized": False,
+    }

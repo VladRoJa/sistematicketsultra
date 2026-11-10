@@ -1598,3 +1598,13 @@ export interface CampaignV2BulkInventoryRegistered {
   send_authorized: false;
   quota_reserved: false;
 }
+
+/** Persisted operator evidence, not a live iVentas consultation. */
+export interface CampaignV2BulkInventoryStatus {
+  template_id: number;
+  template_name: string;
+  rows: Array<{ sucursal_canon: string; channel_id: string; status: string }>;
+  counts: { accepted: number; pending: number };
+  provider_api_verified: false;
+  send_authorized: false;
+}

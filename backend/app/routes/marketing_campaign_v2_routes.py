@@ -2934,6 +2934,31 @@ def campaign_v2_previous_contacts_apply_endpoint(campaign_id: int):
 
 
 
+@marketing_campaign_v2_bp.get(
+    "/campaigns-v2/dispatch/templates/<int:template_id>/inventory/status"
+)
+@jwt_required()
+def campaign_v2_bulk_template_inventory_status_endpoint(template_id: int):
+    """Read saved evidence by sender; not a live provider status lookup."""
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        BulkInventoryValidation, catalog_bulk_inventory_status,
+    )
+    try:
+        _, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        _validate_query_args(set())
+        return jsonify(catalog_bulk_inventory_status(
+            template_id=template_id, session=db.session,
+        )), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except BulkInventoryValidation as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Error consultando evidencias de plantillas")
+        return _error("No fue posible consultar evidencia masiva.", 500)
+
+
 @marketing_campaign_v2_bp.post(
     "/campaigns-v2/dispatch/templates/<int:template_id>/inventory/preview"
 )
