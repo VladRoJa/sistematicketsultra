@@ -567,6 +567,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return 'neutral';
   }
 
+  resolveBaseDifferenceClass(value: number | null | undefined): string {
+    return value === null || value === undefined || value === 0
+      ? 'neutral'
+      : 'base-discrepancy';
+  }
+
   trackByBranchCanon(
     _index: number,
     row: KpiDesempenoMonthlyRow,
