@@ -1,0 +1,91 @@
+name: Tickets BI Vlad Multi-Branch V1
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/models/ticket_model.py"
+      - "backend/app/models/ticket_sucursal_alcance.py"
+      - "backend/app/models/__init__.py"
+      - "backend/app/routes/ticket_routes.py"
+      - "backend/migrations/versions/m1233bimulti111026_ticket_branch_scope.py"
+      - "backend/tests/**/test_bi_vlad_*"
+      - "backend/tests/models/test_ticket_create_transaction_mode.py"
+      - "backend/tests/routes/test_ticket_tapizado_m2.py"
+      - "backend/tests/routes/test_ticket_create_attachment_integration.py"
+      - "backend/tests/test_ticket_creator_closure_flow.py"
+      - "frontend/src/app/pantalla-crear-ticket/**"
+      - "frontend/src/app/pantalla-ver-tickets/**"
+      - "frontend/src/app/utils/ticket-utils.ts"
+      - "frontend/src/app/services/ticket.service.ts"
+      - "frontend/tests/tickets-bi-vlad-multibranch.test.cjs"
+      - ".github/workflows/tickets-bi-vlad-multibranch-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      SECRET_KEY: bi-vlad-multibranch-test
+      JWT_SECRET_KEY: bi-vlad-multibranch-test
+      SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+      NOTIFY_EMAIL_ON_UPDATE: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install pytest==8.3.5
+      - name: Compile and check migration graph
+        run: |
+          python -m py_compile app/models/ticket_model.py app/models/ticket_sucursal_alcance.py app/routes/ticket_routes.py migrations/versions/m1233bimulti111026_ticket_branch_scope.py
+          python -m flask db heads
+      - name: BI Vlad and neighboring Tickets regressions
+        run: |
+          python -m pytest -q --tb=short -o addopts= \
+            tests/migrations/test_bi_vlad_multi_branch_migration.py \
+            tests/routes/test_bi_vlad_multi_branch_scope.py \
+            tests/routes/test_bi_vlad_ticket_assignment.py \
+            tests/models/test_ticket_create_transaction_mode.py \
+            tests/routes/test_ticket_create_attachment_integration.py \
+            tests/routes/test_ticket_tapizado_m2.py \
+            tests/routes/test_create_ticket_requires_apparatus.py \
+            tests/test_ticket_creator_closure_flow.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: BI Vlad scope and existing Tickets filters
+        run: |
+          node --test tests/tickets-bi-vlad-multibranch.test.cjs
+          node scripts/verify-tickets-responsable-filter.cjs
+          node --test tests/tickets-tapizado-m3.test.cjs
+      - name: Typecheck Angular templates
+        run: npx ngc -p tsconfig.app.json
+      - name: Build
+        run: npm run build -- --configuration production
