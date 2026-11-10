@@ -20,7 +20,7 @@ def _classification(*, department_id=42, active=True, parent_id=83, level=2):
 
 
 def _admin(role="ADMINISTRADOR"):
-    return SimpleNamespace(username="ADMICORP", rol=role, email="admin@example.test")
+    return SimpleNamespace(username="ADMICORP", rol=role, sucursal_id=1000, email="admin@example.test")
 
 
 def _creator(role="GERENTE", branch=4):
@@ -32,6 +32,8 @@ def _fake_route_deps(*, department=None, classification=None, admin=None):
     stack = ExitStack()
     dep = stack.enter_context(patch.object(ticket_routes, "Departamento"))
     cat = stack.enter_context(patch.object(ticket_routes, "CatalogoClasificacion"))
+    branch_catalog = stack.enter_context(patch.object(ticket_routes, "Sucursal"))
+    branch_catalog.query.filter.return_value.filter.return_value.count.return_value = 1
     admin_lookup = stack.enter_context(
         patch.object(ticket_routes.UserORM, "get_by_username")
     )
@@ -128,6 +130,7 @@ def test_bi_vlad_endpoint_overrides_spoofed_assignee_without_new_user():
         "clasificacion_id": 85,
         "sucursal_id_destino": 4,
         "asignado_a": "OTRA_CUENTA",
+        "sucursales_alcance_ids": [4],
     }
     created = SimpleNamespace(id=9001)
     with app.test_request_context(
@@ -150,4 +153,5 @@ def test_bi_vlad_endpoint_overrides_spoofed_assignee_without_new_user():
         assert response.get_json()["ticket_id"] == 9001
         assert create.call_args.kwargs["asignado_a"] == "ADMICORP"
         assert create.call_args.kwargs["departamento_id"] == 42
-        assert create.call_args.kwargs["sucursal_id_destino"] == 4
+        assert create.call_args.kwargs["sucursal_id_destino"] == 1000
+        assert create.call_args.kwargs["sucursales_alcance_ids"] == [4]

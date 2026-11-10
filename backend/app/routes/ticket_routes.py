@@ -16,6 +16,7 @@ from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.utils.scope_utils import get_user_assigned_branch_ids
+from app.utils.sucursal_audience import apply_selectable_sucursal_catalog
 from app.utils.ticket_aparatos_filters import (
     ticket_relacionado_con_aparato,
     ticket_relacionado_con_alguno,
@@ -714,6 +715,80 @@ def _ticket_create_grant_denied(user) -> bool:
     )
 
 
+def _allowed_bi_vlad_branches(user):
+    """None = global administrator; set = server-authorized branch IDs."""
+    role = (user.rol or "").strip().upper()
+    if role in {"ADMINISTRADOR", "SUPER_ADMIN", "ADMIN"}:
+        return None
+    assigned = set(get_user_assigned_branch_ids(user))
+    if role == "GERENTE_REGIONAL":
+        return assigned
+    return assigned or ({int(user.sucursal_id)} if user.sucursal_id else set())
+
+
+@ticket_bp.route("/bi-vlad/sucursales-disponibles", methods=["GET"])
+@jwt_required()
+def bi_vlad_available_branches():
+    user = UserORM.get_by_id(get_jwt_identity())
+    if not user:
+        return jsonify({"mensaje": "Usuario no encontrado"}), 404
+    if _ticket_create_grant_denied(user):
+        return jsonify({"mensaje": "No autorizado para crear tickets."}), 403
+    allowed = _allowed_bi_vlad_branches(user)
+    # Reuse the existing selectable-gym policy: never offer technical nodes.
+    query = apply_selectable_sucursal_catalog(Sucursal.query, audience="operational")
+    if allowed is not None:
+        if not allowed:
+            return jsonify({"sucursales": []}), 200
+        query = query.filter(Sucursal.sucursal_id.in_(sorted(allowed)))
+    rows = query.order_by(Sucursal.sucursal.asc()).all()
+    return jsonify({"sucursales": [
+        {"sucursal_id": row.sucursal_id, "sucursal": row.sucursal}
+        for row in rows
+    ]}), 200
+
+
+def _validate_bi_vlad_branch_scope(departamento_id, raw_ids, user):
+    """Validate the entire branch set before inserting one BI Vlad ticket.
+
+    The user-provided list is never used to grant read access to other tickets.
+    Only existing, individually authorized branches can be included.
+    """
+    department = Departamento.query.get(departamento_id)
+    is_bi_vlad = bool(
+        department and (department.nombre or "").strip().casefold() == "bi vlad"
+    )
+    if not is_bi_vlad:
+        if raw_ids is not None:
+            return None, (jsonify({"mensaje": "Alcance múltiple solo disponible para BI Vlad."}), 400)
+        return None, None
+
+    if not isinstance(raw_ids, list) or not 1 <= len(raw_ids) <= 50:
+        return None, (jsonify({"mensaje": "Selecciona de 1 a 50 sucursales para BI Vlad."}), 400)
+
+    ids = []
+    for item in raw_ids:
+        if isinstance(item, bool) or not (
+            isinstance(item, int) and item > 0
+        ):
+            return None, (jsonify({"mensaje": "Las sucursales deben ser IDs enteros positivos."}), 400)
+        ids.append(item)
+    if len(set(ids)) != len(ids):
+        return None, (jsonify({"mensaje": "No repitas sucursales en la solicitud."}), 400)
+
+    allowed = _allowed_bi_vlad_branches(user)
+    if allowed is not None and not set(ids).issubset(allowed):
+        return None, (jsonify({"mensaje": "Sucursal fuera de tu alcance autorizado."}), 403)
+
+    found = apply_selectable_sucursal_catalog(
+        Sucursal.query.filter(Sucursal.sucursal_id.in_(ids)),
+        audience="operational",
+    ).count()
+    if found != len(ids):
+        return None, (jsonify({"mensaje": "Una o más sucursales no existen."}), 400)
+    return ids, None
+
+
 def _resolve_bi_vlad_assignment(departamento_id, clasificacion_id, creator, destination_id):
     """Use the existing ADMICORP account as BI Vlad's ticket assignee.
 
@@ -886,11 +961,25 @@ def create_ticket():
         if error_aparato:
             return jsonify({"mensaje": error_aparato}), 400
 
+        sucursales_alcance_ids, scope_error = _validate_bi_vlad_branch_scope(
+            departamento_id, data.get("sucursales_alcance_ids"), user
+        )
+        if scope_error is not None:
+            return scope_error
+
         asignado_a, bi_vlad_error = _resolve_bi_vlad_assignment(
-            departamento_id, clasificacion_id, user, sucursal_id_destino
+            departamento_id, clasificacion_id, user,
+            sucursales_alcance_ids[0] if sucursales_alcance_ids else sucursal_id_destino,
         )
         if bi_vlad_error is not None:
             return bi_vlad_error
+        if sucursales_alcance_ids:
+            # The operational destination is the existing ADMICORP account's
+            # branch, never the first affected location.
+            responsible = UserORM.get_by_username(asignado_a)
+            if not responsible or not responsible.sucursal_id:
+                return jsonify({"mensaje": "Sucursal corporativa del responsable no disponible."}), 409
+            sucursal_id_destino = responsible.sucursal_id
 
         current_app.logger.info("DEBUG Ticket class: %s.%s", getattr(Ticket, "__module__", "?"), getattr(Ticket, "__name__", "?"))
 
@@ -900,6 +989,7 @@ def create_ticket():
             descripcion=descripcion,
             username=user.username,
             asignado_a=asignado_a,
+            sucursales_alcance_ids=sucursales_alcance_ids,
             sucursal_id=user.sucursal_id,              # creador
             sucursal_id_destino=sucursal_id_destino,   # destino
             departamento_id=departamento_id,

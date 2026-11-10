@@ -1719,3 +1719,33 @@ td.col-descripcion {
   line-height: 15px;
   color: var(--ultra-orange);
 }
+
+
+/* Scope BI Vlad: compact summary in the existing Sucursal column. */
+.ticket-bi-alcance__boton {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ticket-bi-alcance__boton mat-icon {
+  margin-right: 2px;
+}
+
+.ticket-bi-alcance__lista {
+  padding: 10px 16px;
+  min-width: 210px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ticket-bi-alcance__lista strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.ticket-bi-alcance__lista div {
+  font-size: 13px;
+  padding: 3px 0;
+}

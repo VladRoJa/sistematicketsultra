@@ -8,6 +8,7 @@ from pytz import timezone as tz
 from dateutil import parser
 from dateutil.parser import isoparse
 from sqlalchemy.orm.attributes import flag_modified
+from app.models.ticket_sucursal_alcance import TicketSucursalAlcanceORM
 
 
 class Ticket(db.Model):
@@ -109,6 +110,12 @@ class Ticket(db.Model):
     sucursal = db.relationship('Sucursal', backref='tickets', foreign_keys=[sucursal_id])
     inventario = db.relationship('InventarioGeneral', foreign_keys=[aparato_id])
     # M1: relación multiaparato disponible, no utilizada por flujos V1 todavía.
+    sucursales_alcance = db.relationship(
+        'TicketSucursalAlcanceORM',
+        back_populates='ticket',
+        cascade='all, delete-orphan',
+        lazy='select',
+    )
     aparatos_asociados = db.relationship(
         'TicketAparatoORM',
         back_populates='ticket',
@@ -263,6 +270,11 @@ class Ticket(db.Model):
             'descripcion': self.descripcion,
             'username': self.username,
             'asignado_a': self.asignado_a,
+            'sucursales_alcance': [
+                {'sucursal_id': scope.sucursal_id,
+                 'sucursal': scope.sucursal.sucursal if scope.sucursal else str(scope.sucursal_id)}
+                for scope in sorted(self.sucursales_alcance, key=lambda row: row.sucursal_id)
+            ] if self.departamento and (self.departamento.nombre or '').strip().casefold() == 'bi vlad' else [],
             'tipo_atencion': self.tipo_atencion,
             'estado': self.estado,
 
@@ -372,7 +384,8 @@ class Ticket(db.Model):
                     aprobacion_comentario: str | None = None,
                     commit: bool = True,
                     tipo_trabajo: str | None = None,
-                    asignado_a: str | None = None):
+                    asignado_a: str | None = None,
+                    sucursales_alcance_ids: list[int] | None = None):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
             if v is None:
@@ -417,6 +430,11 @@ class Ticket(db.Model):
             aprobacion_fecha=aprobacion_fecha,
             aprobacion_comentario=aprobacion_comentario,
         )
+        if sucursales_alcance_ids:
+            ticket.sucursales_alcance = [
+                TicketSucursalAlcanceORM(sucursal_id=branch_id)
+                for branch_id in sucursales_alcance_ids
+            ]
         db.session.add(ticket)
         db.session.flush()
         

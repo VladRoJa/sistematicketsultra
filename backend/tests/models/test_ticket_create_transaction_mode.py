@@ -50,6 +50,18 @@ class TicketCreateTransactionModeTest(unittest.TestCase):
         self.session.flush.assert_called_once_with()
         self.session.commit.assert_not_called()
 
+    def test_bi_vlad_attaches_three_branches_before_transaction_commit(self):
+        ticket = self._create(
+            departamento_id=42, sucursales_alcance_ids=[4, 5, 21], commit=False
+        )
+        self.assertEqual(
+            sorted(scope.sucursal_id for scope in ticket.sucursales_alcance),
+            [4, 5, 21],
+        )
+        self.session.add.assert_called_once_with(ticket)
+        self.session.flush.assert_called_once_with()
+        self.session.commit.assert_not_called()
+
     def _create_with_inventory(
         self, *, family_id=7, family_active=True, department_id=1, commit=True
     ):

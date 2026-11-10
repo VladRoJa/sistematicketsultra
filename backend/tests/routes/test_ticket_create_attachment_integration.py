@@ -83,6 +83,10 @@ class TicketCreateAttachmentIntegrationTest(unittest.TestCase):
             ticket_routes, "_resolve_bi_vlad_assignment", return_value=(None, None)
         )
         self.bi_vlad_patch.start()
+        self.bi_vlad_scope_patch = patch.object(
+            ticket_routes, "_validate_bi_vlad_branch_scope", return_value=(None, None)
+        )
+        self.bi_vlad_scope_patch.start()
 
         self.env_patch = patch.dict(
             os.environ,
@@ -95,6 +99,7 @@ class TicketCreateAttachmentIntegrationTest(unittest.TestCase):
     def tearDown(self):
         self.env_patch.stop()
         self.bi_vlad_patch.stop()
+        self.bi_vlad_scope_patch.stop()
         self.classification_patch.stop()
         self.db_patch.stop()
         self.attachment_patch.stop()

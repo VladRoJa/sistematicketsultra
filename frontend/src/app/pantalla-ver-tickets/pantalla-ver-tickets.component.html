@@ -953,7 +953,31 @@
             </button>
           </td>
 
-          <td>{{ getNombreSucursal(ticket) }}</td>
+          <td>
+            <ng-container *ngIf="ticket.sucursales_alcance?.length; else sucursalTicketTradicional">
+              <button
+                mat-button
+                type="button"
+                class="ticket-bi-alcance__boton"
+                [matMenuTriggerFor]="menuSucursalesBI"
+                [attr.aria-label]="'Ver ' + ticket.sucursales_alcance?.length + ' sucursales del ticket ' + ticket.id"
+              >
+                <mat-icon>place</mat-icon>
+                {{ ticket.sucursales_alcance?.length }}
+                {{ ticket.sucursales_alcance?.length === 1 ? 'sucursal' : 'sucursales' }}
+                <mat-icon>arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #menuSucursalesBI="matMenu">
+                <div class="ticket-bi-alcance__lista" (click)="$event.stopPropagation()">
+                  <strong>Sucursales involucradas</strong>
+                  <div *ngFor="let suc of ticket.sucursales_alcance">
+                    {{ suc.sucursal }}
+                  </div>
+                </div>
+              </mat-menu>
+            </ng-container>
+            <ng-template #sucursalTicketTradicional>{{ getNombreSucursal(ticket) }}</ng-template>
+          </td>
           <td class="td-estado">
             <div class="ticket-estado" *ngIf="presentacionEstadoTicket(ticket) as estadoVisible">
               <span class="ticket-estado__principal">{{ estadoVisible.principal }}</span>
