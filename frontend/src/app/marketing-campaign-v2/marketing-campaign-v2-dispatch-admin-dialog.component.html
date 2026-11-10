@@ -62,7 +62,7 @@
             <h4>Inventario masivo · {{ bulkTemplateName }}</h4>
             <p>Un solo inventario con los registros de todos los emisores. No se consultan APIs externas ni se envían mensajes.</p>
           </div>
-          <button mat-button type="button" (click)="bulkTemplateId = null">Cerrar</button>
+          <button mat-button type="button" (click)="closeBulkInventory()">Cerrar</button>
         </div>
         <p class="muted">Carga un JSON exportado de iVentas o pega su arreglo completo. No inventes estados; las entradas sin aceptación quedan pendientes.</p>
         <label for="campaign-v2-bulk-json-file" class="muted">Archivo JSON (opcional)</label>

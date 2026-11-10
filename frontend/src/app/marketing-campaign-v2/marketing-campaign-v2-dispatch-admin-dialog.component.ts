@@ -223,6 +223,12 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     });
   }
 
+  closeBulkInventory(): void {
+    this.bulkTemplateId = null;
+    this.bulkPreview = null;
+    this.bulkError = '';
+  }
+
   openBulkInventory(template: CampaignV2DispatchTemplate): void {
     this.bulkTemplateId = this.bulkTemplateId === template.id ? null : template.id;
     this.bulkTemplateName = template.template_name;
