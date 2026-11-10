@@ -230,6 +230,15 @@
   color: #667085;
 }
 
+.monthly-closing-card table {
+  min-width: 1450px;
+}
+
+.base-discrepancy {
+  color: #b54708;
+  font-weight: 700;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid rgba(23, 32, 51, 0.08);
@@ -1183,6 +1192,11 @@ td {
   border-radius: 999px;
   background: var(--year-color);
   content: '';
+}
+
+.year-overlay-comparison-years button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .year-overlay-comparison-years button.current {

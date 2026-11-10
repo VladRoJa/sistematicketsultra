@@ -271,6 +271,7 @@ def _build_monthly_row_payload(
     snapshot: KpiDesempenoSnapshotORM,
     sucursal_canon: str | None,
     branch_catalog_by_canon: dict[str, TrackBranchCatalogORM],
+    previous_row: KpiDesempenoSnapshotRowORM | None = None,
 ) -> dict[str, Any]:
     socios_inicio = int(row.socios_activos_inicio_mes or 0)
     socios_cierre = int(row.socios_activos_del_mes or 0)
@@ -282,6 +283,24 @@ def _build_monthly_row_payload(
     movimiento_reportado = clientes_nuevos + reactivaciones - bajas
     ajuste_no_explicado = crecimiento_real - movimiento_reportado
 
+    # La variación intermensual compara cierres canónicos consecutivos;
+    # el inicio declarado por Gasca es otra base y no debe sustituirlos.
+    cierre_anterior = (
+        int(previous_row.socios_activos_del_mes)
+        if previous_row is not None
+        else None
+    )
+    crecimiento_inter_mensual = (
+        socios_cierre - cierre_anterior
+        if cierre_anterior is not None
+        else None
+    )
+    diferencia_bases = (
+        socios_inicio - cierre_anterior
+        if cierre_anterior is not None
+        else None
+    )
+
     return {
         "branch": _build_branch_payload(
             row=row,
@@ -291,6 +310,9 @@ def _build_monthly_row_payload(
         "metrics": {
             "socios_activos_inicio_mes": socios_inicio,
             "socios_activos_cierre_mes": socios_cierre,
+            "socios_activos_cierre_mes_anterior": cierre_anterior,
+            "crecimiento_inter_mensual": crecimiento_inter_mensual,
+            "diferencia_bases": diferencia_bases,
             "clientes_nuevos": clientes_nuevos,
             "reactivaciones": reactivaciones,
             "bajas": bajas,
@@ -358,10 +380,12 @@ def build_monthly_closing_section(
     if snapshot is None:
         return {
             "key": "monthly_closing",
-            "title": "Cierre mensual de socios",
+            "title": "Crecimiento mensual de socios por sucursal",
             "chart_type": "grouped_bar",
             "status": "empty",
             "target_month": normalized_target_month,
+            "previous_month": (date(year, month, 1) - timedelta(days=1)).strftime("%Y-%m"),
+            "previous_resolved_snapshot": None,
             "rule": {
                 "description": "Último snapshot canónico disponible dentro del mes.",
                 "report_type_key": KPI_DESEMPENO_REPORT_TYPE_KEY,
@@ -399,24 +423,90 @@ def build_monthly_closing_section(
         sucursales_canon=sucursales_canon,
     )
 
+    previous_month_end = date(year, month, 1) - timedelta(days=1)
+    previous_month = previous_month_end.strftime("%Y-%m")
+    previous_snapshot = _resolve_last_canonical_snapshot_for_month(
+        year=previous_month_end.year,
+        month=previous_month_end.month,
+    )
+    previous_by_canon: dict[str, KpiDesempenoSnapshotRowORM] = {}
+
+    if previous_snapshot is None:
+        warnings.append({
+            "code": "missing_previous_month_canonical_snapshot",
+            "message": "No existe cierre canónico del mes anterior para comparar.",
+            "previous_month": previous_month,
+        })
+    else:
+        previous_rows = [
+            row
+            for row in _fetch_snapshot_rows(snapshot_id=previous_snapshot.id)
+            if not _is_out_of_scope_raw_branch(_normalize_raw_branch_name(row.sucursal))
+        ]
+        previous_canon_by_row_id, previous_warnings = _resolve_rows_branch_canon(
+            rows=previous_rows,
+        )
+        warnings.extend(previous_warnings)
+        ambiguous_canons: set[str] = set()
+        for previous_row in previous_rows:
+            previous_canon = previous_canon_by_row_id.get(previous_row.id)
+            if not previous_canon:
+                continue
+            if previous_canon in previous_by_canon:
+                ambiguous_canons.add(previous_canon)
+            else:
+                previous_by_canon[previous_canon] = previous_row
+
+        for ambiguous_canon in sorted(ambiguous_canons):
+            previous_by_canon.pop(ambiguous_canon, None)
+            warnings.append({
+                "code": "ambiguous_previous_month_branch",
+                "message": "Hay más de una fila canónica para la sucursal del mes anterior.",
+                "sucursal_canon": ambiguous_canon,
+                "previous_month": previous_month,
+            })
+
     data = [
         _build_monthly_row_payload(
             row=row,
             snapshot=snapshot,
             sucursal_canon=canon_by_row_id.get(row.id),
             branch_catalog_by_canon=branch_catalog_by_canon,
+            previous_row=previous_by_canon.get(canon_by_row_id.get(row.id)),
         )
         for row in rows
     ]
+
+    if previous_snapshot is not None:
+        for item in data:
+            if (
+                item["branch"]["sucursal_canon"]
+                and item["metrics"]["socios_activos_cierre_mes_anterior"] is None
+            ):
+                warnings.append({
+                    "code": "missing_previous_month_branch",
+                    "message": "La sucursal no tiene cierre comparable del mes anterior.",
+                    "sucursal_canon": item["branch"]["sucursal_canon"],
+                    "previous_month": previous_month,
+                })
 
     sorted_data = _sort_monthly_rows(data)
 
     return {
         "key": "monthly_closing",
-        "title": "Cierre mensual de socios",
+        "title": "Crecimiento mensual de socios por sucursal",
         "chart_type": "grouped_bar",
         "status": "ok",
         "target_month": normalized_target_month,
+        "previous_month": previous_month,
+        "previous_resolved_snapshot": (
+            {
+                "snapshot_id": previous_snapshot.id,
+                "business_date": previous_snapshot.business_date.isoformat(),
+            }
+            if previous_snapshot is not None
+            else None
+        ),
         "rule": {
             "description": "Último snapshot canónico disponible dentro del mes.",
             "report_type_key": KPI_DESEMPENO_REPORT_TYPE_KEY,

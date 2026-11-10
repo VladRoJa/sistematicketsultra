@@ -78,6 +78,9 @@ export interface KpiDesempenoBranch {
 export interface KpiDesempenoMonthlyMetrics {
   socios_activos_inicio_mes: number;
   socios_activos_cierre_mes: number;
+  socios_activos_cierre_mes_anterior: number | null;
+  crecimiento_inter_mensual: number | null;
+  diferencia_bases: number | null;
   clientes_nuevos: number;
   reactivaciones: number;
   bajas: number;
@@ -216,6 +219,8 @@ export interface KpiDesempenoMonthlyBranchYearOverlaySection extends KpiDesempen
 
 export interface KpiDesempenoMonthlySection extends KpiDesempenoBaseSection {
   key: 'monthly_closing';
+  previous_month: string;
+  previous_resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
   resolved_snapshot: KpiDesempenoResolvedSnapshot | null;
   totals: KpiDesempenoMonthlyMetrics | Record<string, never>;
   data: KpiDesempenoMonthlyRow[];

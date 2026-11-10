@@ -514,6 +514,29 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return formattedValue;
   }
 
+  formatOptionalNumber(value: number | null | undefined): string {
+    return value === null || value === undefined ? '—' : this.formatNumber(value);
+  }
+
+  formatOptionalSignedNumber(value: number | null | undefined): string {
+    return value === null || value === undefined ? '—' : this.formatSignedNumber(value);
+  }
+
+  formatMonthYear(value: string | null | undefined): string {
+    const match = /^(\d{4})-(\d{2})$/.exec(value || '');
+    const month = match ? Number(match[2]) : 0;
+
+    if (!match || month < 1 || month > 12) {
+      return 'Sin periodo';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(Number(match[1]), month - 1, 1)));
+  }
+
   formatDate(value: string | null | undefined): string {
     if (!value) {
       return 'Sin fecha';
@@ -542,6 +565,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
     }
 
     return 'neutral';
+  }
+
+  resolveBaseDifferenceClass(value: number | null | undefined): string {
+    return value === null || value === undefined || value === 0
+      ? 'neutral'
+      : 'base-discrepancy';
   }
 
   trackByBranchCanon(
@@ -609,6 +638,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
     this.selectedYearOverlayYear = year;
     this.selectedYearOverlayCompareYear = year;
+    this.ensureDistinctYearOverlayBase();
     this.yearOverlayCharts = this.buildYearOverlayCharts();
   }
 
@@ -627,36 +657,66 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return this.yearOverlayColors[yearIndex % this.yearOverlayColors.length];
   }
 
+  private ensureDistinctYearOverlayBase(): void {
+    const years = this.monthlyBranchYearOverlaySection?.years ?? [];
+    const compareYear = this.selectedYearOverlayCompareYear;
+    if (
+      compareYear === null ||
+      (this.selectedYearOverlayBaseYear !== null &&
+        years.includes(this.selectedYearOverlayBaseYear) &&
+        this.selectedYearOverlayBaseYear !== compareYear)
+    ) {
+      return;
+    }
+
+    const olderYears = years.filter((year) => year < compareYear);
+    this.selectedYearOverlayBaseYear =
+      olderYears[olderYears.length - 1] ??
+      years.find((year) => year !== compareYear) ??
+      null;
+  }
+
   private syncSelectedYearOverlayYear(): void {
     const section = this.monthlyBranchYearOverlaySection;
 
     if (!section?.years?.length) {
       this.selectedYearOverlayYear = null;
+      this.selectedYearOverlayBaseYear = null;
+      this.selectedYearOverlayCompareYear = null;
       return;
     }
 
     if (
-      this.selectedYearOverlayYear &&
-      section.years.includes(this.selectedYearOverlayYear)
+      this.selectedYearOverlayYear === null ||
+      !section.years.includes(this.selectedYearOverlayYear)
     ) {
-      return;
+      this.selectedYearOverlayYear = section.end_year;
     }
 
-    this.selectedYearOverlayYear = section.end_year;
-    this.selectedYearOverlayCompareYear = section.end_year;
-
-    if (!this.selectedYearOverlayBaseYear || !section.years.includes(this.selectedYearOverlayBaseYear)) {
-      this.selectedYearOverlayBaseYear = section.end_year;
+    if (
+      this.selectedYearOverlayCompareYear === null ||
+      !section.years.includes(this.selectedYearOverlayCompareYear)
+    ) {
+      this.selectedYearOverlayCompareYear = this.selectedYearOverlayYear;
     }
+
+    this.ensureDistinctYearOverlayBase();
   }
 
   get selectedYearOverlayComparison(): KpiYearOverlayComparisonModel | null {
     const chart = this.selectedYearOverlayChart;
+    const section = this.monthlyBranchYearOverlaySection;
 
-    if (!chart || !this.selectedYearOverlayBaseYear || !this.selectedYearOverlayCompareYear) {
+    if (
+      !chart || !section ||
+      this.selectedYearOverlayBaseYear === null ||
+      this.selectedYearOverlayCompareYear === null ||
+      this.selectedYearOverlayBaseYear === this.selectedYearOverlayCompareYear
+    ) {
       return null;
     }
 
+    const monthNumber = Number(section.end_month.slice(5, 7));
     const baseSerie = chart.series.find(
       (serie) => serie.year === this.selectedYearOverlayBaseYear,
     );
@@ -664,8 +724,9 @@ export class TrackKpiDesempenoComponent implements OnInit {
       (serie) => serie.year === this.selectedYearOverlayCompareYear,
     );
 
-    const basePoint = this.getLatestYearOverlayPoint(baseSerie);
-    const comparePoint = this.getLatestYearOverlayPoint(compareSerie);
+    // Comparar siempre el mismo mes, nunca diciembre vs octubre.
+    const basePoint = baseSerie?.points.find((point) => point.month === monthNumber);
+    const comparePoint = compareSerie?.points.find((point) => point.month === monthNumber);
 
     if (!basePoint || !comparePoint) {
       return null;
@@ -693,7 +754,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
   selectYearOverlayBaseYear(year: number): void {
     const section = this.monthlyBranchYearOverlaySection;
 
-    if (!section?.years?.includes(year)) {
+    if (!section?.years?.includes(year) || year === this.selectedYearOverlayCompareYear) {
       return;
     }
 
@@ -710,6 +771,7 @@ export class TrackKpiDesempenoComponent implements OnInit {
 
     this.selectedYearOverlayCompareYear = year;
     this.selectedYearOverlayYear = year;
+    this.ensureDistinctYearOverlayBase();
     this.yearOverlayCharts = this.buildYearOverlayCharts();
   }
 
@@ -740,18 +802,6 @@ export class TrackKpiDesempenoComponent implements OnInit {
     }
 
     return 'year-overlay-line shadow';
-  }
-
-  private getLatestYearOverlayPoint(
-    serie: KpiYearOverlaySeriesModel | undefined,
-  ): KpiYearOverlayPoint | null {
-    if (!serie?.points?.length) {
-      return null;
-    }
-
-    return serie.points.reduce((latest, point) =>
-      point.month > latest.month ? point : latest,
-    );
   }
 
   get selectedYearOverlayChart(): KpiYearOverlayChartModel | null {
