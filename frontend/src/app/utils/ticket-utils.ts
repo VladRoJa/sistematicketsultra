@@ -76,6 +76,19 @@ export function obtenerResponsableVisible(ticket: Pick<Ticket, 'departamento_id'
   return Number(ticket.departamento_id) === 1 ? 'Sin asignar' : '—';
 }
 
+/** Branch filters use actual BI Vlad scope, not the corporate destination. */
+export function nombresSucursalesDeTicket(ticket: {
+  sucursales_alcance?: { sucursal_id: number; sucursal: string }[] | null;
+  sucursal?: string | null;
+}): string[] {
+  const seleccionadas = (ticket.sucursales_alcance || [])
+    .map(s => String(s.sucursal || '').trim())
+    .filter(Boolean);
+  if (seleccionadas.length) return [...new Set(seleccionadas)];
+  return [String(ticket.sucursal || '—')];
+}
+
+
 export function filtrarTicketsConFiltros(
   tickets: any[],
   filtros: FiltrosEntrada | Record<string, any>
@@ -102,6 +115,11 @@ export function filtrarTicketsConFiltros(
 return tickets.filter(t => {
   for (const [col, valores] of Object.entries(filtrosSet)) {
     if (!valores || valores.size === 0) continue;
+
+    if (col === 'sucursal') {
+      if (!nombresSucursalesDeTicket(t).some(nombre => valores.has(nombre))) return false;
+      continue;
+    }
 
     let valorTicket = '';
 
@@ -169,7 +187,9 @@ export function regenerarFiltrosFiltradosDesdeTickets(
     } else if (campo === 'departamento') {
       valoresExistentes = new Set(filteredTickets.map(t => t.departamento_id ?? '—'));
     } else if (campo === 'sucursal') {
-      valoresExistentes = new Set(filteredTickets.map(t => (t as any).sucursal ?? '—'));
+      valoresExistentes = new Set(
+        filteredTickets.flatMap(t => nombresSucursalesDeTicket(t as any))
+      );
     } else if (campo === 'detalle') {
       valoresExistentes = new Set(
         filteredTickets.map(t =>
