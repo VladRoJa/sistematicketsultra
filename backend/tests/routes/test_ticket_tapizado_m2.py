@@ -120,6 +120,7 @@ class EndpointTapizadoM2Test(unittest.TestCase):
             patch.object(ticket_routes.db, "session"),
             patch.object(tapizado, "flag_modified"),
             patch.object(ticket_routes, "pick_recipients", return_value=[]),
+            patch.object(ticket_routes, "_resolve_bi_vlad_assignment", return_value=(None, None)),
         ]
         self.started = [p.start() for p in self.patches]
         self.catalogo = self.started[3]
