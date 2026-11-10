@@ -395,6 +395,7 @@
                   type="button"
                   [class.current]="isYearOverlayBaseYearSelected(year)"
                   [style.--year-color]="getYearOverlayColor(year)"
+                  [disabled]="year === selectedYearOverlayCompareYear"
                   (click)="selectYearOverlayBaseYear(year); $event.stopPropagation()"
                 >
                   {{ year }}
@@ -422,7 +423,7 @@
             *ngIf="selectedYearOverlayComparison as comparison; else noYearOverlayComparison"
             class="year-overlay-comparison-summary"
           >
-            <span>Último dato disponible</span>
+            <span>Comparación del mismo mes entre años</span>
             <strong
               [class.positive]="comparison.diffValue > 0"
               [class.negative]="comparison.diffValue < 0"
@@ -444,7 +445,7 @@
               <span>Sin comparación</span>
               <strong>N/A</strong>
               <small>
-                El año base o comparado no tiene dato disponible para esta sucursal.
+                Sin cierres canónicos comparables del mismo mes en ambos años.
               </small>
             </div>
           </ng-template>
@@ -624,7 +625,17 @@
       <div class="section-heading">
         <div>
           <h2>{{ monthlySection.title }}</h2>
-          <p>Cierre mensual por sucursal con inicio, cierre, nuevos, reactivaciones y bajas.</p>
+          <p>
+            <strong>Periodo: {{ formatMonthYear(monthlySection.target_month) }}</strong>
+            · Corte actual: {{ formatDate(monthlySection.resolved_snapshot?.business_date) }}
+            · Cierre anterior: {{ formatDate(monthlySection.previous_resolved_snapshot?.business_date) }}
+            ({{ formatMonthYear(monthlySection.previous_month) }})
+          </p>
+          <p>
+            Crecimiento mensual = cierre actual menos cierre del mes anterior.
+            Inicio Gasca y variación contra ese inicio se conservan para conciliación;
+            una diferencia de bases no cambia el crecimiento entre cierres.
+          </p>
         </div>
       </div>
 
@@ -633,34 +644,38 @@
           <thead>
             <tr>
               <th>Sucursal</th>
-              <th>Inicio</th>
-              <th>Cierre</th>
+              <th title="Socios del último cierre canónico del mes anterior">Cierre anterior</th>
+              <th title="Socios al inicio del mes declarados en el reporte KPI de Gasca">Inicio Gasca</th>
+              <th title="Socios del último cierre canónico del mes consultado">Cierre actual</th>
               <th>Nuevos</th>
               <th>Reactiv.</th>
               <th>Bajas</th>
-              <th>Crec. real</th>
-              <th>Ajuste</th>
+              <th title="Cierre actual menos cierre canónico anterior">Crec. mensual</th>
+              <th title="Cierre actual menos inicio declarado por Gasca">Var. vs inicio Gasca</th>
+              <th title="Inicio declarado por Gasca menos cierre canónico anterior">Dif. bases</th>
+              <th title="Diferencia no explicada por nuevos, reactivaciones y bajas dentro del reporte Gasca">Ajuste movimientos</th>
             </tr>
           </thead>
 
           <tbody>
-            <tr
-              *ngFor="let row of monthlyRows; trackBy: trackByBranchCanon"
-            >
+            <tr *ngFor="let row of monthlyRows; trackBy: trackByBranchCanon">
               <td>{{ row.branch.track_label }}</td>
+              <td>{{ formatOptionalNumber(row.metrics.socios_activos_cierre_mes_anterior) }}</td>
               <td>{{ formatNumber(row.metrics.socios_activos_inicio_mes) }}</td>
               <td>{{ formatNumber(row.metrics.socios_activos_cierre_mes) }}</td>
               <td>{{ formatNumber(row.metrics.clientes_nuevos) }}</td>
               <td>{{ formatNumber(row.metrics.reactivaciones) }}</td>
               <td>{{ formatNumber(row.metrics.bajas) }}</td>
-              <td
-                [class]="resolveMovementClass(row.metrics.crecimiento_real)"
-              >
+              <td [class]="resolveMovementClass(row.metrics.crecimiento_inter_mensual)">
+                {{ formatOptionalSignedNumber(row.metrics.crecimiento_inter_mensual) }}
+              </td>
+              <td [class]="resolveMovementClass(row.metrics.crecimiento_real)">
                 {{ formatSignedNumber(row.metrics.crecimiento_real) }}
               </td>
-              <td
-                [class]="resolveMovementClass(row.metrics.ajuste_no_explicado)"
-              >
+              <td [class]="resolveMovementClass(row.metrics.diferencia_bases)">
+                {{ formatOptionalSignedNumber(row.metrics.diferencia_bases) }}
+              </td>
+              <td [class]="resolveMovementClass(row.metrics.ajuste_no_explicado)">
                 {{ formatSignedNumber(row.metrics.ajuste_no_explicado) }}
               </td>
             </tr>
