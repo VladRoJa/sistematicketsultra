@@ -33,7 +33,7 @@ def _fake_route_deps(*, department=None, classification=None, admin=None):
     dep = stack.enter_context(patch.object(ticket_routes, "Departamento"))
     cat = stack.enter_context(patch.object(ticket_routes, "CatalogoClasificacion"))
     branch_catalog = stack.enter_context(patch.object(ticket_routes, "Sucursal"))
-    branch_catalog.query.filter.return_value.count.return_value = 1
+    branch_catalog.query.filter.return_value.filter.return_value.count.return_value = 1
     admin_lookup = stack.enter_context(
         patch.object(ticket_routes.UserORM, "get_by_username")
     )
