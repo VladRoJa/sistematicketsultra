@@ -71,6 +71,14 @@ class TicketCreateAttachmentIntegrationTest(unittest.TestCase):
         )
         self.db_patch.start()
 
+        # Attachment transaction tests use an Edificio classification fixture.
+        # Avoid querying the real Maintenance catalog without an initialized DB.
+        self.classification_patch = patch.object(
+            ticket_routes, "_es_clasificacion_mantenimiento_aparatos",
+            return_value=False,
+        )
+        self.classification_patch.start()
+
         self.bi_vlad_patch = patch.object(
             ticket_routes, "_resolve_bi_vlad_assignment", return_value=(None, None)
         )
@@ -87,6 +95,7 @@ class TicketCreateAttachmentIntegrationTest(unittest.TestCase):
     def tearDown(self):
         self.env_patch.stop()
         self.bi_vlad_patch.stop()
+        self.classification_patch.stop()
         self.db_patch.stop()
         self.attachment_patch.stop()
         self.ticket_create_patch.stop()
