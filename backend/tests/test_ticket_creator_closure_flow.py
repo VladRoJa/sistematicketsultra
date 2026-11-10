@@ -141,6 +141,10 @@ class TicketCreatorClosureFlowTest(unittest.TestCase):
                 return_value=[],
             ),
             patch(
+                "app.routes.ticket_routes._resolve_bi_vlad_assignment",
+                return_value=(None, None),
+            ),
+            patch(
                 "app.routes.ticket_routes._notificar_evento_ticket",
                 return_value=[],
             ),
