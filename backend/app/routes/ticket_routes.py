@@ -1630,6 +1630,10 @@ def update_ticket_status(id):
         )
         if not ticket_en_scope:
             return jsonify({"mensaje": "No autorizado para actualizar este ticket"}), 403
+        # Leer un ticket dentro del alcance regional NO autoriza operarlo.
+        # El creador conserva conformidad en sus endpoints específicos.
+        if _es_gerente_regional(actor):
+            return jsonify({"mensaje": "Gerencia regional no puede cambiar el estado ni los datos operativos del ticket."}), 403
         if not _puede_gestionar_bi_vlad(actor, ticket):
             return jsonify({"mensaje": "Solo el responsable puede gestionar este ticket de BI Vlad."}), 403
 
@@ -3061,6 +3065,8 @@ def notify_ticket(ticket_id):
 @jwt_required()
 def set_compromiso(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if user and _es_gerente_regional(user):
+        return jsonify({"mensaje": "Gerencia regional no puede modificar compromisos operativos."}), 403
     # Este endpoint modifica datos de compromiso/refacción, nunca el estado.
     # El guard de roles/objeto y las restricciones PM siguen después.
     if user and tickets_update_grants_enabled() and _ticket_action_grant_denied(
@@ -3248,6 +3254,8 @@ def cierre_solicitar(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
     if not user:
         return jsonify({"mensaje": "Usuario no encontrado"}), 401
+    if _es_gerente_regional(user):
+        return jsonify({"mensaje": "Gerencia regional no puede solicitar el cierre operativo de tickets."}), 403
     if _ticket_close_grant_denied(user):
         return jsonify({"mensaje": "No autorizado para solicitar cierre de tickets."}), 403
 
@@ -3380,6 +3388,8 @@ def cierre_solicitar(ticket_id):
 @jwt_required()
 def cierre_rechazar_jefe(ticket_id):
     user = UserORM.get_by_id(get_jwt_identity())
+    if user and _es_gerente_regional(user):
+        return jsonify({"mensaje": "Gerencia regional no puede rechazar el cierre como responsable operativo."}), 403
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
