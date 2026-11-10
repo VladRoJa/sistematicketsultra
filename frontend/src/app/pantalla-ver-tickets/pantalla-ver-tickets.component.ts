@@ -47,7 +47,7 @@ import { mostrarAlertaToast,solicitarMotivoRechazoCierre } from '../utils/alerta
 import { SucursalesService } from '../services/sucursales.service';
 import { EvidenciaPreviewComponent } from './modals/evidencia-preview.component';
 import { ModalCierreTicketComponent } from '../shared/modal-cierre-ticket/modal-cierre-ticket.component';
-import { buscarAncestroNivel, filtrarTicketsConFiltros, obtenerResponsableVisible } from '../utils/ticket-utils';
+import { buscarAncestroNivel, filtrarTicketsConFiltros, obtenerResponsableVisible, nombresSucursalesDeTicket } from '../utils/ticket-utils';
 import { MatSelectModule } from '@angular/material/select';
 import { AuthService } from '../services/auth.service';
 import {
@@ -147,6 +147,7 @@ export interface Ticket {
   url_evidencia?: string | null;
   has_attachment?: boolean;
   asignado_a?: string | null;
+  sucursales_alcance?: { sucursal_id: number; sucursal: string }[];
   tipo_atencion?: 'INTERNA' | 'EXTERNA' | 'AUTOGESTION' | null;
   refaccion_definida_por_jefe?: boolean;
   estado_cierre?:
@@ -1365,6 +1366,10 @@ private prepararOpcionesFiltro(columna: string, path: string): void {
 
   // 1) Recolector genérico: usa todos los filtros activos EXCEPTO la columna actual.
   (baseOpciones || []).forEach((t: any) => {
+    if (columna === 'sucursal') {
+      nombresSucursalesDeTicket(t).forEach(nombre => setGen.add(nombre));
+      return;
+    }
     let valor: any = t;
     if (columna === 'responsable') {
       valor = obtenerResponsableVisible(t);
