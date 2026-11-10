@@ -371,7 +371,8 @@ class Ticket(db.Model):
                     aprobacion_fecha=None,
                     aprobacion_comentario: str | None = None,
                     commit: bool = True,
-                    tipo_trabajo: str | None = None):
+                    tipo_trabajo: str | None = None,
+                    asignado_a: str | None = None):
         # Sanitizar: si llega un número como texto, lo consideramos vacío (derivaremos la ruta)
         def _clean_text(v):
             if v is None:
@@ -386,6 +387,7 @@ class Ticket(db.Model):
         ticket = cls(
             descripcion=descripcion,
             username=username,
+            asignado_a=asignado_a,
             sucursal_id=sucursal_id,
             sucursal_id_destino=sucursal_id_destino,
             departamento_id=departamento_id,
