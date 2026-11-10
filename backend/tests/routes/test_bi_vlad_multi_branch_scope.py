@@ -34,7 +34,7 @@ def test_valid_multiple_branches_regional_scope():
                 42, [4, 5, 21], _user("GERENTE_REGIONAL", 100)
             )
             assert error is None and branches == [4, 5, 21]
-            suc.query.filter.return_value.count.assert_called_once()
+            suc.query.filter.return_value.filter.return_value.count.assert_called_once()
 
 
 def test_regional_cannot_use_first_valid_branch_to_smuggle_other_branches():
