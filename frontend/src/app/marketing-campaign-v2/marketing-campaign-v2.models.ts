@@ -1554,6 +1554,10 @@ export interface CampaignV2TemplateProbeRow {
   recorded_acceptance: string;
   evidence_current: boolean;
   evidence_expires_at: string | null;
+  certification_source?: 'QA_MANUAL' | 'COMMERCIAL_DELIVERY' | null;
+  certification_campaign_id?: number | null;
+  certification_snapshot_id?: number | null;
+  certification_observed_at?: string | null;
   stale: boolean;
   child_id: number | null;
   provider_campaign_id: string | null;
