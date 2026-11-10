@@ -109,7 +109,7 @@ def test_regional_available_branches_are_not_all_physical_branches():
     ), patch.object(
         ticket_routes, "get_user_assigned_branch_ids", return_value=(4, 5)
     ), patch.object(ticket_routes, "Sucursal") as suc:
-        suc.query.filter.return_value.order_by.return_value.all.return_value = [
+        suc.query.filter.return_value.filter.return_value.order_by.return_value.all.return_value = [
             SimpleNamespace(sucursal_id=4, sucursal="Villas del Rey"),
             SimpleNamespace(sucursal_id=5, sucursal="Villa Verde"),
         ]
