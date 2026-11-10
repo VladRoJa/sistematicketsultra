@@ -18,6 +18,7 @@ on:
       - "frontend/src/app/utils/ticket-utils.ts"
       - "frontend/src/app/services/ticket.service.ts"
       - "frontend/tests/tickets-bi-vlad-multibranch.test.cjs"
+      - "frontend/tests/tickets-bi-vlad-closure-guard.test.cjs"
       - ".github/workflows/tickets-bi-vlad-multibranch-ci.yml"
   workflow_dispatch:
 
@@ -59,6 +60,7 @@ jobs:
             tests/migrations/test_bi_vlad_multi_branch_migration.py \
             tests/routes/test_bi_vlad_multi_branch_scope.py \
             tests/routes/test_bi_vlad_ticket_assignment.py \
+            tests/routes/test_bi_vlad_close_assignee_guard.py \
             tests/models/test_ticket_create_transaction_mode.py \
             tests/routes/test_ticket_create_attachment_integration.py \
             tests/routes/test_ticket_tapizado_m2.py \
@@ -83,6 +85,7 @@ jobs:
       - name: BI Vlad scope and existing Tickets filters
         run: |
           node --test tests/tickets-bi-vlad-multibranch.test.cjs
+          node --test tests/tickets-bi-vlad-closure-guard.test.cjs
           node scripts/verify-tickets-responsable-filter.cjs
           node --test tests/tickets-tapizado-m3.test.cjs
       - name: Typecheck Angular templates
