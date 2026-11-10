@@ -470,9 +470,13 @@ def template_probe_matrix(*, campaign_id, template_id, session=None):
             error_code=(child.error_code if child else
                         rejection.error_code if rejection and status == "RECHAZADA" else None),
             attempted_at=(commercial_proof["submitted_at"] if commercial_proof else
-                          child.submit_started_at.isoformat() if child and child.submit_started_at else None),
+                          child.submit_started_at.isoformat() if child and child.submit_started_at else
+                          rejection.submit_started_at.isoformat()
+                          if rejection and status == "RECHAZADA" and rejection.submit_started_at else None),
             actor_user_id=(commercial_proof["actor_user_id"] if commercial_proof else
-                           child.submitted_by_user_id if child else None),
+                           child.submitted_by_user_id if child else
+                           rejection.submitted_by_user_id
+                           if rejection and status == "RECHAZADA" else None),
             authorized_by_user_id=spec.get("authorized_by_user_id") if isinstance(spec, dict) else None,
             recipient_phone_masked="******" + spec["phone_mx10"][-4:]
                 if isinstance(spec, dict) and isinstance(spec.get("phone_mx10"), str) else None,
