@@ -223,6 +223,11 @@ export class CrearTicketRefactorComponent implements OnInit, OnDestroy {
     const sucursal = this.form.get('sucursal_id');
     if (this.esBiVladSeleccionado) {
       sucursal?.clearValidators();
+      if (this.sucursalesBiVladCargadas &&
+          this.sucursalesBiVladDisponibles.length === 1 &&
+          !this.sucursalesBiVladSeleccionadas.length) {
+        this.sucursalesBiVladSeleccionadas = [this.sucursalesBiVladDisponibles[0].sucursal_id];
+      }
       this.cargarSucursalesBiVlad();
     } else {
       this.sucursalesBiVladSeleccionadas = [];
