@@ -620,7 +620,7 @@
 
     <section
       *ngIf="monthlySection"
-      class="content-card"
+      class="content-card monthly-closing-card"
     >
       <div class="section-heading">
         <div>
@@ -672,7 +672,7 @@
               <td [class]="resolveMovementClass(row.metrics.crecimiento_real)">
                 {{ formatSignedNumber(row.metrics.crecimiento_real) }}
               </td>
-              <td [class]="resolveMovementClass(row.metrics.diferencia_bases)">
+              <td [class]="resolveBaseDifferenceClass(row.metrics.diferencia_bases)">
                 {{ formatOptionalSignedNumber(row.metrics.diferencia_bases) }}
               </td>
               <td [class]="resolveMovementClass(row.metrics.ajuste_no_explicado)">
