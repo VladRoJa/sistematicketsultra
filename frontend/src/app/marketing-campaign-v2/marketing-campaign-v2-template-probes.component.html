@@ -73,6 +73,9 @@
         </tr></tbody>
       </table>
     </div>
+    <app-campaign-template-qa-bulk
+      [rows]="state.rows" [templateId]="templateId" [disabled]="busy || disabled"
+      (finished)="refresh()"></app-campaign-template-qa-bulk>
     <p>La matriz aprovecha entregas/lecturas comerciales confirmadas y QA existentes, sin enviar mensajes adicionales.
       Un lote SUBMITTED sin una observación de entrega vinculada sigue pendiente.
       ACEPTADA POR IVENTAS no significa entregada. Actualiza la matriz después de revisar cada QA.

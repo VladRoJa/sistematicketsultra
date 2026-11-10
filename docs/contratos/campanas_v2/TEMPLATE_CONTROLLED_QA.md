@@ -250,3 +250,44 @@ en `marketing_campaign_v2_provider_campaigns`,
   aprobación, revisión de cuota/costo, confirmación y guards existentes.
 - Uso focal: para VILLA_VERDE y SEND_CUL marcar solo sus dos filas;
   VILLAS_DEL_REY es otra sucursal distinta y no se incluye.
+
+
+## Operación agrupada de QA desde el catálogo
+
+Tras preparar las QA por canal, el operador puede seleccionar dos o más
+cohortes QA_MANUAL existentes y pulsar **Revisar QA juntas (no envía)**.
+Cada QA se revisa con los mismos endpoints ya gobernados de preflight,
+presupuesto automático USD, cuotas, aprobación y monitor. La operación
+agrupada no crea una nueva campaña iVentas: el contrato externo conserva
+una campaña y un canal emisor por solicitud.
+
+La revisión exige que cada QA tenga exactamente un destinatario y un lote,
+misma plantilla vigente, emisor exacto, sin provider child, sin aprobación
+anterior, cuota REVIEWABLE y presupuesto completo. Se muestran los
+destinatarios enmascarados y el máximo USD conjunto. No se leen ni copian
+contactos comerciales.
+
+La acción **Autorizar y enviar N QA** requiere checkbox, frase literal y
+contraseña de Suite Ultra. Antes de cualquier escritura se vuelven a leer
+todos los preflights y se comparan las huellas de plantilla/dispatch/costo.
+Posteriormente se invocan en orden los endpoints existentes para reservar
+capacidad, materializar y autorizar cada campaña QA. **Ningún proveedor se
+invoca hasta que todas las campañas hayan sido autorizadas.** Cada POST
+de envío usa los mismos controles de contraseña, permisos, vigencia,
+cuotas, estado, aprobación, manifiesto y bloqueo de reintentos.
+
+La agrupación es una **experiencia operativa unificada**, no una
+transacción SQL global ni un trabajo en segundo plano. Si el navegador
+se interrumpe, si vence una reserva o si falla una aprobación parcial, el
+operador revisa el estado de cada QA antes de continuar. No hay reintentos
+automáticos ni reanudaciones ocultas. Si una respuesta del proveedor
+declara definitively_not_accepted=true y TEMPLATE_NOT_FOUND para el
+child exacto, la operación registra ese rechazo y puede seguir con el
+siguiente canal. Cualquier timeout, resultado ambiguo o discrepancia
+de manifiesto detiene todos los envíos posteriores. Los resultados
+persisten en los registros individuales existentes. La entrega confirmada
+se consulta después: SUBMITTED no es DELIVERED.
+
+Esta ampliación reutiliza QA ya preparadas (por ejemplo #45/#46) sin
+congelarlas otra vez. No añade tablas ni migraciones, no modifica
+permisos ni enciende flags productivos. No autoriza envíos por sí sola.

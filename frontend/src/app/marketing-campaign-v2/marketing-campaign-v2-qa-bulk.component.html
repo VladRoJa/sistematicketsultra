@@ -1,0 +1,54 @@
+<section class="qa-bulk" *ngIf="candidates.length || reviewed.length">
+  <h4>Operación QA agrupada · una sola revisión</h4>
+  <p>Las QA ya preparadas se reutilizan. Marca los canales de esta operación;
+    Suite Ultra enviará un mensaje por emisor mediante autorizaciones individuales auditadas.</p>
+  <div class="choices">
+    <mat-checkbox *ngFor="let row of candidates"
+      [checked]="row.qa_campaign_id !== null && selected.has(row.qa_campaign_id)"
+      [disabled]="busy || disabled || reviewed.length > 0"
+      (change)="toggle(row, $event.checked)">
+      {{ row.sender }} · QA #{{ row.qa_campaign_id }} · {{ row.recipient_phone_masked }}
+    </mat-checkbox>
+  </div>
+  <button mat-stroked-button type="button" (click)="reviewAll()" [disabled]="!canReview">
+    Revisar {{ selected.size }} QA juntas (no envía)
+  </button>
+  <section class="review" *ngIf="reviewed.length">
+    <h5>Revisión conjunta · {{ reviewed.length }} mensajes</h5>
+    <p>Máximo estimado por entrega de todos: <strong>US$ {{ maximumUsd }}</strong>.
+      No es un cobro confirmado. Se comprobarán nuevamente cuota y autorización antes de cada envío.</p>
+    <table>
+      <thead><tr><th>Emisor</th><th>QA</th><th>Destinatario</th><th>Costo máximo USD</th></tr></thead>
+      <tbody><tr *ngFor="let item of reviewed">
+        <td>{{ item.sender }}</td><td>#{{ item.campaignId }}</td>
+        <td>{{ item.recipientMasked }}</td><td>{{ item.maximumUsd }}</td>
+      </tr></tbody>
+    </table>
+    <mat-checkbox [formControl]="confirmed" [disabled]="busy">
+      Revisé los {{ reviewed.length }} canales, sus destinatarios QA, presupuesto, plantilla y límites.
+      Autorizo los envíos reales de esta operación.
+    </mat-checkbox>
+    <div class="confirmation">
+      <mat-form-field><mat-label>Escribe {{ sendWord }}</mat-label>
+        <input matInput [formControl]="phrase" [readonly]="busy" autocomplete="off">
+      </mat-form-field>
+      <mat-form-field><mat-label>Contraseña de Suite Ultra</mat-label>
+        <input matInput type="password" [formControl]="password" [readonly]="busy"
+          maxlength="256" autocomplete="current-password">
+      </mat-form-field>
+      <button mat-flat-button color="warn" type="button" (click)="sendAll()" [disabled]="!canSend">
+        Autorizar y enviar {{ reviewed.length }} QA
+      </button>
+    </div>
+    <p>La aprobación es por cada campaña QA y vence. Si falla una preparación o el resultado es incierto,
+      no habrá reintentos: consulta la auditoría antes de volver a operar.</p>
+  </section>
+  <p *ngIf="busy" role="status">{{ stage }}</p>
+  <p class="error" *ngIf="error" role="alert">{{ error }}</p>
+  <p *ngIf="notice" role="status">{{ notice }}</p>
+  <div *ngIf="results | keyvalue as outcomes">
+    <p *ngFor="let item of outcomes">
+      QA #{{ item.key }} · {{ item.value }}
+    </p>
+  </div>
+</section>
