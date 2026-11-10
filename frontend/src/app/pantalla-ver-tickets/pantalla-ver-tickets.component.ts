@@ -2689,6 +2689,10 @@ async solicitarCierre(ticket: Ticket) {
     mostrarAlertaToast('Ticket inválido.', 'error');
     return;
   }
+  if (!this.puedeGestionarBiVlad(ticket)) {
+    mostrarAlertaToast('Solo el responsable puede solicitar cierre de BI Vlad.', 'error');
+    return;
+  }
   if (!this.tapizadoListoParaCierre(ticket)) {
     mostrarAlertaToast(this.mensajeTapizadoPendiente(ticket), 'error');
     return;
@@ -2729,6 +2733,18 @@ async solicitarCierre(ticket: Ticket) {
 }
 
 
+private esTicketBiVlad(ticket: Ticket): boolean {
+  return [ticket?.departamento, ticket?.departamento_nombre]
+    .some(name => String(name || '').trim().toLowerCase() === 'bi vlad');
+}
+
+private puedeGestionarBiVlad(ticket: Ticket): boolean {
+  if (!this.esTicketBiVlad(ticket)) return true;
+  const responsable = String(ticket?.asignado_a || '').trim().toUpperCase();
+  const usuario = String(this.user?.username || '').trim().toUpperCase();
+  return !!responsable && responsable === usuario;
+}
+
 private esAdminParaCierreDesdeCero(): boolean {
   const rol = (this.user?.rol || '').toString().trim().toUpperCase();
   return ['ADMIN', 'ADMINISTRADOR', 'SUPER_ADMIN'].includes(rol);
@@ -2751,7 +2767,7 @@ private ticketPerteneceASucursalDelGerente(ticket: Ticket): boolean {
 }
 
 puedeMostrarBotonCerrarDesdeCero(ticket: Ticket): boolean {
-  if (!ticket?.id || !this.tapizadoListoParaCierre(ticket)) return false;
+  if (!ticket?.id || !this.tapizadoListoParaCierre(ticket) || !this.puedeGestionarBiVlad(ticket)) return false;
 
   const estado = (ticket.estado || '').toString().trim().toLowerCase();
 
@@ -2906,7 +2922,7 @@ esPendienteCierreCreador(ticket: Ticket): boolean {
 
 puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  if (estado !== 'abierto') return false;
+  if (estado !== 'abierto' || !this.puedeGestionarBiVlad(ticket)) return false;
 
   if (this.puedeCoordinarTicket(ticket)) return true;
 
@@ -2918,7 +2934,7 @@ puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
 
 puedeMostrarEditarFechaSolucion(ticket: Ticket): boolean {
   const estado = String(ticket?.estado || '').trim().toLowerCase();
-  if (estado !== 'en progreso') return false;
+  if (estado !== 'en progreso' || !this.puedeGestionarBiVlad(ticket)) return false;
   if (this.puedeCoordinarTicket(ticket)) return true;
   const scopedRole = ['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
     this.getUserMaintenanceRole(),
@@ -3077,7 +3093,8 @@ puedeMostrarAvisoTapizadoPendiente(ticket: Ticket): boolean {
 
 puedeMostrarBotonFinalizar(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  return this.tapizadoListoParaCierre(ticket) &&
+  return this.puedeGestionarBiVlad(ticket) &&
+         this.tapizadoListoParaCierre(ticket) &&
          this.puedeEditarTickets &&
          !this.esTicketMantenimiento(ticket) &&
          estado === 'en progreso' &&
