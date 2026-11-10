@@ -38,31 +38,9 @@
           <span class="crear-ticket-section__number">1</span>
           <div>
             <h2>Datos principales</h2>
-            <p>Selecciona la sucursal y clasifica el tipo de solicitud.</p>
+            <p>Selecciona el departamento y después las sucursales que correspondan.</p>
           </div>
         </div>
-
-        <!-- Selector de sucursal para admin -->
-        <mat-form-field
-          *ngIf="esAdmin()"
-          appearance="fill"
-          floatLabel="always"
-          class="w-full"
-        >
-          <mat-label>Sucursal destino</mat-label>
-          <mat-select
-            formControlName="sucursal_id"
-            placeholder="Selecciona una sucursal"
-            required
-          >
-            <mat-option
-              *ngFor="let s of listaSucursales"
-              [value]="s.sucursal_id"
-            >
-              {{ s.sucursal }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
 
         <!-- Campos dinámicos (n1..n5) -->
         <div class="crear-ticket-grid">
@@ -105,6 +83,55 @@
                 Selecciona {{ nivel.etiqueta.toLowerCase() }}
               </mat-error>
             </mat-form-field>
+
+            <!-- El departamento siempre se elige primero. -->
+            <ng-container *ngIf="nivel.nivel === 1">
+              <mat-form-field
+                *ngIf="esAdmin() && !esBiVladSeleccionado"
+                appearance="fill"
+                floatLabel="always"
+                class="w-full"
+              >
+                <mat-label>Sucursal destino</mat-label>
+                <mat-select formControlName="sucursal_id" placeholder="Selecciona una sucursal" required>
+                  <mat-option *ngFor="let s of listaSucursales" [value]="s.sucursal_id">
+                    {{ s.sucursal }}
+                  </mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <div *ngIf="esBiVladSeleccionado" class="crear-ticket-bi-sucursales">
+                <div class="crear-ticket-bi-sucursales__titulo">
+                  <strong>Sucursales involucradas*</strong>
+                  <span>{{ sucursalesBiVladSeleccionadas.length }} seleccionadas · Un solo ticket</span>
+                </div>
+                <p *ngIf="cargandoSucursalesBiVlad">Cargando sucursales autorizadas...</p>
+                <p *ngIf="!cargandoSucursalesBiVlad && !sucursalesBiVladDisponibles.length">
+                  No hay sucursales disponibles. Revisa tus asignaciones.
+                </p>
+                <ng-container *ngIf="!cargandoSucursalesBiVlad && sucursalesBiVladDisponibles.length === 1">
+                  <p class="crear-ticket-bi-sucursales__unica">
+                    {{ sucursalesBiVladDisponibles[0].sucursal }} · Seleccionada automáticamente
+                  </p>
+                </ng-container>
+                <ng-container *ngIf="!cargandoSucursalesBiVlad && sucursalesBiVladDisponibles.length > 1">
+                  <mat-checkbox
+                    [checked]="todasSucursalesBiVladSeleccionadas"
+                    (change)="seleccionarTodasSucursalesBiVlad($event.checked)"
+                  >Todas mis sucursales</mat-checkbox>
+                  <div class="crear-ticket-bi-sucursales__opciones">
+                    <mat-checkbox
+                      *ngFor="let s of sucursalesBiVladDisponibles"
+                      [checked]="sucursalesBiVladSeleccionadas.includes(s.sucursal_id)"
+                      (change)="alternarSucursalBiVlad(s.sucursal_id, $event.checked)"
+                    >{{ s.sucursal }}</mat-checkbox>
+                  </div>
+                </ng-container>
+                <p class="crear-ticket-bi-sucursales__ayuda">
+                  Las sucursales describen el alcance de la solicitud. Se asignará a ADMICORP.
+                </p>
+              </div>
+            </ng-container>
           </ng-container>
         </div>
       </section>
