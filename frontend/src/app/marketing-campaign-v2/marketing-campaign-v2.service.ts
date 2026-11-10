@@ -99,6 +99,7 @@ export class MarketingCampaignV2Service {
   prepareTemplateProbes(campaignId: number, request: {
     template_id: number; recipient_name: string; phone: string;
     authorization_reference: string; confirmed_authorized: boolean;
+    selected_channel_ids: string[];
   }): Observable<CampaignV2TemplateProbeMatrix> {
     return this.http.post<CampaignV2TemplateProbeMatrix>(
       `${this.apiUrl}/${campaignId}/dispatch/template-probes`, request,
@@ -113,6 +114,7 @@ export class MarketingCampaignV2Service {
   prepareCatalogTemplateCertifications(templateId: number, request: {
     recipient_name: string; phone: string;
     authorization_reference: string; confirmed_authorized: boolean;
+    selected_channel_ids: string[];
   }): Observable<CampaignV2TemplateProbeMatrix> {
     return this.http.post<CampaignV2TemplateProbeMatrix>(
       this.apiUrl + '/dispatch/template-certifications/' + templateId, request,

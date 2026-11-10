@@ -314,3 +314,40 @@ def test_catalog_reuses_existing_qa_without_commercial_source():
             **(prepare_args(active) | {"campaign_id": None}))
     create.assert_not_called()
     active.commit.assert_called_once()
+
+
+@pytest.mark.parametrize('selected', [
+    [], ['tec','tec'], ['unknown'], ['tec','unknown'], 'tec', [123], [None],
+])
+def test_selected_channels_reject_invalid_or_unknown_before_freeze(selected):
+    active = session()
+    with patch.object(probe, '_context', return_value=context()), \
+         patch.object(probe, 'freeze_campaign_v2_qa_manual') as freeze, \
+         patch.object(probe, 'commercial_certifications', return_value={}):
+        with pytest.raises(probe.TemplateProbeValidation):
+            probe.prepare_template_probes(**prepare_args(active),
+                                          selected_channel_ids=selected)
+    freeze.assert_not_called()
+    active.commit.assert_not_called()
+
+
+def test_selection_prepares_only_requested_channel_and_never_another():
+    active = session()
+    groups = {
+        'villa': dict(group(), sender='VILLA_VERDE', origins=['VILLA_VERDE']),
+        'cul': dict(group(), sender='SEND_CUL', origins=['SEND_CUL']),
+        'tec': group(),
+    }
+    chosen = ['villa', 'cul']
+    with patch.object(probe, '_context', return_value=(context()[0], template(), groups)), \
+         patch.object(probe, 'commercial_certifications', return_value={}) as delivered, \
+         patch.object(probe, '_existing', return_value=None), \
+         patch.object(probe, 'preview_qa_manual_http', return_value={'preview_fingerprint': 'a'*64}), \
+         patch.object(probe, 'freeze_campaign_v2_qa_manual') as freeze, \
+         patch.object(probe, 'template_probe_matrix', return_value={'rows': []}):
+        probe.prepare_template_probes(**prepare_args(active),
+                                      selected_channel_ids=chosen)
+    assert freeze.call_count == 2
+    assert {call.kwargs['source_metadata'][probe.KEY]['channel_id'] for call in freeze.call_args_list} == set(chosen)
+    assert 'tec' not in str([call.kwargs['source_metadata'] for call in freeze.call_args_list])
+    assert set(delivered.call_args.kwargs['groups']) == set(chosen)

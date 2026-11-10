@@ -30,6 +30,22 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
   readonly reference = new FormControl('', { nonNullable: true });
   readonly authorized = new FormControl(false, { nonNullable: true });
   matrix: CampaignV2TemplateProbeMatrix | null = null;
+  readonly selectedChannels = new Set<string>();
+  get selectedChannelIds(): string[] {
+    return this.matrix?.rows.filter(row => this.selectedChannels.has(row.channel_id))
+      .map(row => row.channel_id) ?? [];
+  }
+  canSelect(row: CampaignV2TemplateProbeRow): boolean {
+    return (row.result === 'PENDIENTE' || row.result === 'RECHAZADA' || row.result === 'INVALIDADA')
+      && (!row.qa_campaign_id || row.stale)
+      && !this.busy && !this.disabled;
+  }
+  toggleChannel(row: CampaignV2TemplateProbeRow, selected: boolean): void {
+    if (!this.canSelect(row)) return;
+    if (selected) this.selectedChannels.add(row.channel_id);
+    else this.selectedChannels.delete(row.channel_id);
+    this.authorized.setValue(false);
+  }
   busy = false;
   error = '';
   private generation = 0;
@@ -44,6 +60,7 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
   ngOnChanges(): void {
     this.generation++;
     this.matrix = null;
+    this.selectedChannels.clear();
     this.busy = false;
     this.error = '';
     this.authorized.setValue(false);
@@ -54,7 +71,8 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
   }
 
   get canPrepare(): boolean {
-    return !this.allCertified && !this.busy && !this.disabled && !!this.templateId && this.authorized.value &&
+    return !this.allCertified && this.selectedChannelIds.length > 0 &&
+      !this.busy && !this.disabled && !!this.templateId && this.authorized.value &&
       this.name.value.trim().length > 0 && this.name.value.trim().length <= 255 &&
       /^[+]?[0-9]{10,13}$/.test(this.phone.value.trim()) &&
       this.reference.value.trim().length >= 8 && this.reference.value.trim().length <= 255;
@@ -72,6 +90,7 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
       recipient_name: this.name.value.trim(), phone: this.phone.value.trim(),
       authorization_reference: this.reference.value.trim(),
       confirmed_authorized: this.authorized.value,
+      selected_channel_ids: this.selectedChannelIds,
     };
     const result = this.catalogMode
       ? (prepare
@@ -84,6 +103,7 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
       next: matrix => {
         if (generation !== this.generation) return;
         this.matrix = matrix;
+        this.selectedChannels.clear();
         this.busy = false;
         this.authorized.setValue(false);
         if (prepare) this.phone.setValue('');

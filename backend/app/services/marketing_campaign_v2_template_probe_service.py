@@ -181,7 +181,7 @@ def _no_commercial_phone(source_id, phone, session):
 
 def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
                             authorization_reference, confirmed_authorized,
-                            actor_user_id, session=None):
+                            actor_user_id, session=None, selected_channel_ids=None):
     """Freeze QA only for missing template-version/sender pairs, atomically.
 
     Existing certifications are reused across commercial campaigns; neither
@@ -197,6 +197,16 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
         raise TemplateProbeValidation("Indica nombre del destinatario de prueba.")
     if type(actor_user_id) is not int or actor_user_id <= 0:
         raise TemplateProbeValidation("Actor inválido.")
+    # Explicit selection is mandatory for catalog operations. Legacy direct
+    # callers may still omit it; all browser callers send an explicit list.
+    if selected_channel_ids is not None and (
+        not isinstance(selected_channel_ids, list) or not selected_channel_ids
+        or any(not isinstance(item, str) or not item.strip()
+               for item in selected_channel_ids)
+        or len(selected_channel_ids) != len(set(selected_channel_ids))
+        or len(selected_channel_ids) > 100
+    ):
+        raise TemplateProbeValidation("Selecciona uno o más canales emisores válidos.")
     normalized = normalize_phone(phone) if isinstance(phone, str) else None
     if normalized is None:
         raise TemplateProbeValidation("Teléfono de prueba inválido.")
@@ -208,6 +218,12 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
         active.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
                        {"scope": f"template-certification:{template_id}"})
         source, template, groups = _context(campaign_id, template_id, active)
+        if selected_channel_ids is not None:
+            unknown = set(selected_channel_ids) - set(groups)
+            if unknown:
+                raise TemplateProbeValidation("La selección contiene canales ajenos a la plantilla.")
+            groups = {channel: group for channel, group in groups.items()
+                      if channel in set(selected_channel_ids)}
         signature = _signature(template)
         # A proven commercial delivery is already a certification; do not
         # generate duplicate QA cohorts for those exact channel/version pairs.
@@ -440,6 +456,16 @@ def template_probe_matrix(*, campaign_id, template_id, session=None):
             provider_campaign_id=(
                 commercial_proof["provider_campaign_id"] if commercial_proof else
                 child.provider_campaign_id if child else None
+            ),
+            rejection_source=(
+                "COMMERCIAL_REJECTION"
+                if rejection is not None and qa is None and status == "RECHAZADA"
+                else None
+            ),
+            rejection_campaign_id=(
+                int(rejection.campaign_v2_id)
+                if rejection is not None and qa is None and status == "RECHAZADA"
+                else None
             ),
             error_code=(child.error_code if child else
                         rejection.error_code if rejection and status == "RECHAZADA" else None),
