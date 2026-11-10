@@ -831,8 +831,11 @@ refrescarTicketsPreservandoFiltros(): void {
   }
 
   get puedeEditarTickets(): boolean {
-    // Bloquea edición a LECTOR_GLOBAL y también a GERENTE
-    return !this.authService.esLectorGlobal() && !this.authService.esGerente();
+    // La gerencia regional consulta sus tickets, pero no ejecuta trabajo.
+    // No cambiar AuthService.esGerente(): afectaría consumidores ajenos a Tickets.
+    return !this.authService.esLectorGlobal()
+      && !this.authService.esGerente()
+      && this.getUserMaintenanceRole() !== 'GERENTE_REGIONAL';
   }
 
   private readonly usuariosConScopeDepartamento = new Set([
@@ -1978,6 +1981,7 @@ abrirFechaSolucionConCoordinacion(ticket: Ticket): void {
 }
 
 cambiarEstadoEnProgreso(ticket: Ticket) {
+  if (!this.puedeMostrarBotonEnProgreso(ticket)) return;
   // Una única entrada al modal de fecha. Para coordinadores incluye la
   // asignación interna/externa; los demás conservan el flujo anterior.
   if (this.puedeCoordinarTicket(ticket)) {
@@ -2177,8 +2181,7 @@ onCancelarAsignarFecha() {
 }
 
 abrirEditarFechaSolucion(ticket: Ticket) {
-  const estado = (ticket.estado ?? '').toString().trim().toLowerCase();
-  if (estado !== 'en progreso') return;
+  if (!this.puedeMostrarEditarFechaSolucion(ticket)) return;
 
   if (this.puedeCoordinarTicket(ticket)) {
     this.abrirFechaSolucionConCoordinacion(ticket);
@@ -2922,7 +2925,8 @@ esPendienteCierreCreador(ticket: Ticket): boolean {
 
 puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
   const estado = (ticket?.estado || '').trim().toLowerCase();
-  if (estado !== 'abierto' || !this.puedeGestionarBiVlad(ticket)) return false;
+  if (estado !== 'abierto' || !this.puedeGestionarBiVlad(ticket)
+      || this.getUserMaintenanceRole() === 'GERENTE_REGIONAL') return false;
 
   if (this.puedeCoordinarTicket(ticket)) return true;
 
@@ -2934,7 +2938,8 @@ puedeMostrarBotonEnProgreso(ticket: Ticket): boolean {
 
 puedeMostrarEditarFechaSolucion(ticket: Ticket): boolean {
   const estado = String(ticket?.estado || '').trim().toLowerCase();
-  if (estado !== 'en progreso' || !this.puedeGestionarBiVlad(ticket)) return false;
+  if (estado !== 'en progreso' || !this.puedeGestionarBiVlad(ticket)
+      || this.getUserMaintenanceRole() === 'GERENTE_REGIONAL') return false;
   if (this.puedeCoordinarTicket(ticket)) return true;
   const scopedRole = ['COMPRAS', 'COORDINADOR_MANTENIMIENTO'].includes(
     this.getUserMaintenanceRole(),

@@ -9,6 +9,7 @@ on:
       - "backend/app/routes/ticket_routes.py"
       - "backend/migrations/versions/m1233bimulti111026_ticket_branch_scope.py"
       - "backend/tests/**/test_bi_vlad_*"
+      - "backend/tests/routes/test_tickets_regional_operational_access.py"
       - "backend/tests/models/test_ticket_create_transaction_mode.py"
       - "backend/tests/routes/test_ticket_tapizado_m2.py"
       - "backend/tests/routes/test_ticket_create_attachment_integration.py"
@@ -19,6 +20,7 @@ on:
       - "frontend/src/app/services/ticket.service.ts"
       - "frontend/tests/tickets-bi-vlad-multibranch.test.cjs"
       - "frontend/tests/tickets-bi-vlad-closure-guard.test.cjs"
+      - "frontend/tests/tickets-regional-operational-guard.test.cjs"
       - ".github/workflows/tickets-bi-vlad-multibranch-ci.yml"
   workflow_dispatch:
 
@@ -61,6 +63,7 @@ jobs:
             tests/routes/test_bi_vlad_multi_branch_scope.py \
             tests/routes/test_bi_vlad_ticket_assignment.py \
             tests/routes/test_bi_vlad_close_assignee_guard.py \
+            tests/routes/test_tickets_regional_operational_access.py \
             tests/models/test_ticket_create_transaction_mode.py \
             tests/routes/test_ticket_create_attachment_integration.py \
             tests/routes/test_ticket_tapizado_m2.py \
@@ -86,6 +89,7 @@ jobs:
         run: |
           node --test tests/tickets-bi-vlad-multibranch.test.cjs
           node --test tests/tickets-bi-vlad-closure-guard.test.cjs
+          node --test tests/tickets-regional-operational-guard.test.cjs
           node scripts/verify-tickets-responsable-filter.cjs
           node --test tests/tickets-tapizado-m3.test.cjs
       - name: Typecheck Angular templates

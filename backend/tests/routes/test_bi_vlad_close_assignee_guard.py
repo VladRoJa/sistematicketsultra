@@ -73,7 +73,10 @@ def test_regional_cannot_manage_bi_vlad_even_by_direct_endpoint(endpoint, route,
         scope.return_value.filter.return_value.first.return_value = ticket
         result = inspect.unwrap(getattr(ticket_routes, endpoint))(3381)
         assert result[1] == 403, (endpoint, result)
-        assert "responsable" in result[0].get_json()["mensaje"].lower()
+        # La capa de rol regional puede vetar antes del guard de responsable.
+        # Ambos deben impedir esta mutación (HTTP 403, sin efectos).
+        mensaje = result[0].get_json()["mensaje"].lower()
+        assert "responsable" in mensaje or "regional" in mensaje
         ticket.solicitar_cierre.assert_not_called()
 
 
