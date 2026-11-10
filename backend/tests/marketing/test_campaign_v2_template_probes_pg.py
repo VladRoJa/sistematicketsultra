@@ -63,6 +63,7 @@ def test_two_connections_freeze_one_qa_cohort_without_provider_requests():
                     confirmed_authorized=True, actor_user_id=47, session=active)
 
         with patch.object(probe, "_context", return_value=(NS(purpose="REACTIVATION"), selected, groups)), \
+             patch.object(probe, "commercial_certifications", return_value={}), \
              patch.object(probe, "preview_qa_manual_http", side_effect=preview), \
              patch.object(probe, "template_probe_matrix", return_value={"rows": []}), \
              ThreadPoolExecutor(max_workers=2) as pool:
