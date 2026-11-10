@@ -341,6 +341,7 @@ def test_selection_prepares_only_requested_channel_and_never_another():
     chosen = ['villa', 'cul']
     with patch.object(probe, '_context', return_value=(context()[0], template(), groups)), \
          patch.object(probe, 'commercial_certifications', return_value={}) as delivered, \
+         patch.object(probe, '_no_commercial_phone'), \
          patch.object(probe, '_existing', return_value=None), \
          patch.object(probe, 'preview_qa_manual_http', return_value={'preview_fingerprint': 'a'*64}), \
          patch.object(probe, 'freeze_campaign_v2_qa_manual') as freeze, \
