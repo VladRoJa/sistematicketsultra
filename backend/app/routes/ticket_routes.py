@@ -16,6 +16,7 @@ from app.utils.notify_targets import build_subject, pick_recipients
 from app.utils.notify_utils import render_ticket_html, render_ticket_whatsapp_text
 from app.utils.ticket_filters import filtrar_tickets_por_usuario
 from app.utils.scope_utils import get_user_assigned_branch_ids
+from app.utils.sucursal_audience import apply_selectable_sucursal_catalog
 from app.utils.ticket_aparatos_filters import (
     ticket_relacionado_con_aparato,
     ticket_relacionado_con_alguno,
@@ -734,7 +735,8 @@ def bi_vlad_available_branches():
     if _ticket_create_grant_denied(user):
         return jsonify({"mensaje": "No autorizado para crear tickets."}), 403
     allowed = _allowed_bi_vlad_branches(user)
-    query = Sucursal.query
+    # Reuse the existing selectable-gym policy: never offer technical nodes.
+    query = apply_selectable_sucursal_catalog(Sucursal.query, audience="operational")
     if allowed is not None:
         if not allowed:
             return jsonify({"sucursales": []}), 200
@@ -778,7 +780,10 @@ def _validate_bi_vlad_branch_scope(departamento_id, raw_ids, user):
     if allowed is not None and not set(ids).issubset(allowed):
         return None, (jsonify({"mensaje": "Sucursal fuera de tu alcance autorizado."}), 403)
 
-    found = Sucursal.query.filter(Sucursal.sucursal_id.in_(ids)).count()
+    found = apply_selectable_sucursal_catalog(
+        Sucursal.query.filter(Sucursal.sucursal_id.in_(ids)),
+        audience="operational",
+    ).count()
     if found != len(ids):
         return None, (jsonify({"mensaje": "Una o más sucursales no existen."}), 400)
     return ids, None
