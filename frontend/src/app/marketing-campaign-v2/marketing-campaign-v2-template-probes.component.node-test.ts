@@ -41,6 +41,8 @@ function harness() {
 test('requires explicit authorization and never dispatches on prepare or refresh', () => {
   const { component, calls, requests } = harness();
   component.prepare(); assert.equal(calls.length, 0);
+  component.matrix = { rows: [{ channel_id: 'villa-verde', result: 'RECHAZADA', qa_campaign_id: null }] } as any;
+  component.toggleChannel(component.matrix.rows[0], true);
   component.authorized.setValue(true);
   component.prepare(); component.prepare(); // Double click cannot duplicate the HTTP request.
   assert.equal(calls.length, 1);
@@ -57,6 +59,8 @@ test('phone edit revokes authorization and an HTTP error never triggers automati
   const { component, requests, calls } = harness();
   component.authorized.setValue(true); component.phone.setValue('6861000002');
   assert.equal(component.canPrepare, false);
+  component.matrix = { rows: [{ channel_id: 'send-cul', result: 'PENDIENTE', qa_campaign_id: null }] } as any;
+  component.toggleChannel(component.matrix.rows[0], true);
   component.authorized.setValue(true); component.prepare();
   requests[0].error({ error: { message: 'Resultado de preparación desconocido' } });
   assert.equal(calls.length, 1);
@@ -90,11 +94,52 @@ test('catalog preparation uses template scope rather than a commercial campaign'
   component.campaignId = 0;
   component.refresh();
   assert.deepEqual(calls[0], ['catalog-read', 7]);
-  requests[0].next({ rows: [{ result: 'PENDIENTE' }] });
+  requests[0].next({ rows: [{ channel_id: 'send-cul', result: 'PENDIENTE', qa_campaign_id: null }] });
+  component.toggleChannel(component.matrix!.rows[0], true);
   component.authorized.setValue(true);
   component.prepare();
   assert.equal(calls[1][0], 'catalog-prepare');
   assert.equal(calls[1][1], 7);
   assert.equal(calls[1][2].confirmed_authorized, true);
+  assert.deepEqual(calls[1][2].selected_channel_ids, ['send-cul']);
   assert.equal('campaign_id' in calls[1][2], false);
+});
+
+test('only two explicitly selected rejected commercial channels enter QA request', () => {
+  const { component, calls, requests } = harness();
+  component.catalogMode = true;
+  component.refresh();
+  requests[0].next({ rows: [
+    { channel_id: 'villa', result: 'RECHAZADA', qa_campaign_id: null },
+    { channel_id: 'cul', result: 'RECHAZADA', qa_campaign_id: null },
+    { channel_id: 'tec', result: 'PENDIENTE', qa_campaign_id: null },
+    { channel_id: 'send', result: 'VALIDADA', qa_campaign_id: null },
+    { channel_id: 'uncertain', result: 'INCIERTA', qa_campaign_id: null },
+  ] });
+  component.toggleChannel(component.matrix!.rows[0], true);
+  component.toggleChannel(component.matrix!.rows[1], true);
+  component.toggleChannel(component.matrix!.rows[3], true);
+  component.toggleChannel(component.matrix!.rows[4], true);
+  component.authorized.setValue(true);
+  assert.deepEqual(component.selectedChannelIds, ['villa', 'cul']);
+  component.prepare();
+  assert.equal(calls[1][0], 'catalog-prepare');
+  assert.deepEqual(calls[1][2].selected_channel_ids, ['villa', 'cul']);
+  assert.equal(component.canPrepare, false); // in-flight request blocks duplicates
+});
+
+test('empty and changed selection never prepares; changing channels revokes consent', () => {
+  const { component, calls } = harness();
+  component.matrix = { rows: [
+    { channel_id: 'villa', result: 'RECHAZADA', qa_campaign_id: null },
+  ] } as any;
+  component.authorized.setValue(true);
+  component.prepare();
+  assert.equal(calls.length, 0);
+  component.toggleChannel(component.matrix.rows[0], true);
+  assert.equal(component.authorized.value, false);
+  component.authorized.setValue(true);
+  component.ngOnChanges();
+  assert.deepEqual(component.selectedChannelIds, []);
+  assert.equal(component.canPrepare, false);
 });

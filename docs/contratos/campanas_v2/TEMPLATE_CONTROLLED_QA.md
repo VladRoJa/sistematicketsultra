@@ -226,3 +226,27 @@ en `marketing_campaign_v2_provider_campaigns`,
 - Sin migraciones: toda la evaluación es de solo lectura sobre estructuras
   ya existentes. Podrían persistir canales pendientes si no hay observaciones
   históricas de entrega o la versión local no puede verificarse.
+
+
+## Selección focal de canales QA (extensión)
+
+- **Consultar matriz** no crea QA ni llama al proveedor. El operador marca
+  únicamente los canales pendientes/rechazados comerciales/expirados que desea
+  comprobar, y puede desmarcarlos antes de preparar.
+- **Preparar pruebas QA** exige selección no vacía, nombre, teléfono autorizado,
+  referencia y confirmación nueva tras cualquier cambio en la selección.
+  Solicita \`selected_channel_ids\` (identificadores efectivos del proveedor,
+  no alias ni sucursales de origen) tanto desde el catálogo como desde una campaña.
+- El endpoint del catálogo **rechaza** omitir \`selected_channel_ids\`. Backend
+  comprueba estrictamente tipo lista, longitud, duplicados y pertenencia a
+  \`_context(...)\` dentro del lock transaccional. Solo recorre canales elegidos;
+  nunca amplía el conjunto a todos los pendientes.
+- Si una combinación ya estaba certificada o tenía una QA preparada, se reutiliza
+  y no se duplica. Los intentos inciertos siguen sin autorizar reenvíos.
+- Los errores \`TEMPLATE_NOT_FOUND\` provenientes de un child comercial
+  se rotulan **Rechazo comercial confirmado**, con campaña y lote originales;
+  no se falsifica un identificador QA inexistente.
+- Seleccionar y preparar **no envía WhatsApps**. El envío real conserva la
+  aprobación, revisión de cuota/costo, confirmación y guards existentes.
+- Uso focal: para VILLA_VERDE y SEND_CUL marcar solo sus dos filas;
+  VILLAS_DEL_REY es otra sucursal distinta y no se incluye.

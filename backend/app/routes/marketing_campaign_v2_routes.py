@@ -2231,13 +2231,17 @@ def campaign_v2_template_probes_endpoint(campaign_id: int):
             )), 200
         payload = _parse_payload({
             "template_id", "recipient_name", "phone", "authorization_reference", "confirmed_authorized",
+            "selected_channel_ids",
         })
+        if "selected_channel_ids" not in payload:
+            raise TemplateProbeValidation("Selecciona explícitamente los canales que deseas preparar.")
         return jsonify(prepare_template_probes(
             campaign_id=campaign_id, template_id=payload.get("template_id"),
             recipient_name=payload.get("recipient_name"), phone=payload.get("phone"),
             authorization_reference=payload.get("authorization_reference"),
             confirmed_authorized=payload.get("confirmed_authorized"),
             actor_user_id=int(user.id), session=db.session,
+            selected_channel_ids=payload.get("selected_channel_ids"),
         )), 200
     except MarketingCampaignV2DispatchConfigNotFoundError as exc:
         db.session.rollback()
@@ -2278,13 +2282,17 @@ def campaign_v2_catalog_template_certifications_endpoint(template_id: int):
             )), 200
         payload = _parse_payload({
             "recipient_name", "phone", "authorization_reference", "confirmed_authorized",
+            "selected_channel_ids",
         })
+        if "selected_channel_ids" not in payload:
+            raise TemplateProbeValidation("Selecciona explícitamente los canales que deseas preparar.")
         return jsonify(prepare_template_probes(
             campaign_id=None, template_id=template_id,
             recipient_name=payload.get("recipient_name"), phone=payload.get("phone"),
             authorization_reference=payload.get("authorization_reference"),
             confirmed_authorized=payload.get("confirmed_authorized"),
             actor_user_id=int(user.id), session=db.session,
+            selected_channel_ids=payload["selected_channel_ids"],
         )), 200
     except MarketingAuthorizationError as exc:
         return _error(str(exc), 403)

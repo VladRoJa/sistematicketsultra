@@ -1554,6 +1554,8 @@ export interface CampaignV2TemplateProbeRow {
   recorded_acceptance: string;
   evidence_current: boolean;
   evidence_expires_at: string | null;
+  rejection_source?: 'COMMERCIAL_REJECTION' | null;
+  rejection_campaign_id?: number | null;
   certification_source?: 'QA_MANUAL' | 'COMMERCIAL_DELIVERY' | null;
   certification_campaign_id?: number | null;
   certification_snapshot_id?: number | null;

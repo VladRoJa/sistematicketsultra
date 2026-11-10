@@ -9,7 +9,7 @@ from app.routes import marketing_campaign_v2_routes as routes
 from app.services import marketing_campaign_v2_template_probe_service as probe
 
 URL = "/api/marketing/campaigns-v2/42/dispatch/template-probes"
-BODY = dict(template_id=7, recipient_name="QA", phone="6861000001",
+BODY = dict(template_id=7, selected_channel_ids=["tec"], recipient_name="QA", phone="6861000001",
             authorization_reference="Autorizado para QA", confirmed_authorized=True)
 GATES = dict(is_global=True, can_manage_dispatch_config=True, can_manage_campaigns=True,
              can_preflight_campaigns=True, can_send_campaigns=True)
@@ -102,7 +102,7 @@ def test_catalog_certification_requires_jwt_and_all_global_gates():
 
 def test_catalog_endpoint_scope_does_not_require_commercial_campaign_and_never_dispatches():
     api, headers = client()
-    body = dict(recipient_name="QA", phone="6861000001",
+    body = dict(recipient_name="QA", selected_channel_ids=["tec"], phone="6861000001",
                 authorization_reference="QA autorizada", confirmed_authorized=True)
     with patch.object(routes, "_resolve_request_access",
                       return_value=(NS(id=47), NS(**GATES))), \
@@ -132,5 +132,44 @@ def test_catalog_rejects_client_actor_and_targets():
             "authorization_reference": "QA autorizada",
             "confirmed_authorized": True, "provider_channel_id": "other",
         })
+    assert result.status_code == 400
+    prepare.assert_not_called()
+
+
+def test_catalog_must_require_explicit_channel_selection_before_service():
+    api, headers = client()
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "prepare_template_probes") as prepare:
+        result = api.post(CATALOG_URL, headers=headers, json={
+            "recipient_name": "QA", "phone": "6861000001",
+            "authorization_reference": "QA autorizada",
+            "confirmed_authorized": True,
+        })
+    assert result.status_code == 400
+    prepare.assert_not_called()
+
+
+def test_catalog_passes_only_selected_channels_to_backend():
+    api, headers = client()
+    body = dict(recipient_name="QA", phone="6861000001",
+                authorization_reference="QA autorizada", confirmed_authorized=True,
+                selected_channel_ids=["villa", "cul"])
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "prepare_template_probes", return_value={"rows":[]}) as prepare:
+        result = api.post(CATALOG_URL, headers=headers, json=body)
+    assert result.status_code == 200
+    assert prepare.call_args.kwargs["selected_channel_ids"] == ["villa", "cul"]
+
+
+def test_campaign_must_require_explicit_channel_selection_before_service():
+    api, headers = client()
+    body = dict(BODY)
+    body.pop("selected_channel_ids")
+    with patch.object(routes, "_resolve_request_access",
+                      return_value=(NS(id=47), NS(**GATES))), \
+         patch.object(probe, "prepare_template_probes") as prepare:
+        result = api.post(URL, headers=headers, json=body)
     assert result.status_code == 400
     prepare.assert_not_called()

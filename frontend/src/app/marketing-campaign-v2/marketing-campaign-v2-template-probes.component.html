@@ -6,6 +6,9 @@
   <p>Una certificación se reutiliza entre campañas de la misma plantilla y canal emisor. Un resultado incierto requiere revisión;
     no se repite el POST. Los mensajes de prueba pueden generar costo.</p>
   <p *ngIf="allCertified" role="status">Todos los canales ya están certificados para esta versión de la plantilla. No es necesario volver a probarla.</p>
+  <p *ngIf="matrix && !allCertified" role="status">
+    Marca únicamente los canales que quieres probar. Seleccionados: {{ selectedChannelIds.length }}.
+  </p>
   <div class="inputs" *ngIf="!allCertified">
     <mat-form-field><mat-label>Nombre del destinatario de prueba</mat-label>
       <input matInput [formControl]="name" maxlength="255" [readonly]="busy || disabled">
@@ -18,7 +21,7 @@
     </mat-form-field>
   </div>
   <mat-checkbox *ngIf="!allCertified" [formControl]="authorized" [disabled]="busy || disabled">
-    Confirmo autorización expresa para probar todos los canales indicados con este teléfono.
+    Confirmo autorización expresa para probar solamente los {{ selectedChannelIds.length }} canales seleccionados con este teléfono.
     No es un destinatario de esta campaña comercial.
   </mat-checkbox>
   <div class="actions">
@@ -34,9 +37,13 @@
     <div class="table-scroll">
       <table>
         <caption>Pruebas por canal emisor · aceptación separada de entrega</caption>
-        <thead><tr><th>Sucursales de origen</th><th>Emisor / canal</th><th>Destinatario QA</th>
+        <thead><tr><th>Seleccionar QA</th><th>Sucursales de origen</th><th>Emisor / canal</th><th>Destinatario QA</th>
           <th>Aceptación</th><th>Entrega real</th><th>Auditoría</th><th>Acción</th></tr></thead>
         <tbody><tr *ngFor="let row of state.rows">
+          <td><mat-checkbox [checked]="selectedChannels.has(row.channel_id)"
+            [disabled]="!canSelect(row)"
+            [attr.aria-label]="'Seleccionar QA para ' + row.sender"
+            (change)="toggleChannel(row, $event.checked)"></mat-checkbox></td>
           <td>{{ row.origins.join(', ') }}</td><td>{{ row.sender }}<br>{{ row.channel_id }}</td>
           <td>{{ row.recipient_phone_masked || 'Sin preparar' }}</td>
           <td>{{ row.result }}<span *ngIf="row.error_code">: {{ row.error_code }}</span>
@@ -44,6 +51,12 @@
             <strong *ngIf="row.stale"> · Cambió la versión o el canal; esta certificación no aplica.</strong></td>
           <td>{{ row.delivery_status }}</td>
           <td>
+            <ng-container *ngIf="row.rejection_source === 'COMMERCIAL_REJECTION'; else deliveryAudit">
+              Rechazo comercial confirmado · campaña #{{ row.rejection_campaign_id }}<br>
+              Lote comercial #{{ row.child_id }}<br>
+              {{ row.attempted_at | date:'short' }}
+            </ng-container>
+            <ng-template #deliveryAudit>
             <ng-container *ngIf="row.certification_source === 'COMMERCIAL_DELIVERY'; else qaAudit">
               Entrega comercial confirmada · campaña #{{ row.certification_campaign_id }}<br>
               Lote #{{ row.child_id }} · snapshot #{{ row.certification_snapshot_id }}<br>
@@ -51,6 +64,7 @@
             </ng-container>
             <ng-template #qaAudit>QA #{{ row.qa_campaign_id || '—' }} · intento #{{ row.child_id || '—' }}<br>
               {{ row.attempted_at | date:'short' }} · actor {{ row.actor_user_id || '—' }}
+            </ng-template>
             </ng-template>
             <br>iVentas: {{ row.provider_campaign_id || 'Sin identificador confirmado' }}
           </td>
