@@ -15,7 +15,7 @@ class TicketSucursalAlcanceORM(db.Model):
     )
 
     ticket = db.relationship("Ticket", back_populates="sucursales_alcance")
-    sucursal = db.relationship("Sucursal", foreign_keys=[sucursal_id])
+    sucursal = db.relationship("Sucursal", foreign_keys=[sucursal_id], lazy="joined")
 
     __table_args__ = (
         db.Index("ix_ticket_sucursales_alcance_sucursal_id", "sucursal_id"),
