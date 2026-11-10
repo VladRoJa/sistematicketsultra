@@ -2233,6 +2233,8 @@ def campaign_v2_template_probes_endpoint(campaign_id: int):
             "template_id", "recipient_name", "phone", "authorization_reference", "confirmed_authorized",
             "selected_channel_ids",
         })
+        if "selected_channel_ids" not in payload:
+            raise TemplateProbeValidation("Selecciona explícitamente los canales que deseas preparar.")
         return jsonify(prepare_template_probes(
             campaign_id=campaign_id, template_id=payload.get("template_id"),
             recipient_name=payload.get("recipient_name"), phone=payload.get("phone"),
