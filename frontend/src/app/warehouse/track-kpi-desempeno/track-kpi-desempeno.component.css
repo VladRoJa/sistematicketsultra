@@ -231,12 +231,7 @@
 }
 
 .monthly-closing-card table {
-  min-width: 1450px;
-}
-
-.base-discrepancy {
-  color: #b54708;
-  font-weight: 700;
+  min-width: 980px;
 }
 
 .table-wrap {
