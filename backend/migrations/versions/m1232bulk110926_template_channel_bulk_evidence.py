@@ -23,6 +23,7 @@ def upgrade():
             "marketing_campaign_v2_channel_bindings.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("template_signature", sa.String(64), nullable=False),
         sa.Column("sender_signature", sa.String(64), nullable=False),
+        sa.Column("observed_status", sa.String(40), nullable=False),
         sa.Column("inventory_sha256", sa.String(64), nullable=False),
         sa.Column("source_reference", sa.String(500), nullable=False),
         sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False),
@@ -35,6 +36,8 @@ def upgrade():
             "length(template_signature) = 64 AND length(sender_signature) = 64 "
             "AND length(inventory_sha256) = 64",
             name="ck_mkt_v2_template_channel_evidence_hashes"),
+        sa.CheckConstraint("length(trim(observed_status)) > 0",
+                           name="ck_mkt_v2_template_channel_evidence_status"),
         sa.CheckConstraint("expires_at > observed_at",
                            name="ck_mkt_v2_template_channel_evidence_period"),
     )

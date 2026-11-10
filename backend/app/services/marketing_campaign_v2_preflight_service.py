@@ -334,12 +334,15 @@ def build_campaign_v2_preflight(
             outbound_bindings=outbound_bindings, now=now,
         )
         from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
-            accepted_bulk_evidence_channels,
+            bulk_evidence_channel_status,
         )
-        verified_provider_channels |= accepted_bulk_evidence_channels(
+        bulk_accepted, bulk_not_accepted = bulk_evidence_channel_status(
             template=template, session=active_session,
             outbound_bindings=outbound_bindings, now=now,
         )
+        verified_provider_channels |= bulk_accepted
+        # New explicitly rejected provider evidence overrides historical QA/manual proof.
+        verified_provider_channels -= bulk_not_accepted
 
     batches: list[CampaignV2DispatchBatchPlan] = []
     for (_sucursal_id, _sucursal_canon), group in sorted(
@@ -360,6 +363,11 @@ def build_campaign_v2_preflight(
         if group["template_channel_mismatch"]:
             reasons.append("TEMPLATE_CHANNEL_MISMATCH")
             template_channel_mismatch.update(batch_recipient_ids)
+
+        if (campaign.get("source") == FAILED_RECOVERY_SOURCE
+                and binding is not None
+                and str(binding.provider_channel_id) in bulk_not_accepted):
+            reasons.append("PROVIDER_TEMPLATE_NOT_ACCEPTED")
 
         if (campaign.get("source") == FAILED_RECOVERY_SOURCE
                 and (binding is None or str(binding.provider_channel_id)

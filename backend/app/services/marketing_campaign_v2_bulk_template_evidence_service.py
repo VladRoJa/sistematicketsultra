@@ -114,7 +114,8 @@ def preview_bulk_template_inventory(*, template_id, inventory, session=None):
     )
     counts = {
         "accepted": sum(row["status"] == "accepted" for row in rows),
-        "pending": sum(row["status"] not in {"accepted", "incompatible"} for row in rows),
+        "pending": sum(row["status"] == "not_observed" for row in rows),
+        "rejected": sum(row["status"] not in {"accepted", "not_observed", "incompatible"} for row in rows),
         "incompatible": sum(row["status"] == "incompatible" for row in rows),
     }
     return {
@@ -158,16 +159,17 @@ def register_bulk_template_inventory(
     )
     if fingerprint != expected_fingerprint:
         raise BulkInventoryValidation("Plantilla o canales cambiaron; revisa de nuevo.")
-    accepted = [row for row in rows if row["status"] == "accepted"]
-    if not accepted:
-        raise BulkInventoryValidation("Ningún canal tiene aceptación acreditada.")
-    for row in accepted:
+    observed = [row for row in rows if row["status"] not in {"not_observed", "incompatible"}]
+    if not observed:
+        raise BulkInventoryValidation("Ningún canal tiene un estado acreditado.")
+    for row in observed:
         active.add(Evidence(
             template_id=int(template.id),
             provider_channel_id=row["channel_id"],
             sender_binding_id=row["binding_id"],
             template_signature=signature,
             sender_signature=row["sender_signature"],
+            observed_status=row["status"],
             inventory_sha256=inventory_sha,
             source_reference=source_reference.strip(),
             observed_at=capture_time,
@@ -177,8 +179,9 @@ def register_bulk_template_inventory(
     active.commit()
     return {
         "template_id": int(template.id),
-        "recorded": len(accepted),
-        "pending": len(rows) - len(accepted),
+        "recorded": sum(row["status"] == "accepted" for row in observed),
+        "revoked": sum(row["status"] != "accepted" for row in observed),
+        "pending": len(rows) - len(observed),
         "expires_at": (capture_time + EVIDENCE_VALID_FOR).isoformat(),
         "provider_api_verified": False,
         "send_authorized": False,
@@ -186,8 +189,8 @@ def register_bulk_template_inventory(
     }
 
 
-def accepted_bulk_evidence_channels(*, template, session, outbound_bindings, now=None):
-    """Require valid proof for EVERY effective sender of each channel in the plan."""
+def bulk_evidence_channel_status(*, template, session, outbound_bindings, now=None):
+    """Return accepted and explicitly nonaccepted senders, respecting newest observation."""
     timestamp = _utc(now or datetime.now(timezone.utc))
     requested = {}
     for item in outbound_bindings:
@@ -196,17 +199,19 @@ def accepted_bulk_evidence_channels(*, template, session, outbound_bindings, now
         if channel and binding_id:
             requested.setdefault(str(channel), set()).add(int(binding_id))
     if not requested:
-        return frozenset()
+        return frozenset(), frozenset()
     records = session.query(Evidence).filter(
         Evidence.template_id == int(template.id),
         Evidence.provider_channel_id.in_(sorted(requested)),
-    ).order_by(Evidence.id.desc()).all()
+    ).order_by(Evidence.observed_at.desc(), Evidence.id.desc()).all()
     latest = {}
     for row in records:
         latest.setdefault((str(row.provider_channel_id), int(row.sender_binding_id)), row)
-    certified = set()
+    accepted = set()
+    nonaccepted = set()
     signature = template_version_signature(template)
     for channel, binding_ids in requested.items():
+        statuses = []
         for ident in binding_ids:
             binding = session.get(Binding, ident)
             proof = latest.get((channel, ident))
@@ -217,7 +222,18 @@ def accepted_bulk_evidence_channels(*, template, session, outbound_bindings, now
                     or proof.sender_signature != sender_signature(binding)
                     or _utc(proof.observed_at) > timestamp
                     or _utc(proof.expires_at) <= timestamp):
-                break
-        else:
-            certified.add(channel)
-    return frozenset(certified)
+                statuses.append("unknown")
+            else:
+                statuses.append(str(proof.observed_status))
+        if any(status not in {"accepted", "unknown"} for status in statuses):
+            nonaccepted.add(channel)
+        elif statuses and all(status == "accepted" for status in statuses):
+            accepted.add(channel)
+    return frozenset(accepted), frozenset(nonaccepted)
+
+
+def accepted_bulk_evidence_channels(*, template, session, outbound_bindings, now=None):
+    return bulk_evidence_channel_status(
+        template=template, session=session,
+        outbound_bindings=outbound_bindings, now=now,
+    )[0]

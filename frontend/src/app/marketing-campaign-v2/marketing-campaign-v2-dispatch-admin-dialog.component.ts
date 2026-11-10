@@ -307,8 +307,9 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.bulkBusy = false;
-        this.bulkMessage = 'Evidencia registrada para ' + result.recorded +
-          ' emisores; ' + result.pending + ' restantes. Válida hasta ' +
+        this.bulkMessage = 'Aprobados: ' + result.recorded +
+          ' · no aprobados: ' + result.revoked +
+          ' · sin dato/incompatibles: ' + result.pending + '. Válida hasta ' +
           result.expires_at + '. No se enviaron mensajes.';
         this.bulkConfirmed.setValue(false);
       },

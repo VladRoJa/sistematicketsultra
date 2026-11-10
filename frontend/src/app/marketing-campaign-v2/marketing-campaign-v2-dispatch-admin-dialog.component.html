@@ -78,8 +78,9 @@
         </button>
         <ng-container *ngIf="bulkPreview as preview">
           <p class="feedback" role="status">{{ preview.counts.accepted }} emisores aprobados ·
-            {{ preview.counts.pending }} sin acreditar · {{ preview.counts.incompatible }} incompatibles.
-            Solo se registrarán los aprobados explícitos.
+            {{ preview.counts.pending }} sin evidencia · {{ preview.counts.rejected }} no aprobados ·
+            {{ preview.counts.incompatible }} incompatibles.
+            Se registran las observaciones reales; una no aprobación posterior revoca la evidencia anterior.
           </p>
           <div class="catalog-table bulk-table">
             <table>
@@ -109,8 +110,9 @@
           <div class="editor-actions">
             <button mat-flat-button color="primary" type="button" (click)="registerBulkInventory()"
                     [disabled]="bulkBusy || !bulkConfirmed.value || !bulkObservedAt.value.trim() ||
-                      !bulkReference.value.trim() || preview.counts.accepted === 0">
-              Registrar aprobadas para futuras campañas (sin envío)
+                      !bulkReference.value.trim() ||
+                      (preview.counts.accepted === 0 && preview.counts.rejected === 0)">
+              Registrar evidencia de canales (sin envío)
             </button>
           </div>
         </ng-container>

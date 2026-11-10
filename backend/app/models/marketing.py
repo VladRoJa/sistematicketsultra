@@ -527,6 +527,7 @@ class MarketingCampaignV2TemplateChannelEvidenceORM(db.Model):
         "marketing_campaign_v2_channel_bindings.id", ondelete="RESTRICT"), nullable=False)
     template_signature = db.Column(db.String(64), nullable=False)
     sender_signature = db.Column(db.String(64), nullable=False)
+    observed_status = db.Column(db.String(40), nullable=False)
     inventory_sha256 = db.Column(db.String(64), nullable=False)
     source_reference = db.Column(db.String(500), nullable=False)
     observed_at = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -543,6 +544,8 @@ class MarketingCampaignV2TemplateChannelEvidenceORM(db.Model):
             "length(template_signature) = 64 AND length(sender_signature) = 64 "
             "AND length(inventory_sha256) = 64",
             name="ck_mkt_v2_template_channel_evidence_hashes"),
+        db.CheckConstraint("length(trim(observed_status)) > 0",
+                           name="ck_mkt_v2_template_channel_evidence_status"),
         db.CheckConstraint("expires_at > observed_at",
                            name="ck_mkt_v2_template_channel_evidence_period"),
     )

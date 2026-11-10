@@ -39,3 +39,12 @@ parcial registra los canales aceptados y deja pendientes los demás.
 - Evidencia conservada tras reapertura de la Suite, reutilizable por otras campañas.
 - Expiración, deriva de plantilla/canal, permisos y ausencia de huella bloquean.
 - Ningún POST al proveedor desde esta funcionalidad.
+
+## Revocación de estados
+
+Un inventario posterior con estado explícito `pending`, `rejected` u otro
+distinto de `accepted` guarda una evidencia negativa con la misma firma.
+La observación más reciente (fecha e ID) prevalece sobre aceptaciones previas.
+Una negación vigente bloquea incluso QA previamente aceptada para el mismo
+canal/versión; evidencia no observada no equivale a negación. La vigencia sigue
+siendo de 24 horas. La fila negativa se conserva para auditoría.

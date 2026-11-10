@@ -85,7 +85,7 @@ def test_one_inventory_previews_all_senders_without_writes():
     p = preview_bulk_template_inventory(
         template_id=12, inventory=[entry("a"), entry("b")], session=session,
     )
-    assert p["counts"] == {"accepted": 2, "pending": 0, "incompatible": 1}
+    assert p["counts"] == {"accepted": 2, "pending": 0, "rejected": 0, "incompatible": 1}
     assert {r["channel_id"]: r["status"] for r in p["rows"]} == {
         "a": "accepted", "b": "accepted", "c": "incompatible",
     }
@@ -107,10 +107,11 @@ def test_register_only_accepted_and_preserve_missing_channels():
         confirmed_provider_capture=True, actor_user_id=47, now=NOW,
     )
     assert result["recorded"] == 1
-    assert result["pending"] == 2  # one pending and one incompatible
+    assert result["revoked"] == 1
+    assert result["pending"] == 1  # incompatible is not recorded
     assert result["send_authorized"] is False
-    session.add.assert_called_once()
-    assert session.add.call_args.args[0].provider_channel_id == "a"
+    assert session.add.call_count == 2
+    assert {call.args[0].observed_status for call in session.add.call_args_list} == {"accepted", "pending"}
     session.commit.assert_called_once()
 
 
@@ -150,6 +151,7 @@ def test_reusable_evidence_requires_correct_template_sender_and_fresh_timestamp(
         NS(id=i, template_id=12, provider_channel_id=row.provider_channel_id,
            sender_binding_id=i, template_signature=_signature(selected),
            sender_signature=sender_signature(row),
+           observed_status="accepted",
            observed_at=NOW - timedelta(minutes=5),
            expires_at=NOW + timedelta(hours=23))
         for i, row in enumerate(rows, 1)
@@ -178,3 +180,29 @@ def test_reusable_evidence_requires_correct_template_sender_and_fresh_timestamp(
     assert accepted_bulk_evidence_channels(
         template=selected, session=session, outbound_bindings=expected, now=NOW,
     ) == frozenset({"a"})
+
+
+def test_new_explicit_rejection_revokes_older_acceptance():
+    from app.services.marketing_campaign_v2_bulk_template_evidence_service import (
+        bulk_evidence_channel_status,
+    )
+    session, selected, rows = make_session(rows=[binding(1, "a")])
+    positive = NS(id=1, template_id=12, provider_channel_id="a",
+                  sender_binding_id=1, template_signature=_signature(selected),
+                  sender_signature=sender_signature(rows[0]),
+                  observed_status="accepted", observed_at=NOW - timedelta(hours=1),
+                  expires_at=NOW + timedelta(hours=22))
+    negative = NS(id=2, template_id=12, provider_channel_id="a",
+                  sender_binding_id=1, template_signature=_signature(selected),
+                  sender_signature=sender_signature(rows[0]),
+                  observed_status="rejected", observed_at=NOW - timedelta(minutes=5),
+                  expires_at=NOW + timedelta(hours=23))
+    session.query.side_effect = lambda cls: (
+        Query([negative, positive]) if cls is Evidence else Query([])
+    )
+    accepted, revoked = bulk_evidence_channel_status(
+        template=selected, session=session, now=NOW,
+        outbound_bindings=[{"channel_binding_id": 1, "provider_channel_id": "a"}],
+    )
+    assert accepted == frozenset()
+    assert revoked == frozenset({"a"})

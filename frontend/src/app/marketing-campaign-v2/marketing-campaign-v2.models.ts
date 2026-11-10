@@ -1581,7 +1581,7 @@ export interface CampaignV2BulkInventoryPreview {
     binding_id: number; sucursal_canon: string; channel_id: string;
     status: string; compatible: boolean;
   }>;
-  counts: { accepted: number; pending: number; incompatible: number };
+  counts: { accepted: number; pending: number; rejected: number; incompatible: number };
   candidate_fingerprint: string;
   provider_api_verified: false;
   send_authorized: false;
@@ -1591,6 +1591,7 @@ export interface CampaignV2BulkInventoryPreview {
 export interface CampaignV2BulkInventoryRegistered {
   template_id: number;
   recorded: number;
+  revoked: number;
   pending: number;
   expires_at: string;
   provider_api_verified: false;
