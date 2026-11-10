@@ -26,6 +26,9 @@ from app.services.marketing_campaign_v2_qa_http_service import preview_qa_manual
 from app.services.marketing_campaign_v2_qa_manual_service import freeze_campaign_v2_qa_manual
 from app.services.marketing_campaign_v2_confirmed_rejection import confirmed_rejected_child
 from app.services.marketing_campaign_v2_dispatch_config_service import template_file_url
+from app.services.marketing_campaign_v2_commercial_template_certification_service import (
+    commercial_certifications, last_confirmed_template_rejection,
+)
 
 KEY = "template_probe_v1"
 
@@ -206,10 +209,15 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
                        {"scope": f"template-certification:{template_id}"})
         source, template, groups = _context(campaign_id, template_id, active)
         signature = _signature(template)
+        # A proven commercial delivery is already a certification; do not
+        # generate duplicate QA cohorts for those exact channel/version pairs.
+        delivered = commercial_certifications(
+            template=template, groups=groups, signature=signature, session=active,
+        )
         for channel, group in groups.items():
             # The existing QA belongs to the template version and sender,
             # never to the commercial campaign currently open.
-            if _existing(template_id, signature, channel, active):
+            if channel in delivered or _existing(template_id, signature, channel, active):
                 continue
             if campaign_id is not None:
                 _no_commercial_phone(campaign_id, normalized, active)
@@ -354,8 +362,19 @@ def accepted_probe_channels(*, campaign_id, template, outbound_bindings, session
                 or snapshot.get("send_at") is not None
                 or normalize_phone(leads[0].get("phone")) != spec.get("phone_mx10")):
             continue
+        # A subsequent deterministic TEMPLATE_NOT_FOUND invalidates prior
+        # successful proof (QA or commercial) for this channel.
+        if last_confirmed_template_rejection(
+            template_id=int(template.id), channel=channel,
+            session=session, after=child.submitted_at,
+        ) is not None:
+            continue
         accepted.add(channel)
-    return frozenset(accepted)
+    commercial = commercial_certifications(
+        template=template, groups=required, signature=signature,
+        session=session, now=timestamp,
+    )
+    return frozenset(accepted | set(commercial))
 
 
 
@@ -365,6 +384,9 @@ def template_probe_matrix(*, campaign_id, template_id, session=None):
     signature = _signature(template)
     outbound = [dict(provider_channel_id=channel, channel_binding_id=group["binding_id"])
                 for channel, group in groups.items()]
+    commercial = commercial_certifications(
+        template=template, groups=groups, signature=signature, session=active,
+    )
     certified = accepted_probe_channels(
         campaign_id=campaign_id, template=template,
         outbound_bindings=outbound, session=active,
@@ -382,27 +404,56 @@ def template_probe_matrix(*, campaign_id, template_id, session=None):
         stale = bool(historical or (qa and (not isinstance(spec, dict)
             or spec.get("template_signature") != signature
             or any(spec.get(k) != group[k] for k in ("binding_id", "sender_sucursal_id", "sender")))))
+        rejection = last_confirmed_template_rejection(
+            template_id=int(template.id), channel=channel, session=active,
+        )
         if stale:
             status = "INVALIDADA"
         elif channel in certified:
             status = "VALIDADA"
         elif raw == "ACEPTADA POR IVENTAS":
             status = "INCIERTA"  # Persisted acceptance lacks valid current proof.
+        elif rejection is not None and qa is None:
+            status = "RECHAZADA"
         else:
             status = raw
+        commercial_proof = commercial.get(channel) if channel in certified else None
+        source = ("COMMERCIAL_DELIVERY" if commercial_proof else
+                  "QA_MANUAL" if channel in certified else None)
         rows.append(dict(
             channel_id=channel, **group, qa_campaign_id=int(visible_qa.id) if visible_qa else None,
             result=status, recorded_acceptance=raw, stale=stale,
             evidence_current=channel in certified, evidence_expires_at=None,
-            child_id=int(child.id) if child else None,
-            provider_campaign_id=child.provider_campaign_id if child else None,
-            error_code=child.error_code if child else None,
-            attempted_at=child.submit_started_at.isoformat() if child and child.submit_started_at else None,
-            actor_user_id=child.submitted_by_user_id if child else None,
+            certification_source=source,
+            certification_campaign_id=(
+                commercial_proof["campaign_id"] if commercial_proof else None
+            ),
+            certification_snapshot_id=(
+                commercial_proof["snapshot_id"] if commercial_proof else None
+            ),
+            certification_observed_at=(
+                commercial_proof["observed_at"] if commercial_proof else None
+            ),
+            child_id=(commercial_proof["child_id"] if commercial_proof else
+                      int(child.id) if child else
+                      int(rejection.id) if rejection and status == "RECHAZADA" else None),
+            provider_campaign_id=(
+                commercial_proof["provider_campaign_id"] if commercial_proof else
+                child.provider_campaign_id if child else None
+            ),
+            error_code=(child.error_code if child else
+                        rejection.error_code if rejection and status == "RECHAZADA" else None),
+            attempted_at=(commercial_proof["submitted_at"] if commercial_proof else
+                          child.submit_started_at.isoformat() if child and child.submit_started_at else None),
+            actor_user_id=(commercial_proof["actor_user_id"] if commercial_proof else
+                           child.submitted_by_user_id if child else None),
             authorized_by_user_id=spec.get("authorized_by_user_id") if isinstance(spec, dict) else None,
             recipient_phone_masked="******" + spec["phone_mx10"][-4:]
                 if isinstance(spec, dict) and isinstance(spec.get("phone_mx10"), str) else None,
-            delivery_status="NO VERIFICADA",
+            delivery_status=(
+                commercial_proof["delivery_status"] if commercial_proof
+                else "NO VERIFICADA"
+            ),
         ))
     return dict(campaign_id=campaign_id or 0, template_id=template_id,
                 template_name=str(template.template_name), rows=rows,

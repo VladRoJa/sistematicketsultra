@@ -40,11 +40,16 @@ def child(**kwargs):
 def session(rows=None):
     active = MagicMock()
     active.get_bind.return_value.dialect.name = "postgresql"
-    def query(model):
+    def query(model, *extra):
         q = MagicMock()
         q.filter_by.return_value = q
         q.filter.return_value = q
-        if model is probe.Recipient:
+        q.join.return_value = q
+        q.order_by.return_value = q
+        q.limit.return_value = q
+        if extra:
+            q.all.return_value = []
+        elif model is probe.Recipient:
             q.all.return_value = [NS(phone_mx10="6861000001")]
         elif model is probe.Child:
             q.all.return_value = rows or []

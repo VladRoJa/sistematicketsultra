@@ -43,15 +43,25 @@
             <p *ngIf="row.result === 'VALIDADA'">Certificación reutilizable, sin vencimiento automático.</p>
             <strong *ngIf="row.stale"> · Cambió la versión o el canal; esta certificación no aplica.</strong></td>
           <td>{{ row.delivery_status }}</td>
-          <td>QA #{{ row.qa_campaign_id || '—' }} · intento #{{ row.child_id || '—' }}<br>
-            {{ row.attempted_at | date:'short' }} · actor {{ row.actor_user_id || '—' }}<br>
-            iVentas: {{ row.provider_campaign_id || 'Sin identificador confirmado' }}</td>
+          <td>
+            <ng-container *ngIf="row.certification_source === 'COMMERCIAL_DELIVERY'; else qaAudit">
+              Entrega comercial confirmada · campaña #{{ row.certification_campaign_id }}<br>
+              Lote #{{ row.child_id }} · snapshot #{{ row.certification_snapshot_id }}<br>
+              {{ row.certification_observed_at | date:'short' }} · actor {{ row.actor_user_id || '—' }}
+            </ng-container>
+            <ng-template #qaAudit>QA #{{ row.qa_campaign_id || '—' }} · intento #{{ row.child_id || '—' }}<br>
+              {{ row.attempted_at | date:'short' }} · actor {{ row.actor_user_id || '—' }}
+            </ng-template>
+            <br>iVentas: {{ row.provider_campaign_id || 'Sin identificador confirmado' }}
+          </td>
           <td><button mat-stroked-button type="button" (click)="reviewQa.emit(row)"
             [disabled]="busy || disabled || !row.qa_campaign_id || row.stale || row.result === 'VALIDADA' || row.result === 'RECHAZADA' || row.result === 'INCIERTA'">Revisar QA / confirmar envío</button></td>
         </tr></tbody>
       </table>
     </div>
-    <p>Actualizar la matriz después de revisar cada QA. ACEPTADA POR IVENTAS no significa entregada.
+    <p>La matriz aprovecha entregas/lecturas comerciales confirmadas y QA existentes, sin enviar mensajes adicionales.
+      Un lote SUBMITTED sin una observación de entrega vinculada sigue pendiente.
+      ACEPTADA POR IVENTAS no significa entregada. Actualiza la matriz después de revisar cada QA.
       La certificación aceptada no caduca automáticamente; solo aplica a la misma versión y canal. Los intentos inciertos no se reenvían.
       Si faltan variables de la plantilla, el preflight QA bloqueará el envío.</p>
   </ng-container>
