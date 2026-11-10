@@ -335,6 +335,26 @@ def _es_jefe_depto(user: UserORM, ticket: Ticket) -> bool:
 def _es_creador(user: UserORM, ticket: Ticket) -> bool:
     return (user.username or "").lower() == (ticket.username or "").lower()
 
+def _es_ticket_bi_vlad(ticket: Ticket) -> bool:
+    """BI Vlad has a corporate assignee, separate from the requesting branches."""
+    department = getattr(ticket, "departamento", None)
+    name = getattr(department, "nombre", "")
+    return isinstance(name, str) and name.strip().casefold() == "bi vlad"
+
+
+def _puede_gestionar_bi_vlad(user: UserORM, ticket: Ticket) -> bool:
+    """Only the assigned operator can work on BI Vlad; creator retains conformity.
+
+    This is a per-resource restriction layered on top of legacy role/scope
+    guards. No change to the authorization of other departments.
+    """
+    if not _es_ticket_bi_vlad(ticket):
+        return True
+    operator = str(getattr(user, "username", "") or "").strip().casefold()
+    assigned = str(getattr(ticket, "asignado_a", "") or "").strip().casefold()
+    return bool(operator and assigned and operator == assigned)
+
+
 def _es_gerente_regional(user: UserORM) -> bool:
     return (user.rol or "").upper() == "GERENTE_REGIONAL"
 
@@ -1610,6 +1630,8 @@ def update_ticket_status(id):
         )
         if not ticket_en_scope:
             return jsonify({"mensaje": "No autorizado para actualizar este ticket"}), 403
+        if not _puede_gestionar_bi_vlad(actor, ticket):
+            return jsonify({"mensaje": "Solo el responsable puede gestionar este ticket de BI Vlad."}), 403
 
         data = request.get_json() or {}
         # /update mezcla cambio de estado y metadatos. Si vienen ambos,
@@ -3050,6 +3072,8 @@ def set_compromiso(ticket_id):
     if not t:
         return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
+    if not _puede_gestionar_bi_vlad(user, t):
+        return jsonify({"mensaje": "Solo el responsable puede gestionar este ticket de BI Vlad."}), 403
     if not (_es_admin_o_corporativo(user) or _es_jefe_depto(user, t)):
         return jsonify({"mensaje": "No autorizado"}), 403
 
@@ -3134,6 +3158,8 @@ def cierre_gerente_desde_cero(ticket_id):
         if not t:
             return jsonify({"mensaje": "Ticket no encontrado"}), 404
 
+        if not _puede_gestionar_bi_vlad(user, t):
+            return jsonify({"mensaje": "Solo el responsable puede cerrar este ticket de BI Vlad."}), 403
         if not _puede_cerrar_ticket_desde_cero(user, t):
             return jsonify({"mensaje": "No autorizado"}), 403
 
@@ -3228,6 +3254,9 @@ def cierre_solicitar(ticket_id):
     t = Ticket.query.get(ticket_id)
     if not t:
         return jsonify({"mensaje":"Ticket no encontrado"}), 404
+
+    if not _puede_gestionar_bi_vlad(user, t):
+        return jsonify({"mensaje": "Solo el responsable puede solicitar cierre de BI Vlad."}), 403
 
     if t.departamento_id == 1:
         # El usuario 45 conserva cierre legacy SIN responsable, con alcance
@@ -3358,6 +3387,9 @@ def cierre_rechazar_jefe(ticket_id):
     # En Mantenimiento la devolución técnica pertenece exclusivamente a
     # coordinación (return-to-technician); la devolución tras conformidad
     # pertenece al gerente (rechazar-creador). Esta ruta legacy no aplica.
+    if not _puede_gestionar_bi_vlad(user, t):
+        return jsonify({"mensaje": "Solo el responsable puede rechazar cierre de BI Vlad."}), 403
+
     if t.departamento_id == 1:
         return jsonify({
             "mensaje": "Para Mantenimiento usa la revisión de coordinación o conformidad del gerente."
