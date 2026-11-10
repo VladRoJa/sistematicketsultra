@@ -19,7 +19,7 @@ def _catalog_context(department_name="BI Vlad", branches=3):
     dep = stack.enter_context(patch.object(ticket_routes, "Departamento"))
     dep.query.get.return_value = SimpleNamespace(nombre=department_name)
     suc = stack.enter_context(patch.object(ticket_routes, "Sucursal"))
-    suc.query.filter.return_value.count.return_value = branches
+    suc.query.filter.return_value.filter.return_value.count.return_value = branches
     return stack, suc
 
 
