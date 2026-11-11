@@ -249,7 +249,7 @@ def test_max_campaigns_per_cycle_is_applied_after_deterministic_order(session):
 def test_identical_stats_become_unchanged_and_changed_stats_create_new_snapshot(
     session,
 ):
-    for campaign_id in (2, 3, 5):
+    for campaign_id in (2, 3, 5, 6):
         campaign = session.get(MarketingCampaignV2ORM, campaign_id)
         campaign.provider = None
         campaign.provider_campaign_id = None
