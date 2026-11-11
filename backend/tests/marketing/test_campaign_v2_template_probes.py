@@ -373,3 +373,80 @@ def test_commercial_rejection_audit_never_claims_a_qa_attempt():
     assert row["child_id"] == 290
     assert row["actor_user_id"] == 47
     assert row["attempted_at"] == NOW.isoformat()
+
+
+def test_existing_qa_revision_prefers_latest_and_keeps_original_immutable():
+    signature = probe._signature(template())
+    base = probe._name(7, signature, "tec")
+    rows = [
+        NS(id=80, name=base),
+        NS(id=81, name=base + "-R2"),
+        NS(id=82, name=base + "-R3"),
+        NS(id=100, name=base + "-unknown"),
+    ]
+    active = session()
+    active.query.return_value.filter.return_value.all.return_value = rows
+    assert probe._existing(7, signature, "tec", active).id == 82
+    assert probe._retry_name(7, signature, "tec", rows[0]) == base + "-R2"
+    assert probe._retry_name(7, signature, "tec", rows[2]) == base + "-R4"
+
+
+def test_after_confirmed_template_not_found_new_qa_preserves_failed_history():
+    active = session([child(
+        status="PROVIDER_ERROR", submit_started_at=NOW,
+        submitted_by_user_id=47, error_code="TEMPLATE_NOT_FOUND",
+        support_ref="provider-ref-73", provider_response_json={"http_status": 400},
+    )])
+    previous = campaign()
+    previous.name = probe._name(7, probe._signature(template()), "tec")
+    captured = {}
+    def freeze(**kwargs):
+        captured.update(kwargs)
+    with patch.object(probe, "_context", return_value=context()), \
+         patch.object(probe, "_existing", return_value=previous), \
+         patch.object(probe, "_no_commercial_phone"), \
+         patch.object(probe, "preview_qa_manual_http", return_value={"preview_fingerprint": "a" * 64}), \
+         patch.object(probe, "freeze_campaign_v2_qa_manual", side_effect=freeze) as prepare, \
+         patch.object(probe, "template_probe_matrix", return_value={"rows": []}):
+        probe.prepare_template_probes(**prepare_args(active), selected_channel_ids=["tec"])
+    prepare.assert_called_once()
+    assert captured["name"] == previous.name + "-R2"
+    assert captured["source_metadata"][probe.KEY]["retry_of_qa_campaign_id"] == previous.id
+    assert captured["source_metadata"][probe.KEY]["retry_reason"] == "CONFIRMED_TEMPLATE_NOT_FOUND"
+    assert captured["commit"] is False
+    active.commit.assert_called_once()
+
+
+@pytest.mark.parametrize("bad_child", [
+    child(status="RECONCILIATION_REQUIRED", submit_started_at=NOW,
+          error_code="TEMPLATE_NOT_FOUND", support_ref="unknown",
+          submitted_by_user_id=47, provider_response_json={"http_status": 400}),
+    child(status="PROVIDER_ERROR", submit_started_at=NOW,
+          error_code="UNKNOWN", support_ref="provider-ref",
+          submitted_by_user_id=47, provider_response_json={"http_status": 400}),
+    child(status="SUBMITTED", submit_started_at=NOW, submitted_at=NOW,
+          submitted_by_user_id=47, provider_campaign_id="accepted-iv"),
+])
+def test_uncertain_or_accepted_qa_cannot_create_another_attempt(bad_child):
+    active = session([bad_child])
+    previous = campaign()
+    previous.name = probe._name(7, probe._signature(template()), "tec")
+    with patch.object(probe, "_context", return_value=context()), \
+         patch.object(probe, "_existing", return_value=previous), \
+         patch.object(probe, "freeze_campaign_v2_qa_manual") as freeze, \
+         patch.object(probe, "template_probe_matrix", return_value={"rows": []}):
+        probe.prepare_template_probes(**prepare_args(active), selected_channel_ids=["tec"])
+    freeze.assert_not_called()
+
+
+def test_retry_qa_cohort_preparation_is_idempotent_before_send():
+    active = session()
+    previous = campaign()
+    previous.name = probe._name(7, probe._signature(template()), "tec") + "-R2"
+    with patch.object(probe, "_context", return_value=context()), \
+         patch.object(probe, "_existing", return_value=previous), \
+         patch.object(probe, "freeze_campaign_v2_qa_manual") as freeze, \
+         patch.object(probe, "template_probe_matrix", return_value={"rows": []}):
+        # There is a saved retry cohort without a submitted provider child.
+        probe.prepare_template_probes(**prepare_args(active), selected_channel_ids=["tec"])
+    freeze.assert_not_called()
