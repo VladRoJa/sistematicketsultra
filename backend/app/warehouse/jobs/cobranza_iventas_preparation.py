@@ -107,10 +107,16 @@ def build_import_bytes(artifacts: list[dict[str, Any]]) -> tuple[bytes, int]:
 
 def prepare_cobranza_iventas_campaign(
     *, business_date: date | str, artifacts: list[dict[str, Any]],
+    pilot_branch_key: str | None = None,
 ) -> dict[str, Any]:
     """Freeze one idempotent daily campaign, without sending a message."""
     day = date.fromisoformat(str(business_date))
     name = f"{CAMPAIGN_PREFIX} - {day.isoformat()}"
+    if pilot_branch_key is not None and (
+        not isinstance(pilot_branch_key, str) or
+        not pilot_branch_key.strip() or pilot_branch_key != pilot_branch_key.strip()
+    ):
+        raise CobranzaCampaignPreparationError("Sucursal de piloto invalida.")
     existing = db.session.query(MarketingCampaignV2ORM).filter(
         MarketingCampaignV2ORM.name == name,
         MarketingCampaignV2ORM.source == "EXCEL_IMPORT",
@@ -141,12 +147,16 @@ def prepare_cobranza_iventas_campaign(
     )
     eligible: list[dict[str, Any]] = []
     skipped_branches: list[dict[str, str]] = []
+    pilot_found = False
     for artifact in artifacts:
         branch_raw = str(artifact.get("sucursal_raw") or "").strip()
         branch = resolve_dispatch_branch_key(branch_raw, session=db.session)
         if branch is None:
             skipped_branches.append({"sucursal": branch_raw, "reason": "SIN_SUCURSAL_CANONICA"})
             continue
+        if pilot_branch_key is not None and branch.sucursal_canon != pilot_branch_key:
+            continue  # Intentionally out of scope, not a delivery error.
+        pilot_found = True
         binding = resolve_dispatch_channel_binding(
             sucursal_id=branch.sucursal_id, session=db.session,
         )
@@ -161,6 +171,8 @@ def prepare_cobranza_iventas_campaign(
             skipped_branches.append({"sucursal": branch_raw, "reason": "ARCHIVO_O_TELEFONOS"})
             continue
         eligible.append(artifact)
+    if pilot_branch_key is not None and not pilot_found:
+        raise CobranzaCampaignPreparationError("La sucursal piloto no aparece en el corte diario.")
     if not eligible:
         raise CobranzaCampaignPreparationError("Ninguna sucursal tiene cobranza enviable.")
     payload, rows = build_import_bytes(eligible)
@@ -179,6 +191,7 @@ def prepare_cobranza_iventas_campaign(
             "business_date": day.isoformat(),
             "generated_rows_with_phone": rows,
             "skipped_branches": skipped_branches,
+            **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
         },
     )
     return {
@@ -187,4 +200,5 @@ def prepare_cobranza_iventas_campaign(
         "recipient_count": int(result["recipient_count"]),
         "blacklist_excluded_count": int(result["blacklist_excluded_count"]),
         "skipped_branches": skipped_branches,
+        "pilot_branch_key": pilot_branch_key,
     }
