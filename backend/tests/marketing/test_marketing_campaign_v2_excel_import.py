@@ -159,3 +159,66 @@ def test_stale_preview_blacklist_change_rejects_freeze(session):
             expected_preview_fingerprint=preview["preview_fingerprint"],
         )
     assert session.query(MarketingCampaignV2ORM).count() == 0
+
+
+def test_cobranza_pilot_preparation_freezes_one_branch_and_is_idempotent(
+    session, tmp_path, monkeypatch,
+):
+    """Actual Excel preview+freeze integration; no provider, no dispatch."""
+    from types import SimpleNamespace
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_TEMPLATE_ID", "1")
+    monkeypatch.setenv("WAREHOUSE_AUTOMATION_USER_ID", "47")
+    monkeypatch.setattr(preparation, "db", SimpleNamespace(session=session))
+    session.add(MarketingCampaignV2BlacklistORM(
+        phone_mx10="6861000003", source_filename="blacklist.xlsx", created_by_user_id=47,
+    ))
+    session.commit()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Socio", "Teléfono", "Estatus"])
+    ws.append(["Test A", "6861000001", "Rechazado"])
+    ws.append(["Test B", "6861000002", "Rechazado"])
+    ws.append(["Blacklist", "6861000003", "Rechazado"])
+    file_path = tmp_path / "piloto_azahares.xlsx"
+    wb.save(file_path)
+    artifacts = [{
+        "path": str(file_path), "sucursal_raw": "AZAHARES CUL", "rows_count": 3,
+    }]
+    result = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-10", artifacts=artifacts,
+    )
+    assert result["status"] == "PREPARED"
+    assert result["recipient_count"] == 2
+    assert result["blacklist_excluded_count"] == 1
+    assert result["skipped_branches"] == []
+    campaign = session.get(MarketingCampaignV2ORM, result["campaign_id"])
+    assert campaign.source == "EXCEL_IMPORT"
+    assert campaign.audience_definition_json["source_metadata"]["automation_job"] == (
+        "cobranza_recurrente_rechazados"
+    )
+    assert campaign.audience_definition_json["source_metadata"]["business_date"] == "2026-11-10"
+    assert sorted(row.phone_mx10 for row in campaign.recipients) == [
+        "6861000001", "6861000002",
+    ]
+
+    repeat = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-10", artifacts=artifacts,
+    )
+    assert repeat == {"status": "ALREADY_PREPARED", "campaign_id": result["campaign_id"]}
+    assert session.query(MarketingCampaignV2ORM).count() == 1
+
+
+def test_cobranza_without_template_never_prepares_or_sends(session, monkeypatch):
+    from types import SimpleNamespace
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.delenv("COBRANZA_IVENTAS_TEMPLATE_ID", raising=False)
+    monkeypatch.setattr(preparation, "db", SimpleNamespace(session=session))
+    result = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-10", artifacts=[],
+    )
+    assert result == {"status": "TEMPLATE_NOT_CONFIGURED"}
+    assert session.query(MarketingCampaignV2ORM).count() == 0
