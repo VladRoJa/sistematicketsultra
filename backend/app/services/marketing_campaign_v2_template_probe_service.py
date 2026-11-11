@@ -155,12 +155,41 @@ def _name(template_id, signature, channel):
 
 
 def _existing(template_id, signature, channel, session):
-    rows = session.query(Campaign).filter_by(
-        source="QA_MANUAL", name=_name(template_id, signature, channel),
+    """Latest QA revision for this exact template version and sender.
+
+    The first QA keeps its historical name; a definitively rejected QA can
+    be followed by an explicit new QA cohort named -R2, -R3, etc. Older
+    attempts remain immutable and never receive another provider POST.
+    """
+    base = _name(template_id, signature, channel)
+    rows = session.query(Campaign).filter(
+        Campaign.source == "QA_MANUAL", Campaign.name.like(base + "%"),
     ).all()
-    if len(rows) > 1:
-        raise TemplateProbeConflict("Certificación QA duplicada; requiere revisión.")
-    return rows[0] if rows else None
+    versions = {}
+    for row in rows:
+        suffix = row.name[len(base):] if row.name.startswith(base) else None
+        if suffix == "":
+            revision = 1
+        elif (isinstance(suffix, str) and suffix.startswith("-R")
+              and suffix[2:].isdigit() and int(suffix[2:]) >= 2):
+            revision = int(suffix[2:])
+        else:
+            continue
+        if revision in versions:
+            raise TemplateProbeConflict("Certificación QA duplicada; requiere revisión.")
+        versions[revision] = row
+    return versions[max(versions)] if versions else None
+
+
+def _retry_name(template_id, signature, channel, qa):
+    base = _name(template_id, signature, channel)
+    suffix = qa.name[len(base):] if qa.name.startswith(base) else None
+    if suffix == "":
+        return base + "-R2"
+    if (isinstance(suffix, str) and suffix.startswith("-R")
+            and suffix[2:].isdigit() and int(suffix[2:]) >= 2):
+        return base + "-R" + str(int(suffix[2:]) + 1)
+    raise TemplateProbeConflict("La revisión anterior de QA no es válida.")
 
 
 def _previous_version(template_id, channel, session):
