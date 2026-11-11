@@ -47,6 +47,13 @@ def _definition():
     }
 
 
+@pytest.fixture(autouse=True)
+def clear_stats_failure_cooldown():
+    scheduler_service._FAILED_UNTIL.clear()
+    yield
+    scheduler_service._FAILED_UNTIL.clear()
+
+
 @pytest.fixture
 def session():
     engine = create_engine("sqlite://")
@@ -95,8 +102,8 @@ def session():
                     ),
                     audience_definition_json=_definition(),
                     frozen_at=NOW - timedelta(days=20),
-                    created_at=NOW - timedelta(days=20),
-                    updated_at=NOW - timedelta(days=20),
+                    created_at=NOW - timedelta(hours=2),
+                    updated_at=NOW - timedelta(hours=2),
                 )
             )
 
@@ -242,7 +249,7 @@ def test_max_campaigns_per_cycle_is_applied_after_deterministic_order(session):
 def test_identical_stats_become_unchanged_and_changed_stats_create_new_snapshot(
     session,
 ):
-    for campaign_id in (2, 3, 5, 6):
+    for campaign_id in (2, 3, 5):
         campaign = session.get(MarketingCampaignV2ORM, campaign_id)
         campaign.provider = None
         campaign.provider_campaign_id = None
@@ -463,3 +470,73 @@ def test_multichild_scheduler_selects_submitted_children_without_crossing_budget
     assert (result.selected, result.attempted, result.created, result.failed) == (
         2, 2, 2, 0,
     )
+
+
+def test_uncaptured_ancient_child_never_starves_recent_submissions(session):
+    from sqlalchemy import MetaData, Table
+    child_table = Table("marketing_campaign_v2_provider_campaigns", MetaData(),
+                        autoload_with=session.get_bind())
+    for campaign_id in range(1, 7):
+        parent = session.get(MarketingCampaignV2ORM, campaign_id)
+        parent.provider = None
+        parent.provider_campaign_id = None
+    session.execute(child_table.insert(), [
+        dict(id=1, campaign_v2_id=1, provider="IVENTAS",
+             provider_campaign_id="failed-old", status="SUBMITTED",
+             submitted_at=NOW - timedelta(days=30)),
+        dict(id=2, campaign_v2_id=4, provider="IVENTAS",
+             provider_campaign_id="recent-a", status="SUBMITTED",
+             submitted_at=NOW - timedelta(hours=4)),
+        dict(id=3, campaign_v2_id=4, provider="IVENTAS",
+             provider_campaign_id="recent-b", status="SUBMITTED",
+             submitted_at=NOW - timedelta(hours=3)),
+    ])
+    session.commit()
+    selection = select_campaign_v2_provider_stats_candidates(
+        now=NOW, horizon_hours=48, max_campaigns=2, session=session)
+    assert selection.targets == ((4, 2), (4, 3))
+    assert selection.skipped_outside_horizon == 1
+
+
+def test_failed_lookup_gets_cooldown_and_other_children_advance(session):
+    for campaign_id in (2, 3, 5):
+        campaign = session.get(MarketingCampaignV2ORM, campaign_id)
+        campaign.provider = None
+        campaign.provider_campaign_id = None
+    session.commit()
+    calls = []
+
+    def capture(**kwargs):
+        campaign = kwargs["campaign_id"]
+        calls.append(campaign)
+        if campaign == 1:
+            raise MarketingCampaignV2ProviderStatsUpstreamError("429", retryable=True)
+        return {"created": False}
+
+    a = run_campaign_v2_provider_stats_capture_cycle(
+        now=NOW, horizon_hours=48, max_campaigns=1,
+        session=session, capture_func=capture)
+    b = run_campaign_v2_provider_stats_capture_cycle(
+        now=NOW + timedelta(minutes=15), horizon_hours=48,
+        max_campaigns=1, session=session, capture_func=capture)
+    assert a.failed == 1
+    # A failure cannot consume the only available slot in the next cycle.
+    assert b.failed == 0
+    assert calls == [1, 6]
+    assert scheduler_service._FAILED_UNTIL[(1, None)] > NOW + timedelta(minutes=15)
+
+
+def test_snapshot_without_change_rotates_behind_uncaptured_recent(session):
+    # The second oldest recent missing capture must not wait for a repeatedly
+    # unchanged snapshot from a previously captured campaign.
+    a = select_campaign_v2_provider_stats_candidates(
+        now=NOW, horizon_hours=24, max_campaigns=2, session=session)
+    assert a.campaign_ids == (1, 6)
+    _add_snapshot(session, campaign_id=1,
+                  fetched_at=NOW, fingerprint="1" * 64)
+    session.commit()
+    b = select_campaign_v2_provider_stats_candidates(
+        now=NOW + timedelta(minutes=15), horizon_hours=24,
+        max_campaigns=2, session=session)
+    assert b.campaign_ids[0] == 6
+    assert b.campaign_ids[1] == 2
