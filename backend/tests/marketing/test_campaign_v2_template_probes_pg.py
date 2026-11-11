@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.marketing import (
     MarketingCampaignV2ORM as Campaign, MarketingCampaignV2RecipientORM as Recipient,
     MarketingCampaignV2RecipientEvidenceORM as Evidence,
+    MarketingCampaignV2ProviderCampaignORM as Child,
 )
 from app.models.sucursal_model import Sucursal
 from app.models.warehouse import TrackBranchCatalogORM as Branch
@@ -32,7 +33,12 @@ def test_two_connections_freeze_one_qa_cohort_without_provider_requests():
     users = sa.Table("users", md, sa.Column("id", sa.Integer, primary_key=True))
     for name in ["socios_vencidos_cartera", "socios_activos_snapshot_rows", "socios_activos_snapshots"]:
         sa.Table(name, md, sa.Column("id", sa.BigInteger, primary_key=True))
-    for model in [Sucursal, Branch, Campaign, Recipient, Evidence]:
+    # The retry eligibility check reads provider children, even when none were
+    # submitted. Keep the isolated fixture aligned with that read-only query.
+    for table_name in ("marketing_campaign_v2_channel_bindings",
+                       "marketing_campaign_v2_templates"):
+        sa.Table(table_name, md, sa.Column("id", sa.BigInteger, primary_key=True))
+    for model in [Sucursal, Branch, Campaign, Recipient, Evidence, Child]:
         model.__table__.to_metadata(md)
     md.create_all(engine)
     try:

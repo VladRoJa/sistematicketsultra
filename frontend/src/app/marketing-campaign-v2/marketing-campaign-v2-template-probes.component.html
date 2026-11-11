@@ -37,7 +37,14 @@
     <div class="table-scroll">
       <table>
         <caption>Pruebas por canal emisor · aceptación separada de entrega</caption>
-        <thead><tr><th>Seleccionar QA</th><th>Sucursales de origen</th><th>Emisor / canal</th><th>Destinatario QA</th>
+        <thead><tr><th>
+          <mat-checkbox [checked]="allSelectableChannelsSelected"
+            [indeterminate]="someSelectableChannelsSelected"
+            [disabled]="!selectableChannelIds.length"
+            (change)="toggleAllChannels($event.checked)">
+            Seleccionar todas
+          </mat-checkbox>
+        </th><th>Sucursales de origen</th><th>Emisor / canal</th><th>Destinatario QA</th>
           <th>Aceptación</th><th>Entrega real</th><th>Auditoría</th><th>Acción</th></tr></thead>
         <tbody><tr *ngFor="let row of state.rows">
           <td><mat-checkbox [checked]="selectedChannels.has(row.channel_id)"

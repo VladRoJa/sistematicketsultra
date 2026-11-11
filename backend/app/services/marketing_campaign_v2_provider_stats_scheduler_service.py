@@ -50,6 +50,13 @@ LOGGER = logging.getLogger(__name__)
 
 CaptureFunc = Callable[..., dict]
 
+# One worker process owns this scheduler. After a failed provider lookup, give
+# other candidates a chance before retrying this exact provider child.
+# No database state is mutated by cooldowns; a worker restart clears them.
+_FAILED_UNTIL: dict[tuple[int, int | None], datetime] = {}
+FAILED_RETRY_DELAY = timedelta(hours=1)
+
+
 
 def select_campaign_v2_provider_stats_candidates(
     *,
@@ -86,6 +93,7 @@ def select_campaign_v2_provider_stats_candidates(
         parent_rows = (
             active_session.query(
                 MarketingCampaignV2ORM.id,
+                MarketingCampaignV2ORM.created_at,
                 aggregate.c.first_fetched_at,
                 aggregate.c.latest_fetched_at,
             )
@@ -103,6 +111,7 @@ def select_campaign_v2_provider_stats_candidates(
             active_session.query(
                 MarketingCampaignV2ProviderCampaignORM.id.label("child_id"),
                 MarketingCampaignV2ProviderCampaignORM.campaign_v2_id,
+                MarketingCampaignV2ProviderCampaignORM.submitted_at,
                 aggregate.c.first_fetched_at,
                 aggregate.c.latest_fetched_at,
             )
@@ -128,39 +137,57 @@ def select_campaign_v2_provider_stats_candidates(
 
     # max_campaigns is one common outbound provider-fetch budget for both kinds.
     bound_count = len(parent_rows) + len(child_rows)
-    eligible: list[tuple[tuple[int, int | None], datetime | None]] = []
+    # First evidence is bounded by send/creation age, not by first snapshot:
+    # otherwise an ancient failed child can starve every newer campaign.
+    # Once a first snapshot exists, retain the existing first-capture horizon.
+    eligible: list[tuple[tuple[int, int | None], datetime | None, datetime]] = []
     skipped_outside_horizon = 0
     for row in parent_rows:
         first = _normalize_db_datetime(row.first_fetched_at)
-        if first is not None and first < cutoff:
+        submitted = _normalize_db_datetime(row.created_at)
+        if (first is not None and first < cutoff) or (
+            first is None and (submitted is None or submitted < cutoff)
+        ):
             skipped_outside_horizon += 1
             continue
         eligible.append((
-            (int(row.id), None), _normalize_db_datetime(row.latest_fetched_at),
+            (int(row.id), None),
+            _normalize_db_datetime(row.latest_fetched_at),
+            submitted or now_utc,
         ))
     for row in child_rows:
         first = _normalize_db_datetime(row.first_fetched_at)
-        if first is not None and first < cutoff:
+        submitted = _normalize_db_datetime(row.submitted_at)
+        if (first is not None and first < cutoff) or (
+            first is None and (submitted is None or submitted < cutoff)
+        ):
             skipped_outside_horizon += 1
             continue
         eligible.append((
             (int(row.campaign_v2_id), int(row.child_id)),
             _normalize_db_datetime(row.latest_fetched_at),
+            submitted or now_utc,
         ))
 
+    # The oldest *recent* uncaptured send gets first opportunity. Successfully
+    # captured children rotate behind it, ordered by last fetched_at.
+    # Failed lookups go on a bounded cooldown rather than retrying each cycle.
     eligible.sort(key=lambda item: (
         item[1] is not None,
-        item[1] or datetime.min.replace(tzinfo=timezone.utc),
-        item[0][0],
-        item[0][1] or 0,
+        item[1] if item[1] is not None else item[2],
+        item[0][0], item[0][1] or 0,
     ))
-    targets = tuple(key for key, _ in eligible[:max_campaigns])
+    eligible_count = len(eligible)
+    targets = tuple(
+        key for key, _, _ in eligible
+        if _FAILED_UNTIL.get(key, datetime.min.replace(tzinfo=timezone.utc)) <= now_utc
+    )[:max_campaigns]
     return CampaignV2ProviderStatsSelection(
         campaign_ids=tuple(campaign for campaign, child in targets if child is None),
         bound_count=bound_count,
-        eligible_count=len(eligible),
+        eligible_count=eligible_count,
         skipped_outside_horizon=skipped_outside_horizon,
-        skipped_by_limit=max(0, len(eligible) - len(targets)),
+        skipped_by_limit=max(0, eligible_count - len(targets)),
         targets=targets,
     )
 
@@ -203,6 +230,7 @@ def run_campaign_v2_provider_stats_capture_cycle(
             if child_id is not None:
                 kwargs["child_id"] = child_id
             result = capture_func(**kwargs)
+            _FAILED_UNTIL.pop((campaign_id, child_id), None)
             if result.get("created"):
                 created += 1
             else:
@@ -212,6 +240,7 @@ def run_campaign_v2_provider_stats_capture_cycle(
             MarketingCampaignV2ProviderStatsSnapshotPersistenceError,
         ) as exc:
             failed += 1
+            _FAILED_UNTIL[(campaign_id, child_id)] = _normalize_now(now) + FAILED_RETRY_DELAY
             active_session.rollback()
             LOGGER.warning(
                 "Captura provider stats falló. "
@@ -222,6 +251,7 @@ def run_campaign_v2_provider_stats_capture_cycle(
             )
         except Exception as exc:  # noqa: BLE001
             failed += 1
+            _FAILED_UNTIL[(campaign_id, child_id)] = _normalize_now(now) + FAILED_RETRY_DELAY
             active_session.rollback()
             LOGGER.warning(
                 "Captura provider stats falló inesperadamente. "

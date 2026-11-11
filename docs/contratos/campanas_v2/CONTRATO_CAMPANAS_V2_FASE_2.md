@@ -2273,3 +2273,32 @@ POSTERIOR / NO BLOQUEANTE salvo necesidad:
     Fase 2 está ACCEPTED.
     Fase 3 está DESBLOQUEADA / PENDIENTE DE IMPLEMENTACIÓN; aún no existe envío desde Suite.
     No implementes POST /v2/broadcast ni GraphQL mutations.
+
+
+### Recuperación de estadísticas sin reenvío comercial (noviembre 2026)
+
+El selector automático de provider stats limita el primer snapshot al horizonte
+medido desde el submitted_at real del child (o created_at para campañas
+legacy con un único binding). Ya no toma como horizonte un first_fetched_at
+inexistente: una captura fallida antigua no puede bloquear la cola para
+siempre. Los hijos recientes no capturados preceden a los que ya cuentan
+con snapshot; después se usa latest_fetched_at para rotación estable.
+Un error externo aplica una pausa en memoria de una hora para ese
+campaign_id/child_id, con limpieza cuando la captura vuelve a funcionar.
+El proceso sigue limitado por MAX_CAMPAIGNS_PER_CYCLE y el horizonte
+configurado, sin agregar envíos.
+
+Para recuperar una campaña particular con children SUBMITTED:
+- Vista previa (sin llamadas a proveedor ni escritura):
+  docker compose exec -T marketing-scheduler python -m scripts.marketing.capture_campaign_v2_stats --campaign-id 68
+- Tras revisar la lista, ejecución explícita y limitada a 12 children:
+  docker compose exec -T marketing-scheduler python -m scripts.marketing.capture_campaign_v2_stats --campaign-id 68 --max-children 12 --execute
+
+Cada child requiere un identificador de campaña externo y se consulta por su
+binding exacto; las capturas quedan inmutables/append-only y se asocian al
+child por provider_campaign_id. Un error se registra por identificador sin
+revelar teléfonos; el script continúa solo con lecturas de estadísticas.
+No se envía WhatsApp, ni se altera el estado de las campañas comerciales.
+No es un mecanismo de reenvío ni de reintentos del proveedor. Usar después
+de desplegar la corrección y validar que la vista previa contenga los lotes
+esperados.

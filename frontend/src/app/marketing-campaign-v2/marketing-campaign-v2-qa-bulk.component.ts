@@ -107,7 +107,7 @@ export class MarketingCampaignV2QaBulkComponent implements OnChanges, OnDestroy 
 
   get canReview(): boolean {
     return !this.destroyed && !this.busy && !this.disabled && !this.blocked && !!this.templateId &&
-      this.selected.size >= 2 && this.selectedRows.length === this.selected.size &&
+      this.selected.size >= 1 && this.selectedRows.length === this.selected.size &&
       new Set(this.selectedRows.map(row => row.channel_id)).size === this.selected.size;
   }
 
@@ -122,7 +122,7 @@ export class MarketingCampaignV2QaBulkComponent implements OnChanges, OnDestroy 
 
   get canSend(): boolean {
     return !this.destroyed && !this.busy && !this.disabled && !this.blocked && !!this.templateId &&
-      this.reviewed.length >= 2 && this.reviewed.length === this.selected.size &&
+      this.reviewed.length >= 1 && this.reviewed.length === this.selected.size &&
       this.confirmed.value && this.phrase.value.trim() === this.sendWord &&
       this.password.value.length > 0 && this.password.value.length <= 256;
   }

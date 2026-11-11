@@ -155,12 +155,41 @@ def _name(template_id, signature, channel):
 
 
 def _existing(template_id, signature, channel, session):
-    rows = session.query(Campaign).filter_by(
-        source="QA_MANUAL", name=_name(template_id, signature, channel),
+    """Latest QA revision for this exact template version and sender.
+
+    The first QA keeps its historical name; a definitively rejected QA can
+    be followed by an explicit new QA cohort named -R2, -R3, etc. Older
+    attempts remain immutable and never receive another provider POST.
+    """
+    base = _name(template_id, signature, channel)
+    rows = session.query(Campaign).filter(
+        Campaign.source == "QA_MANUAL", Campaign.name.like(base + "%"),
     ).all()
-    if len(rows) > 1:
-        raise TemplateProbeConflict("Certificación QA duplicada; requiere revisión.")
-    return rows[0] if rows else None
+    versions = {}
+    for row in rows:
+        suffix = row.name[len(base):] if row.name.startswith(base) else None
+        if suffix == "":
+            revision = 1
+        elif (isinstance(suffix, str) and suffix.startswith("-R")
+              and suffix[2:].isdigit() and int(suffix[2:]) >= 2):
+            revision = int(suffix[2:])
+        else:
+            continue
+        if revision in versions:
+            raise TemplateProbeConflict("Certificación QA duplicada; requiere revisión.")
+        versions[revision] = row
+    return versions[max(versions)] if versions else None
+
+
+def _retry_name(template_id, signature, channel, qa):
+    base = _name(template_id, signature, channel)
+    suffix = qa.name[len(base):] if qa.name.startswith(base) else None
+    if suffix == "":
+        return base + "-R2"
+    if (isinstance(suffix, str) and suffix.startswith("-R")
+            and suffix[2:].isdigit() and int(suffix[2:]) >= 2):
+        return base + "-R" + str(int(suffix[2:]) + 1)
+    raise TemplateProbeConflict("La revisión anterior de QA no es válida.")
 
 
 def _previous_version(template_id, channel, session):
@@ -231,13 +260,29 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
             template=template, groups=groups, signature=signature, session=active,
         )
         for channel, group in groups.items():
-            # The existing QA belongs to the template version and sender,
-            # never to the commercial campaign currently open.
-            if channel in delivered or _existing(template_id, signature, channel, active):
+            if channel in delivered:
                 continue
+            # Only a confirmed 400/TEMPLATE_NOT_FOUND with durable evidence
+            # allows a new QA cohort. The original attempt remains immutable.
+            previous = _existing(template_id, signature, channel, active)
+            name = _name(template_id, signature, channel)
+            if previous is not None:
+                children = active.query(Child).filter_by(campaign_v2_id=previous.id).all()
+                spec_before = probe_spec(previous)
+                if (len(children) != 1 or not confirmed_rejected_child(children[0])
+                        or children[0].error_code != "TEMPLATE_NOT_FOUND"
+                        or children[0].template_id != template_id
+                        or children[0].provider_channel_id != channel
+                        or not isinstance(spec_before, dict)
+                        or spec_before.get("template_signature") != signature
+                        or spec_before.get("channel_id") != channel
+                        or any(spec_before.get(k) != group[k]
+                               for k in ("binding_id", "sender_sucursal_id", "sender"))):
+                    continue
+                name = _retry_name(template_id, signature, channel, previous)
             if campaign_id is not None:
                 _no_commercial_phone(campaign_id, normalized, active)
-            args = dict(name=_name(template_id, signature, channel), purpose=source.purpose,
+            args = dict(name=name, purpose=source.purpose,
                         sucursal_id=group["sender_sucursal_id"], provider_channel_id=channel,
                         recipients=[{"name": recipient_name.strip(), "phone": normalized}], session=active)
             preview = preview_qa_manual_http(**args)
@@ -247,6 +292,9 @@ def prepare_template_probes(*, campaign_id, template_id, recipient_name, phone,
                         authorization_reference=authorization_reference.strip(),
                         authorized_at=datetime.now(timezone.utc).isoformat(),
                         certification_scope="TEMPLATE_VERSION_CHANNEL_V2")
+            if previous is not None:
+                spec["retry_of_qa_campaign_id"] = int(previous.id)
+                spec["retry_reason"] = "CONFIRMED_TEMPLATE_NOT_FOUND"
             args.pop("provider_channel_id")
             freeze_campaign_v2_qa_manual(
                 **args, expected_preview_fingerprint=preview["preview_fingerprint"],
@@ -306,8 +354,9 @@ def validate_probe_claim(*, campaign, child, session):
     if (child.provider_channel_id != spec["channel_id"] or child.recipient_count != 1
             or session.query(Approval.id).filter_by(campaign_v2_id=campaign.id).first() is None):
         raise TemplateProbeValidation("La prueba requiere aprobación y despacho gobernados del canal exacto.")
-    # Includes same child on explicit legacy retry, as well as replacement
-    # children after a confirmed rejection. No POST for this pair a second time.
+    # Any historical attempt in THIS QA cohort blocks another provider POST.
+    # A confirmed TEMPLATE_NOT_FOUND may instead create a distinct audited
+    # QA cohort revision; it never reuses this campaign or its child.
     if any(row.submit_started_at is not None for row in session.query(Child).filter_by(
             campaign_v2_id=campaign.id).all()):
         raise TemplateProbeValidation("La prueba ya tuvo un intento; no admite reenvíos.")
