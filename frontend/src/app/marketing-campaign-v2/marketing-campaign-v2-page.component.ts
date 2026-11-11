@@ -1327,6 +1327,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
         campaignId: campaign.id,
         campaignName: campaign.name,
         recipientCount: campaign.recipient_count,
+        pilotBranch: campaign.cobranza_pilot_branch ?? null,
       },
     });
     ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(jobId => {
