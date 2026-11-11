@@ -10,6 +10,7 @@ on:
       - 'backend/app/services/marketing_campaign_v2_query_service.py'
       - 'backend/app/routes/marketing_campaign_v2_routes.py'
       - 'backend/tests/warehouse/test_cobranza_iventas_preparation.py'
+      - 'backend/tests/warehouse/test_cobranza_iventas_send_orchestration.py'
       - 'frontend/src/app/marketing-campaign-v2/**'
       - '.github/workflows/cobranza-iventas-ci.yml'
   workflow_dispatch:
@@ -37,7 +38,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest -q tests/warehouse/test_cobranza_iventas_preparation.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
+          python -m pytest -q tests/warehouse/test_cobranza_iventas_preparation.py tests/warehouse/test_cobranza_iventas_send_orchestration.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
   frontend-cobranza:
     runs-on: ubuntu-latest
     steps:
