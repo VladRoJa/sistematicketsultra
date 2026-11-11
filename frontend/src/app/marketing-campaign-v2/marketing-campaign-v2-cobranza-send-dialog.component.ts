@@ -14,6 +14,7 @@ export interface CobranzaSendDialogData {
   campaignId: number;
   campaignName: string;
   recipientCount: number;
+  pilotBranch: string | null;
 }
 
 @Component({
