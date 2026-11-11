@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'backend/app/warehouse/jobs/cobranza_iventas_preparation.py'
+      - 'backend/app/warehouse/jobs/cobranza_iventas_pilot.py'
       - 'backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py'
       - 'backend/app/services/marketing_campaign_v2_cobranza_send_service.py'
       - 'backend/app/services/marketing_campaign_v2_excel_import_service.py'
@@ -32,7 +33,7 @@ jobs:
           python -m pip install -r backend/requirements.txt pytest
       - name: Compile changed Python modules
         run: |
-          python -m py_compile backend/app/warehouse/jobs/cobranza_iventas_preparation.py backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py backend/app/services/marketing_campaign_v2_cobranza_send_service.py backend/app/services/marketing_campaign_v2_excel_import_service.py backend/app/services/marketing_campaign_v2_query_service.py backend/app/routes/marketing_campaign_v2_routes.py
+          python -m py_compile backend/app/warehouse/jobs/cobranza_iventas_preparation.py backend/app/warehouse/jobs/cobranza_iventas_pilot.py backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py backend/app/services/marketing_campaign_v2_cobranza_send_service.py backend/app/services/marketing_campaign_v2_excel_import_service.py backend/app/services/marketing_campaign_v2_query_service.py backend/app/routes/marketing_campaign_v2_routes.py
       - name: Cobranza audience and campaign regressions (no provider calls)
         working-directory: backend
         env:
