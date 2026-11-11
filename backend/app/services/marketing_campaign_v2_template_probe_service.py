@@ -354,8 +354,9 @@ def validate_probe_claim(*, campaign, child, session):
     if (child.provider_channel_id != spec["channel_id"] or child.recipient_count != 1
             or session.query(Approval.id).filter_by(campaign_v2_id=campaign.id).first() is None):
         raise TemplateProbeValidation("La prueba requiere aprobación y despacho gobernados del canal exacto.")
-    # Includes same child on explicit legacy retry, as well as replacement
-    # children after a confirmed rejection. No POST for this pair a second time.
+    # Any historical attempt in THIS QA cohort blocks another provider POST.
+    # A confirmed TEMPLATE_NOT_FOUND may instead create a distinct audited
+    # QA cohort revision; it never reuses this campaign or its child.
     if any(row.submit_started_at is not None for row in session.query(Child).filter_by(
             campaign_v2_id=campaign.id).all()):
         raise TemplateProbeValidation("La prueba ya tuvo un intento; no admite reenvíos.")
