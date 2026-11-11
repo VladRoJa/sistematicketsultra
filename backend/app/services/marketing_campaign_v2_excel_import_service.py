@@ -252,6 +252,7 @@ def freeze_excel_campaign(
     template_id: int, allowed_sucursal_keys: Iterable[str] | None,
     expected_preview_fingerprint: str, created_by_user_id: int,
     session: Any | None = None,
+    source_metadata_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active = session if session is not None else db.session
     plan = _compile(
@@ -290,6 +291,7 @@ def freeze_excel_campaign(
                 "rows_read": plan["rows_read"],
                 "blacklist_excluded_count": plan["blacklist_excluded_count"],
                 "branch_counts": plan["branch_counts"],
+                **(source_metadata_extra or {}),
             },
             "preview": {
                 "fingerprint_version": VERSION,

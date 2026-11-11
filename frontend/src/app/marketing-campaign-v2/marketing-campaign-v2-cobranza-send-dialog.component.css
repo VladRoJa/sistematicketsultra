@@ -1,0 +1,4 @@
+.cobranza-send-content { display: flex; flex-direction: column; gap: 8px; min-width: min(440px, 78vw); }
+.cobranza-send-content p { margin: 0 0 6px; }
+.cobranza-send-content mat-form-field { width: 100%; margin-top: 8px; }
+.cobranza-send-error { color: #b3261e; }

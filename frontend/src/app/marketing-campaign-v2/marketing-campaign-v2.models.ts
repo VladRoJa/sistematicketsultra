@@ -391,12 +391,14 @@ export interface CampaignV2CampaignSummary {
   id: number;
   name: string;
   purpose: CampaignV2Purpose;
-  source: CampaignV2Source;
+  source: CampaignV2Source | 'EXCEL_IMPORT';
   source_campaign_id: number | null;
   frozen_at: string;
   created_at: string;
   created_by_user_id: number | null;
   recipient_count: number;
+  cobranza_dispatch_started?: boolean;
+  cobranza_pilot_branch?: string | null;
   preview_fingerprint: string | null;
   preview_fingerprint_version: string | null;
 }

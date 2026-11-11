@@ -1,0 +1,22 @@
+<h2 mat-dialog-title>Enviar cobranza</h2>
+<mat-dialog-content class="cobranza-send-content">
+  <p><strong>{{ data.campaignName }}</strong></p>
+  <p *ngIf="data.pilotBranch"><strong>Piloto exclusivo: {{ data.pilotBranch }}</strong>.</p>
+  <p *ngIf="!data.pilotBranch"><strong>Alcance: todas las sucursales de este corte.</strong></p>
+  <p>Se enviará la campaña a <strong>{{ data.recipientCount | number }}</strong> destinatarios
+    mediante los canales iVentas correspondientes.</p>
+  <p>Una vez confirmado, la Suite iniciará el envío y registrará los resultados.</p>
+  <mat-form-field appearance="outline">
+    <mat-label>Contraseña de Suite Ultra</mat-label>
+    <input matInput type="password" autocomplete="current-password" [formControl]="password"
+      (keydown.enter)="send()" />
+  </mat-form-field>
+  <p *ngIf="error" class="cobranza-send-error" role="alert">{{ error }}</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()" [disabled]="submitting">Cancelar</button>
+  <button mat-flat-button color="primary" type="button" (click)="send()"
+    [disabled]="submitting || !password.value">
+    {{ submitting ? 'Preparando envío…' : 'Enviar cobranza' }}
+  </button>
+</mat-dialog-actions>

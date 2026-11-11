@@ -15,6 +15,7 @@ from app.models.marketing import (
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2RecipientORM,
 )
+from app.models.marketing_campaign_v2_background_job import MarketingCampaignV2BackgroundJobORM
 from app.services import marketing_campaign_v2_audience_service as audience
 from app.warehouse.services.socios_vencidos_current_status_resolver import (
     normalize_socios_vencidos_branch_key,
@@ -100,13 +101,41 @@ def list_campaign_v2(
     total = len(visible)
     offset = (normalized_page - 1) * normalized_page_size
     page_rows = visible[offset : offset + normalized_page_size]
+    # Only COBRANZA automation needs dispatch job state. Regular marketing
+    # campaign listing and synthetic query fixtures must not depend on the
+    # background dispatch storage when this feature is not in use.
+    cobranza_ids = [
+        int(campaign.id)
+        for campaign, _ in page_rows
+        if campaign.source == "EXCEL_IMPORT"
+        and campaign.name.startswith("COBRANZA RECURRENTE RECHAZADOS - ")
+        and (campaign.audience_definition_json or {}).get(
+            "source_metadata", {}
+        ).get("automation_job") == "cobranza_recurrente_rechazados"
+    ]
+    sent_job_campaign_ids = set()
+    if cobranza_ids:
+        sent_job_campaign_ids = {
+            int(item[0]) for item in active_session.query(
+                MarketingCampaignV2BackgroundJobORM.campaign_v2_id
+            ).filter(
+                MarketingCampaignV2BackgroundJobORM.campaign_v2_id.in_(cobranza_ids)
+            ).all()
+        }
     return {
         "page": normalized_page,
         "page_size": normalized_page_size,
         "total": total,
         "total_pages": _total_pages(total, normalized_page_size),
         "rows": [
-            _serialize_campaign_summary(campaign, recipient_count=recipient_count)
+            {
+                **_serialize_campaign_summary(campaign, recipient_count=recipient_count),
+                "cobranza_dispatch_started": int(campaign.id) in sent_job_campaign_ids,
+                "cobranza_pilot_branch": (
+                    ((campaign.audience_definition_json or {}).get("source_metadata") or {})
+                    .get("pilot_branch_key") if int(campaign.id) in cobranza_ids else None
+                ),
+            }
             for campaign, recipient_count in page_rows
         ],
     }

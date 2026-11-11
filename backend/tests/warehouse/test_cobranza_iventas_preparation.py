@@ -1,0 +1,176 @@
+"""Synthetic coverage: generated cobranza files to governed Campaign V2."""
+from __future__ import annotations
+
+from io import BytesIO
+from types import SimpleNamespace
+
+import pytest
+from openpyxl import Workbook, load_workbook
+
+from app.warehouse.jobs.cobranza_iventas_preparation import (
+    CobranzaCampaignPreparationError,
+    build_import_bytes,
+)
+from app.services.marketing_campaign_v2_cobranza_send_service import (
+    is_prepared_cobranza_campaign,
+)
+
+
+def _artifact(tmp_path, *, branch, rows):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Socio", "Teléfono", "Estatus"])
+    for row in rows:
+        sheet.append(row)
+    path = tmp_path / (branch + ".xlsx")
+    workbook.save(path)
+    return {"path": str(path), "sucursal_raw": branch, "rows_count": len(rows)}
+
+
+def _rows(result):
+    workbook = load_workbook(BytesIO(result), read_only=True, data_only=True)
+    try:
+        return list(workbook.active.values)
+    finally:
+        workbook.close()
+
+
+def test_generated_files_become_two_column_audience(tmp_path):
+    artifacts = [
+        _artifact(tmp_path, branch="VILLA VERDE", rows=[
+            [1, "6861234567", "Rechazado"],
+            [2, "6861234567", "Rechazado"],
+            [3, "123", "Rechazado"],
+        ]),
+        _artifact(tmp_path, branch="SAN LUIS", rows=[
+            [4, "6531234567", "Rechazado"],
+        ]),
+    ]
+    payload, count = build_import_bytes(artifacts)
+    assert count == 2
+    assert _rows(payload) == [
+        ("sucursal", "telefono"),
+        ("SAN LUIS", "6531234567"),
+        ("VILLA VERDE", "6861234567"),
+    ]
+
+
+def test_ambiguous_phone_across_branches_is_not_sent(tmp_path):
+    files = [
+        _artifact(tmp_path, branch="VILLA VERDE", rows=[[1, "6861234567", "Rechazado"]]),
+        _artifact(tmp_path, branch="SAN LUIS", rows=[[2, "6861234567", "Rechazado"]]),
+    ]
+    with pytest.raises(CobranzaCampaignPreparationError, match="validos"):
+        build_import_bytes(files)
+
+
+def test_missing_phone_column_does_not_guess(tmp_path):
+    workbook = Workbook()
+    workbook.active.append(["Socio", "Correo", "Estatus"])
+    workbook.active.append([1, "correo@example.test", "Rechazado"])
+    path = tmp_path / "sin_telefono.xlsx"
+    workbook.save(path)
+    with pytest.raises(CobranzaCampaignPreparationError, match="columna de telefono"):
+        build_import_bytes([{"path": str(path), "sucursal_raw": "SAN LUIS"}])
+
+
+def test_only_provenance_marked_campaigns_can_send():
+    source = SimpleNamespace(
+        source="EXCEL_IMPORT",
+        name="COBRANZA RECURRENTE RECHAZADOS - 2026-11-10",
+        audience_definition_json={"source_metadata": {
+            "automation_job": "cobranza_recurrente_rechazados",
+            "business_date": "2026-11-10",
+            "template_id_at_freeze": 42,
+        }},
+    )
+    assert is_prepared_cobranza_campaign(campaign=source)
+    source.audience_definition_json["source_metadata"]["automation_job"] = "manual"
+    assert not is_prepared_cobranza_campaign(campaign=source)
+
+
+def test_gasca_generated_xlsx_round_trip_pilot_one_branch(tmp_path):
+    """Real Gasca splitter -> campaign importer shape, never dispatches."""
+    from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
+
+    raw = Workbook()
+    ws = raw.active
+    ws.append(["REPORTE GASCA", *[""] * 11])
+    headers = [
+        "ID", "Socio", "Concepto", "Fecha", "Cargo", "Clave",
+        "Sucursal", "Teléfono", "Estatus", "Observación", "Referencia", "Eliminar",
+    ]
+    ws.append(headers)
+    ws.append([1, "Uno", "", "", "", "", "AZAHARES CUL", "6861234567", "Rechazado", "", "", "X"])
+    ws.append([2, "Dos", "", "", "", "", "AZAHARES CUL", "6867654321", "Aprobado", "", "", "X"])
+    ws.append([3, "Tres", "", "", "", "", "AZAHARES CUL", "6861234567", "Rechazado", "", "", "X"])
+    ws.append(["Reporte generado", *[""] * 11])
+    source = tmp_path / "gasca_raw.xlsx"
+    raw.save(source)
+    outcome = procesar_archivo(source, tmp_path / "por_sucursal")
+    assert outcome["total_files"] == 1
+    assert outcome["total_rows"] == 2
+    payload, count = build_import_bytes(outcome["artifacts"])
+    assert count == 1
+    assert _rows(payload) == [
+        ("sucursal", "telefono"),
+        ("AZAHARES CUL", "6861234567"),
+    ]
+
+
+def test_real_gasca_34_column_header_phone_in_29th_position(tmp_path):
+    """Historical real Gasca branch XLSX layout (17 Jun 2026), synthetic PII."""
+    workbook = Workbook()
+    sheet = workbook.active
+    header = [f"Columna {index}" for index in range(1, 35)]
+    header[0] = ""
+    header[7] = "Sucursal"
+    header[9] = "Estatus de cobro"
+    header[28] = "Teléfono"
+    sheet.append(header)
+    first = [None] * 34
+    first[7] = "VILLA VERDE"
+    first[9] = "Rechazado"
+    first[28] = "6861000001"
+    sheet.append(first)
+    duplicated = list(first)
+    sheet.append(duplicated)
+    path = tmp_path / "VILLA VERDE.xlsx"
+    workbook.save(path)
+
+    payload, count = build_import_bytes([
+        {"path": str(path), "sucursal_raw": "VILLA VERDE", "rows_count": 2},
+    ])
+    assert count == 1
+    assert _rows(payload) == [
+        ("sucursal", "telefono"), ("VILLA VERDE", "6861000001"),
+    ]
+
+
+def test_pilot_reads_existing_scheduler_files_without_any_provider_call(tmp_path, monkeypatch):
+    from datetime import date
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from app.warehouse.jobs import cobranza_iventas_pilot as pilot
+
+    base = tmp_path / "automations"
+    folder = base / "2026-11-11" / "sucursales"
+    folder.mkdir(parents=True)
+    workbook = Workbook()
+    workbook.active.append(["Socio", "Telefono"])
+    workbook.active.append(["Synthetic", "6861000001"])
+    workbook.save(folder / "VILLAS_DEL_REY.xlsx")
+    monkeypatch.setattr(pilot, "load_config",
+                        Mock(return_value=SimpleNamespace(output_base_dir=base)))
+    prepare = Mock(return_value={"status": "PREPARED", "campaign_id": 301})
+    monkeypatch.setattr(pilot, "prepare_cobranza_iventas_campaign", prepare)
+
+    result = pilot.prepare_saved_pilot(
+        business_date=date(2026, 11, 11), branch_key="VILLAS_DEL_REY",
+    )
+    assert result["status"] == "PREPARED"
+    kwargs = prepare.call_args.kwargs
+    assert kwargs["pilot_branch_key"] == "VILLAS_DEL_REY"
+    assert kwargs["business_date"] == date(2026, 11, 11)
+    assert len(kwargs["artifacts"]) == 1
+    assert kwargs["artifacts"][0]["sucursal_raw"] == "VILLAS_DEL_REY"
