@@ -88,6 +88,7 @@ import {
 } from './marketing-campaign-v2-tariff-classifier-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
 import { MarketingCampaignV2ExcelDialogComponent } from './marketing-campaign-v2-excel-dialog.component';
+import { MarketingCampaignV2CobranzaSendDialogComponent } from './marketing-campaign-v2-cobranza-send-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
 import { MarketingCampaignV2QaManualDialogComponent } from './marketing-campaign-v2-qa-manual-dialog.component';
 import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaign-v2-readiness-dialog.component';
@@ -1310,6 +1311,30 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     if (this.campaignPage < this.campaignTotalPages) {
       this.loadCampaigns(this.campaignPage + 1);
     }
+  }
+
+  isCobranzaCampaign(campaign: CampaignV2CampaignSummary): boolean {
+    return this.canManageDispatchConfig && campaign.source === 'EXCEL_IMPORT' &&
+      campaign.name.startsWith('COBRANZA RECURRENTE RECHAZADOS - ');
+  }
+
+  openCobranzaSend(campaign: CampaignV2CampaignSummary): void {
+    if (!this.isCobranzaCampaign(campaign)) { return; }
+    const ref = this.dialog.open(MarketingCampaignV2CobranzaSendDialogComponent, {
+      width: 'min(520px, 96vw)',
+      maxWidth: '96vw',
+      data: {
+        campaignId: campaign.id,
+        campaignName: campaign.name,
+        recipientCount: campaign.recipient_count,
+      },
+    });
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(jobId => {
+      if (typeof jobId === 'number' && jobId > 0) {
+        this.success = 'Envío de cobranza encolado (trabajo #' + jobId + ').';
+        this.loadCampaigns(this.campaignPage);
+      }
+    });
   }
 
   openCampaign(campaign: CampaignV2CampaignSummary): void {

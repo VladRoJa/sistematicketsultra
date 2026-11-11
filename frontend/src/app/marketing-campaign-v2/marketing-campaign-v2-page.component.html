@@ -798,7 +798,7 @@
               <td>{{ campaign.recipient_count | number }}</td>
               <td class="commercial-kpi-column commercial-kpi-value">{{ commercialBuyersLabel(campaign.id) }}</td>
               <td class="commercial-kpi-column commercial-kpi-value">{{ commercialRevenueLabel(campaign.id) }}</td>
-              <td><button mat-button type="button" (click)="openCampaign(campaign)">Ver detalle</button></td>
+              <td><button mat-button type="button" (click)="openCampaign(campaign)">Ver detalle</button><button *ngIf="isCobranzaCampaign(campaign) && !campaign.cobranza_dispatch_started" mat-flat-button color="primary" type="button" (click)="openCobranzaSend(campaign)">Enviar cobranza</button><span *ngIf="isCobranzaCampaign(campaign) && campaign.cobranza_dispatch_started">Envío iniciado · ver detalle</span></td>
             </tr>
           </tbody>
         </table>

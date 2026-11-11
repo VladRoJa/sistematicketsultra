@@ -1,0 +1,55 @@
+name: Cobranza iVentas V1 CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/jobs/cobranza_iventas_preparation.py'
+      - 'backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py'
+      - 'backend/app/services/marketing_campaign_v2_cobranza_send_service.py'
+      - 'backend/app/services/marketing_campaign_v2_excel_import_service.py'
+      - 'backend/app/services/marketing_campaign_v2_query_service.py'
+      - 'backend/app/routes/marketing_campaign_v2_routes.py'
+      - 'backend/tests/warehouse/test_cobranza_iventas_preparation.py'
+      - 'frontend/src/app/marketing-campaign-v2/**'
+      - '.github/workflows/cobranza-iventas-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-cobranza:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile backend/app/warehouse/jobs/cobranza_iventas_preparation.py backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py backend/app/services/marketing_campaign_v2_cobranza_send_service.py backend/app/services/marketing_campaign_v2_excel_import_service.py backend/app/services/marketing_campaign_v2_query_service.py backend/app/routes/marketing_campaign_v2_routes.py
+      - name: Cobranza audience and campaign regressions (no provider calls)
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -q tests/warehouse/test_cobranza_iventas_preparation.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
+  frontend-cobranza:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build Angular
+        working-directory: frontend
+        run: npm run build

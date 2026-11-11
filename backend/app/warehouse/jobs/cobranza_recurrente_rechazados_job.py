@@ -16,6 +16,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import Page, sync_playwright
 
 from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
+from app.warehouse.jobs.cobranza_iventas_preparation import prepare_cobranza_iventas_campaign
 from app.warehouse.jobs.cobranza_recurrente_rechazados_publisher import (
     publish_cobranza_recurrente_rechazados_outputs,
 )
@@ -849,6 +850,18 @@ def run_once(business_date: date | None = None) -> dict:
                 publication_result["total_uploads"],
                 publication_result.get("total_internal_documents", 0),
             )
+            # Campaign preparation does not send; its failure must not turn a
+            # successfully published daily report into a failed report job.
+            try:
+                campaign_preparation = prepare_cobranza_iventas_campaign(
+                    business_date=today_str, artifacts=processing_result["artifacts"],
+                )
+                logger.info("Cobranza iVentas preparacion: %s", campaign_preparation)
+            except Exception:
+                from app.extensions import db
+                db.session.rollback()
+                logger.exception("No se pudo preparar campana iVentas de cobranza")
+                campaign_preparation = {"status": "PREPARATION_FAILED"}
         finally:
             browser.close()
 
@@ -864,6 +877,7 @@ def run_once(business_date: date | None = None) -> dict:
         "total_files": processing_result["total_files"],
         "artifacts": processing_result["artifacts"],
         "warehouse_publication": publication_result,
+        "iventas_campaign_preparation": campaign_preparation,
         "duration_seconds": round(duration_seconds, 2),
     }
 

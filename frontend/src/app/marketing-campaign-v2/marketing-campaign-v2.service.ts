@@ -440,6 +440,16 @@ export class MarketingCampaignV2Service {
     );
   }
 
+  sendCobranza(campaignId: number, operatorPassword: string): Observable<{
+    campaign_id: number; job_id: number; status: string; recipient_count: number; branch_count: number;
+  }> {
+    return this.http.post<{
+      campaign_id: number; job_id: number; status: string; recipient_count: number; branch_count: number;
+    }>(`${this.apiUrl}/${campaignId}/cobranza/send`, {
+      operator_password: operatorPassword, confirmed: true,
+    });
+  }
+
   startBackgroundJob(campaignId: number, payload: BackgroundDispatchStartRequest): Observable<BackgroundDispatchJob> {
     return this.http.post<BackgroundDispatchJob>(`${this.apiUrl}/${campaignId}/dispatch/jobs`, payload);
   }

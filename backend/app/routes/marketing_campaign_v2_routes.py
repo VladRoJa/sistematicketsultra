@@ -31,6 +31,9 @@ from app.services.marketing_campaign_v2_excel_import_service import (
     preview_excel_campaign,
     freeze_excel_campaign,
 )
+from app.services.marketing_campaign_v2_cobranza_send_service import (
+    CobranzaSendConflict, enqueue_cobranza_send,
+)
 from app.services.marketing_campaign_v2_blacklist_service import (
     XLSX_MIMETYPE as BLACKLIST_XLSX_MIMETYPE,
     MarketingCampaignV2BlacklistPersistenceError,
@@ -2080,6 +2083,41 @@ def campaign_v2_governed_execute_endpoint(campaign_id: int):
     except Exception:
         db.session.rollback()
         return _error("Error en despacho gobernado; revisar estado antes de reintentar.", 500)
+
+
+@marketing_campaign_v2_bp.post("/campaigns-v2/<int:campaign_id>/cobranza/send")
+@jwt_required()
+def campaign_v2_cobranza_one_click_send_endpoint(campaign_id: int):
+    """One explicit operator action; schedules existing governed worker only."""
+    try:
+        user, access = _resolve_campaign_v2_dispatch_config_request()
+        _require_campaign_v2_send(access)
+        payload = _parse_payload({"operator_password", "confirmed"})
+        if payload.get("confirmed") is not True:
+            return _error("Confirma el envio de cobranza.", 400)
+        if not _background_dispatch_enabled():
+            return _error("El envio de Campanas V2 no esta disponible.", 423)
+        if not _valid_governed_dispatch_password(user, payload.get("operator_password")):
+            return _error("Contrasena de Suite Ultra incorrecta o ausente.", 403)
+        result = enqueue_cobranza_send(
+            campaign_id=campaign_id, actor_user_id=int(user.id),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 202
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except MarketingCampaignV2RouteValidationError as exc:
+        return _error(str(exc), 400)
+    except (CobranzaSendConflict, CampaignV2ApprovalConflictError,
+            CampaignV2ApprovalValidationError, GovernedDispatchConflict,
+            BackgroundJobConflict, BackgroundJobValidation) as exc:
+        db.session.rollback()
+        return _error(str(exc), 409)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Cobranza one-click dispatch preparation failed")
+        return _error("No se pudo preparar el envio; revisa el estado antes de reintentar.", 500)
 
 
 def _background_dispatch_enabled():

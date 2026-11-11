@@ -15,6 +15,7 @@ from app.models.marketing import (
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2RecipientORM,
 )
+from app.models.marketing_campaign_v2_background_job import MarketingCampaignV2BackgroundJobORM
 from app.services import marketing_campaign_v2_audience_service as audience
 from app.warehouse.services.socios_vencidos_current_status_resolver import (
     normalize_socios_vencidos_branch_key,
@@ -100,13 +101,26 @@ def list_campaign_v2(
     total = len(visible)
     offset = (normalized_page - 1) * normalized_page_size
     page_rows = visible[offset : offset + normalized_page_size]
+    page_ids = [int(campaign.id) for campaign, _ in page_rows]
+    sent_job_campaign_ids = set()
+    if page_ids:
+        sent_job_campaign_ids = {
+            int(item[0]) for item in active_session.query(
+                MarketingCampaignV2BackgroundJobORM.campaign_v2_id
+            ).filter(
+                MarketingCampaignV2BackgroundJobORM.campaign_v2_id.in_(page_ids)
+            ).all()
+        }
     return {
         "page": normalized_page,
         "page_size": normalized_page_size,
         "total": total,
         "total_pages": _total_pages(total, normalized_page_size),
         "rows": [
-            _serialize_campaign_summary(campaign, recipient_count=recipient_count)
+            {
+                **_serialize_campaign_summary(campaign, recipient_count=recipient_count),
+                "cobranza_dispatch_started": int(campaign.id) in sent_job_campaign_ids,
+            }
             for campaign, recipient_count in page_rows
         ],
     }
