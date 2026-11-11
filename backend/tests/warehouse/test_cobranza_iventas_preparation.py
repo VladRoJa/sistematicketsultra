@@ -116,3 +116,32 @@ def test_gasca_generated_xlsx_round_trip_pilot_one_branch(tmp_path):
         ("sucursal", "telefono"),
         ("AZAHARES CUL", "6861234567"),
     ]
+
+
+def test_real_gasca_34_column_header_phone_in_29th_position(tmp_path):
+    """Historical real Gasca branch XLSX layout (17 Jun 2026), synthetic PII."""
+    workbook = Workbook()
+    sheet = workbook.active
+    header = [f"Columna {index}" for index in range(1, 35)]
+    header[0] = ""
+    header[7] = "Sucursal"
+    header[9] = "Estatus de cobro"
+    header[28] = "Teléfono"
+    sheet.append(header)
+    first = [None] * 34
+    first[7] = "VILLA VERDE"
+    first[9] = "Rechazado"
+    first[28] = "6861000001"
+    sheet.append(first)
+    duplicated = list(first)
+    sheet.append(duplicated)
+    path = tmp_path / "VILLA VERDE.xlsx"
+    workbook.save(path)
+
+    payload, count = build_import_bytes([
+        {"path": str(path), "sucursal_raw": "VILLA VERDE", "rows_count": 2},
+    ])
+    assert count == 1
+    assert _rows(payload) == [
+        ("sucursal", "telefono"), ("VILLA VERDE", "6861000001"),
+    ]
