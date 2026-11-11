@@ -206,3 +206,28 @@ test('select all is inert with no eligible channels or while blocked', () => {
   assert.deepEqual(component.selectedChannelIds, []);
   assert.equal(calls.length, 0);
 });
+
+test('confirmed template-not-found QA #73 can be selected again after provider template approval', () => {
+  const { component, calls } = harness();
+  component.matrix = { rows: [
+    { channel_id: 'send-chih', sender: 'SEND_CHIH', result: 'RECHAZADA',
+      error_code: 'TEMPLATE_NOT_FOUND', qa_campaign_id: 73, stale: false },
+    { channel_id: 'validated', result: 'VALIDADA', qa_campaign_id: 72 },
+    { channel_id: 'uncertain', result: 'INCIERTA', qa_campaign_id: 74 },
+    { channel_id: 'unknown-error', result: 'RECHAZADA', qa_campaign_id: 75,
+      error_code: 'UNKNOWN', stale: false },
+  ] } as any;
+  assert.equal(component.canSelect(component.matrix.rows[0]), true);
+  assert.deepEqual(component.selectableChannelIds, ['send-chih']);
+  component.toggleAllChannels(true);
+  assert.deepEqual(component.selectedChannelIds, ['send-chih']);
+  assert.equal(component.canSelect(component.matrix.rows[1]), false);
+  assert.equal(component.canSelect(component.matrix.rows[2]), false);
+  assert.equal(component.canSelect(component.matrix.rows[3]), false);
+  assert.equal(calls.length, 0);
+  component.authorized.setValue(true);
+  component.prepare();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'prepare');
+  assert.deepEqual(calls[0][2].selected_channel_ids, ['send-chih']);
+});
