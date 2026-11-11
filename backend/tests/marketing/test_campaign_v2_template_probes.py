@@ -385,6 +385,7 @@ def test_existing_qa_revision_prefers_latest_and_keeps_original_immutable():
         NS(id=100, name=base + "-unknown"),
     ]
     active = session()
+    active.query.side_effect = None
     active.query.return_value.filter.return_value.all.return_value = rows
     assert probe._existing(7, signature, "tec", active).id == 82
     assert probe._retry_name(7, signature, "tec", rows[0]) == base + "-R2"
