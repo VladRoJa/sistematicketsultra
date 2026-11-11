@@ -72,6 +72,13 @@ Se conserva compatibilidad con la evidencia manual ya existente del PR #1225.
   no crea otra prueba para la misma versión/canal. Un intento duradero de cualquier
   resultado impide otro POST para esa cohorte, incluso mediante retry legado.
   Expirar la evidencia tampoco habilita reenvíos.
+- **Excepción explícita y acotada:** una QA con rechazo definitivo HTTP 400
+  `TEMPLATE_NOT_FOUND`, referencia de soporte y ninguna aceptación del proveedor
+  puede generar, mediante nueva selección y autorización del operador, una cohorte
+  QA de revisión (`-R2`, `-R3`, etc.) con un destinatario autorizado.
+  La QA rechazada y sus hijos quedan inmutables; la revisión registra el ID previo.
+  Una QA PENDIENTE, VALIDADA o INCIERTA nunca genera revisión ni se reenvía.
+  Cada revisión tiene su propio gate D2c y solo permite un intento.
 - El gate compartido de contactos valida contrato y snapshot antes del claim
   SUBMITTING. La prueba necesita aprobación gobernada; no introduce una vía
   alternativa a `IVentasBroadcastProvider` ni un segundo motor de envío.
