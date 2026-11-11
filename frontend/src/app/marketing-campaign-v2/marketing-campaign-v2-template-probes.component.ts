@@ -37,8 +37,11 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
       .map(row => row.channel_id) ?? [];
   }
   canSelect(row: CampaignV2TemplateProbeRow): boolean {
+    const retryableRejection = row.result === 'RECHAZADA'
+      && row.error_code === 'TEMPLATE_NOT_FOUND'
+      && !!row.qa_campaign_id && row.rejection_source !== 'COMMERCIAL_REJECTION';
     return (row.result === 'PENDIENTE' || row.result === 'RECHAZADA' || row.result === 'INVALIDADA')
-      && (!row.qa_campaign_id || row.stale)
+      && (!row.qa_campaign_id || row.stale || retryableRejection)
       && !this.busy && !this.disabled;
   }
   get selectableChannelIds(): string[] {
