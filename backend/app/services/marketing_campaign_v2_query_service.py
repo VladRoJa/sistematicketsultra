@@ -131,6 +131,10 @@ def list_campaign_v2(
             {
                 **_serialize_campaign_summary(campaign, recipient_count=recipient_count),
                 "cobranza_dispatch_started": int(campaign.id) in sent_job_campaign_ids,
+                "cobranza_pilot_branch": (
+                    ((campaign.audience_definition_json or {}).get("source_metadata") or {})
+                    .get("pilot_branch_key") if int(campaign.id) in cobranza_ids else None
+                ),
             }
             for campaign, recipient_count in page_rows
         ],
