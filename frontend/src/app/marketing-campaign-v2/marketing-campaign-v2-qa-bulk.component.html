@@ -11,7 +11,7 @@
     </mat-checkbox>
   </div>
   <button mat-stroked-button type="button" (click)="reviewAll()" [disabled]="!canReview">
-    Revisar {{ selected.size }} QA juntas (no envía)
+    Revisar {{ selected.size }} QA (no envía)
   </button>
   <section class="review" *ngIf="reviewed.length">
     <h5>Revisión conjunta · {{ reviewed.length }} mensajes</h5>
@@ -25,7 +25,7 @@
       </tr></tbody>
     </table>
     <mat-checkbox [formControl]="confirmed" [disabled]="busy">
-      Revisé los {{ reviewed.length }} canales, sus destinatarios QA, presupuesto, plantilla y límites.
+      Revisé {{ reviewed.length === 1 ? 'el canal' : 'los canales' }}, sus destinatarios QA, presupuesto, plantilla y límites.
       Autorizo los envíos reales de esta operación.
     </mat-checkbox>
     <div class="confirmation">
