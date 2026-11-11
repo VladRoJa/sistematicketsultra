@@ -145,3 +145,32 @@ def test_real_gasca_34_column_header_phone_in_29th_position(tmp_path):
     assert _rows(payload) == [
         ("sucursal", "telefono"), ("VILLA VERDE", "6861000001"),
     ]
+
+
+def test_pilot_reads_existing_scheduler_files_without_any_provider_call(tmp_path, monkeypatch):
+    from datetime import date
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from app.warehouse.jobs import cobranza_iventas_pilot as pilot
+
+    base = tmp_path / "automations"
+    folder = base / "2026-11-11" / "sucursales"
+    folder.mkdir(parents=True)
+    workbook = Workbook()
+    workbook.active.append(["Socio", "Telefono"])
+    workbook.active.append(["Synthetic", "6861000001"])
+    workbook.save(folder / "VILLAS_DEL_REY.xlsx")
+    monkeypatch.setattr(pilot, "load_config",
+                        Mock(return_value=SimpleNamespace(output_base_dir=base)))
+    prepare = Mock(return_value={"status": "PREPARED", "campaign_id": 301})
+    monkeypatch.setattr(pilot, "prepare_cobranza_iventas_campaign", prepare)
+
+    result = pilot.prepare_saved_pilot(
+        business_date=date(2026, 11, 11), branch_key="VILLAS_DEL_REY",
+    )
+    assert result["status"] == "PREPARED"
+    kwargs = prepare.call_args.kwargs
+    assert kwargs["pilot_branch_key"] == "VILLAS_DEL_REY"
+    assert kwargs["business_date"] == date(2026, 11, 11)
+    assert len(kwargs["artifacts"]) == 1
+    assert kwargs["artifacts"][0]["sucursal_raw"] == "VILLAS_DEL_REY"
