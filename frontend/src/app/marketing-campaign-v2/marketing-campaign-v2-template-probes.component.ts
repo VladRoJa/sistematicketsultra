@@ -41,6 +41,27 @@ export class MarketingCampaignV2TemplateProbesComponent implements OnChanges {
       && (!row.qa_campaign_id || row.stale)
       && !this.busy && !this.disabled;
   }
+  get selectableChannelIds(): string[] {
+    return this.matrix?.rows.filter(row => this.canSelect(row))
+      .map(row => row.channel_id) ?? [];
+  }
+  get allSelectableChannelsSelected(): boolean {
+    const ids = this.selectableChannelIds;
+    return ids.length > 0 && ids.every(id => this.selectedChannels.has(id));
+  }
+  get someSelectableChannelsSelected(): boolean {
+    const ids = this.selectableChannelIds;
+    return ids.some(id => this.selectedChannels.has(id)) && !this.allSelectableChannelsSelected;
+  }
+  toggleAllChannels(selected: boolean): void {
+    const ids = this.selectableChannelIds;
+    if (!ids.length) return;
+    for (const id of ids) {
+      if (selected) this.selectedChannels.add(id);
+      else this.selectedChannels.delete(id);
+    }
+    this.authorized.setValue(false);
+  }
   toggleChannel(row: CampaignV2TemplateProbeRow, selected: boolean): void {
     if (!this.canSelect(row)) return;
     if (selected) this.selectedChannels.add(row.channel_id);
