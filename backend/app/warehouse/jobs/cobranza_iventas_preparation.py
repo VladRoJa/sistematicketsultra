@@ -125,7 +125,13 @@ def prepare_cobranza_iventas_campaign(
         metadata = (existing.audience_definition_json or {}).get("source_metadata") or {}
         if metadata.get("automation_job") != JOB_KEY:
             raise CobranzaCampaignPreparationError("Nombre de campana reservado ocupado.")
-        return {"status": "ALREADY_PREPARED", "campaign_id": int(existing.id)}
+        if metadata.get("pilot_branch_key") != pilot_branch_key:
+            raise CobranzaCampaignPreparationError(
+                "Ya existe una campana del mismo corte con otro alcance. "
+                "No se mezclaran un piloto y una campana general."
+            )
+        return {"status": "ALREADY_PREPARED", "campaign_id": int(existing.id),
+                "pilot_branch_key": pilot_branch_key}
 
     # A fixed template binding is configuration, not a send switch. Missing
     # config never blocks the Gasca/Warehouse publishing job.
