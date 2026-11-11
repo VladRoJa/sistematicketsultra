@@ -87,3 +87,32 @@ def test_only_provenance_marked_campaigns_can_send():
     assert is_prepared_cobranza_campaign(campaign=source)
     source.audience_definition_json["source_metadata"]["automation_job"] = "manual"
     assert not is_prepared_cobranza_campaign(campaign=source)
+
+
+def test_gasca_generated_xlsx_round_trip_pilot_one_branch(tmp_path):
+    """Real Gasca splitter -> campaign importer shape, never dispatches."""
+    from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
+
+    raw = Workbook()
+    ws = raw.active
+    ws.append(["REPORTE GASCA", *[""] * 11])
+    headers = [
+        "ID", "Socio", "Concepto", "Fecha", "Cargo", "Clave",
+        "Sucursal", "Teléfono", "Estatus", "Observación", "Referencia", "Eliminar",
+    ]
+    ws.append(headers)
+    ws.append([1, "Uno", "", "", "", "", "AZAHARES CUL", "6861234567", "Rechazado", "", "", "X"])
+    ws.append([2, "Dos", "", "", "", "", "AZAHARES CUL", "6867654321", "Aprobado", "", "", "X"])
+    ws.append([3, "Tres", "", "", "", "", "AZAHARES CUL", "6861234567", "Rechazado", "", "", "X"])
+    ws.append(["Reporte generado", *[""] * 11])
+    source = tmp_path / "gasca_raw.xlsx"
+    raw.save(source)
+    outcome = procesar_archivo(source, tmp_path / "por_sucursal")
+    assert outcome["total_files"] == 1
+    assert outcome["total_rows"] == 2
+    payload, count = build_import_bytes(outcome["artifacts"])
+    assert count == 1
+    assert _rows(payload) == [
+        ("sucursal", "telefono"),
+        ("AZAHARES CUL", "6861234567"),
+    ]
