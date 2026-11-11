@@ -398,6 +398,7 @@ export interface CampaignV2CampaignSummary {
   created_by_user_id: number | null;
   recipient_count: number;
   cobranza_dispatch_started?: boolean;
+  cobranza_pilot_branch?: string | null;
   preview_fingerprint: string | null;
   preview_fingerprint_version: string | null;
 }
