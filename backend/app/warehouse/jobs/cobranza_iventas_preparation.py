@@ -130,8 +130,10 @@ def prepare_cobranza_iventas_campaign(
                 "Ya existe una campana del mismo corte con otro alcance. "
                 "No se mezclaran un piloto y una campana general."
             )
-        return {"status": "ALREADY_PREPARED", "campaign_id": int(existing.id),
-                "pilot_branch_key": pilot_branch_key}
+        return {
+            "status": "ALREADY_PREPARED", "campaign_id": int(existing.id),
+            **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
+        }
 
     # A fixed template binding is configuration, not a send switch. Missing
     # config never blocks the Gasca/Warehouse publishing job.
