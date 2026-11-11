@@ -101,14 +101,25 @@ def list_campaign_v2(
     total = len(visible)
     offset = (normalized_page - 1) * normalized_page_size
     page_rows = visible[offset : offset + normalized_page_size]
-    page_ids = [int(campaign.id) for campaign, _ in page_rows]
+    # Only COBRANZA automation needs dispatch job state. Regular marketing
+    # campaign listing and synthetic query fixtures must not depend on the
+    # background dispatch storage when this feature is not in use.
+    cobranza_ids = [
+        int(campaign.id)
+        for campaign, _ in page_rows
+        if campaign.source == "EXCEL_IMPORT"
+        and campaign.name.startswith("COBRANZA RECURRENTE RECHAZADOS - ")
+        and (campaign.audience_definition_json or {}).get(
+            "source_metadata", {}
+        ).get("automation_job") == "cobranza_recurrente_rechazados"
+    ]
     sent_job_campaign_ids = set()
-    if page_ids:
+    if cobranza_ids:
         sent_job_campaign_ids = {
             int(item[0]) for item in active_session.query(
                 MarketingCampaignV2BackgroundJobORM.campaign_v2_id
             ).filter(
-                MarketingCampaignV2BackgroundJobORM.campaign_v2_id.in_(page_ids)
+                MarketingCampaignV2BackgroundJobORM.campaign_v2_id.in_(cobranza_ids)
             ).all()
         }
     return {
