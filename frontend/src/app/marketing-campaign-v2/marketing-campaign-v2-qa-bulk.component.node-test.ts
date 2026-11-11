@@ -13,7 +13,7 @@ function harness(opts: {blocked?: boolean; failOnExecute?: boolean; deterministi
   const api = {
     preflightCampaign: (id: number) => {
       calls.push('preflight:' + id);
-      const channel = id === 45 ? 'villa' : 'cul';
+      const channel = id === 94 ? 'send-chih' : id === 45 ? 'villa' : 'cul';
       return of({ campaign_id: id, mode: 'IMMEDIATE', ready: !opts.blocked,
         sendable_count: 1, frozen_count: 1, provider_campaign_count: 1,
         template: { id: 7 }, batches: [{
@@ -182,5 +182,47 @@ test('closing the modal during first provider POST blocks every subsequent POST'
   component.password.setValue('password123');
   await component.sendAll();
   assert.deepEqual(calls.filter(x => x.startsWith('execute:')), ['execute:45']);
+  assert.equal(component.canSend, false);
+});
+
+
+test('single SEND_CHIH QA can be reviewed without starting any send', async () => {
+  const {component, calls} = harness();
+  component.rows[0] = {channel_id: 'send-chih', sender: 'SEND_CHIH', result: 'PENDIENTE',
+    qa_campaign_id: 94, child_id: null, recipient_phone_masked: '******8369', stale: false} as any;
+  component.rows[1] = {channel_id: 'tec', sender: 'TEC_MXL', result: 'VALIDADA',
+    qa_campaign_id: null, child_id: null, stale: false} as any;
+  component.selected.clear();
+  component.toggle(component.rows[0], true);
+  assert.equal(component.selected.size, 1);
+  assert.equal(component.canReview, true);
+  await component.reviewAll();
+  assert.equal(component.reviewed.length, 1);
+  assert.equal(component.reviewed[0].sender, 'SEND_CHIH');
+  assert.equal(component.sendWord, 'ENVIAR QA 1');
+  assert.equal(component.maximumUsd, '0.0542');
+  assert.equal(component.canSend, false);
+  assert.equal(calls.some(x => /^(approve|materialize|authorize|execute):/.test(x)), false);
+});
+
+test('single QA still requires explicit consent, phrase and password before provider send', async () => {
+  const {component, calls} = harness();
+  component.toggle(component.rows[1], false);
+  await component.reviewAll();
+  assert.equal(component.reviewed.length, 1);
+  component.confirmed.setValue(true);
+  component.phrase.setValue('ENVIAR QA 1');
+  assert.equal(component.canSend, false);
+  await component.sendAll();
+  assert.equal(calls.some(x => x.startsWith('execute:')), false);
+  component.password.setValue('password123');
+  assert.equal(component.canSend, true);
+  await component.sendAll();
+  assert.deepEqual(calls.filter(x => x.startsWith('approve:')), ['approve:45']);
+  assert.deepEqual(calls.filter(x => x.startsWith('materialize:')), ['materialize:45']);
+  assert.deepEqual(calls.filter(x => x.startsWith('authorize:')), ['authorize:45']);
+  assert.deepEqual(calls.filter(x => x.startsWith('execute:')), ['execute:45']);
+  assert.equal(component.results[45], 'ACEPTADA POR IVENTAS');
+  assert.equal(component.password.value, '');
   assert.equal(component.canSend, false);
 });
