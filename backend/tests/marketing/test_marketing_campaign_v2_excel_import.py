@@ -222,3 +222,97 @@ def test_cobranza_without_template_never_prepares_or_sends(session, monkeypatch)
     )
     assert result == {"status": "TEMPLATE_NOT_CONFIGURED"}
     assert session.query(MarketingCampaignV2ORM).count() == 0
+
+
+def test_cobranza_pilot_only_freezes_villas_and_cannot_expand_on_same_day(
+    session, tmp_path, monkeypatch,
+):
+    """The pilot never includes another branch or creates a second daily cohort."""
+    from types import SimpleNamespace
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_TEMPLATE_ID", "1")
+    monkeypatch.setenv("WAREHOUSE_AUTOMATION_USER_ID", "47")
+    monkeypatch.setattr(preparation, "db", SimpleNamespace(session=session))
+    session.add(Sucursal(
+        sucursal_id=2, serie="VILLAS", sucursal="Villas del Rey",
+        estado="BC", operational_status="ACTIVA", is_demo=False,
+        municipio="Mexicali", direccion="Prueba sintetica",
+    ))
+    session.add(TrackBranchCatalogORM(
+        sucursal_canon="VILLAS_DEL_REY", sucursal_id=2,
+        track_label="VILLAS DEL REY", display_order=2, is_track_active=True,
+    ))
+    session.add(MarketingCampaignV2ChannelBindingORM(
+        provider="IVENTAS", sucursal_id=2, sucursal_canon="VILLAS_DEL_REY",
+        provider_channel_id="channel-villas", is_active=True, is_default=True,
+        created_by_user_id=47, updated_by_user_id=47,
+    ))
+    template = session.get(MarketingCampaignV2TemplateORM, 1)
+    template.compatible_channel_ids_json = ["channel-16", "channel-villas"]
+    session.commit()
+
+    artifacts = []
+    for branch, phone in [
+        ("VILLAS DEL REY", "6861000007"),
+        ("AZAHARES CUL", "6861000008"),
+    ]:
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["Socio", "Telefono", "Estatus"])
+        ws.append(["Socio sintetico", phone, "Rechazado"])
+        path = tmp_path / (branch.replace(" ", "_") + ".xlsx")
+        wb.save(path)
+        artifacts.append({"sucursal_raw": branch, "path": str(path)})
+
+    result = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-11", artifacts=artifacts,
+        pilot_branch_key="VILLAS_DEL_REY",
+    )
+    assert result["status"] == "PREPARED"
+    assert result["pilot_branch_key"] == "VILLAS_DEL_REY"
+    assert result["recipient_count"] == 1
+    campaign = session.get(MarketingCampaignV2ORM, result["campaign_id"])
+    assert campaign.audience_definition_json["source_metadata"]["pilot_branch_key"] == "VILLAS_DEL_REY"
+    assert {recipient.phone_mx10 for recipient in campaign.recipients} == {"6861000007"}
+    assert len(session.query(MarketingCampaignV2ORM).all()) == 1
+
+    same_scope = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-11", artifacts=artifacts,
+        pilot_branch_key="VILLAS_DEL_REY",
+    )
+    assert same_scope["status"] == "ALREADY_PREPARED"
+    with pytest.raises(preparation.CobranzaCampaignPreparationError, match="otro alcance"):
+        preparation.prepare_cobranza_iventas_campaign(
+            business_date="2026-11-11", artifacts=artifacts,
+        )
+    with pytest.raises(preparation.CobranzaCampaignPreparationError, match="otro alcance"):
+        preparation.prepare_cobranza_iventas_campaign(
+            business_date="2026-11-11", artifacts=artifacts,
+            pilot_branch_key="AZAHARES_CUL",
+        )
+    assert session.query(MarketingCampaignV2ORM).count() == 1
+
+
+def test_cobranza_pilot_never_falls_back_to_other_branch(
+    session, tmp_path, monkeypatch,
+):
+    from types import SimpleNamespace
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_TEMPLATE_ID", "1")
+    monkeypatch.setenv("WAREHOUSE_AUTOMATION_USER_ID", "47")
+    monkeypatch.setattr(preparation, "db", SimpleNamespace(session=session))
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Socio", "Telefono", "Estatus"])
+    ws.append(["Socio sintetico", "6861000008", "Rechazado"])
+    file_path = tmp_path / "AZAHARES_CUL.xlsx"
+    wb.save(file_path)
+    with pytest.raises(preparation.CobranzaCampaignPreparationError, match="no aparece"):
+        preparation.prepare_cobranza_iventas_campaign(
+            business_date="2026-11-11",
+            artifacts=[{"sucursal_raw": "AZAHARES CUL", "path": str(file_path)}],
+            pilot_branch_key="VILLAS_DEL_REY",
+        )
+    assert session.query(MarketingCampaignV2ORM).count() == 0
