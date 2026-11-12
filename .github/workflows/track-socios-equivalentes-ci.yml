@@ -18,6 +18,8 @@ jobs:
     env:
       PYTHONPATH: backend
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: synthetic-ci-track-equivalentes-secret
+      JWT_SECRET_KEY: synthetic-ci-track-equivalentes-jwt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
