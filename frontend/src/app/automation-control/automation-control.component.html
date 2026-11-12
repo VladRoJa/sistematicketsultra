@@ -101,7 +101,12 @@
           <td><span [title]="effectiveDetail(job.key)" [attr.aria-label]="effectiveDetail(job.key)">{{effectiveLabel(job.key)}}</span>
             <small *ngIf="effectiveJob(job.key)?.state==='REPORTED'">Reportado · {{effectiveJob(job.key)?.schedule?.timezone}}</small>
             <small *ngIf="effectiveJob(job.key)?.state!=='REPORTED'">Referencia de código: {{job.schedule_reference}}</small>
-          </td><td [ngClass]="workerHealthClass(job.worker_key)">{{workerHealthLabel(job.worker_key)}}</td>
+          </td><td [ngClass]="workerHealthClass(job.worker_key)">
+            {{workerHealthLabel(job.worker_key)}}
+            <small *ngIf="isCobranzaMultibranch(job)" class="cobranza-worker-note">
+              Salud de reports-scheduler; el estado de envío se verifica en los jobs iVentas.
+            </small>
+          </td>
           <td class="auto-actions">
             <button type="button" (click)="select(job)">Historial</button>
             <button type="button" (click)="openLastError(job)"
