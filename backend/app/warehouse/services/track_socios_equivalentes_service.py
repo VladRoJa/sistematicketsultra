@@ -5,7 +5,6 @@ posterior a la consultada puede participar en una lectura histórica.
 """
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
@@ -63,11 +62,14 @@ def _wellhub_visits(snapshot_id: int) -> dict[str, int | None]:
         branch = row.sucursal_canon
         if row.total_checkins_mtd is None:
             visits[branch] = None
-        elif visits.get(branch) is not None:
+        else:
             count = int(row.total_checkins_mtd)
             if count < 0:
                 raise ValueError("Check-ins negativos de Wellhub.")
-            visits[branch] = visits.get(branch, 0) + count
+            if branch not in visits:
+                visits[branch] = count
+            elif visits[branch] is not None:
+                visits[branch] += count
     return visits
 
 
