@@ -246,4 +246,34 @@ def test_isolated_campaign_freeze_never_reuses_general_name(monkeypatch, tmp_pat
     assert captured["name"] == "COBRANZA RECURRENTE RECHAZADOS - 2026-11-13 - ALFA"
     assert captured["source_metadata_extra"]["isolated_branch_key"] == "ALFA"
     assert captured["source_metadata_extra"]["auto_multibranch_date"] == "2026-11-13"
-    assert captured["source_metadata_extra"]["pilot_branch_key"] if "pilot_branch_key" in captured["source_metadata_extra"] else True
+    assert "pilot_branch_key" not in captured["source_metadata_extra"]
+
+
+def test_unselected_branch_still_prevents_duplicate_phone_dispatch(monkeypatch, tmp_path):
+    fake_db = MagicMock()
+    _ready(monkeypatch, fake_db)
+    files = [
+        _artifact(tmp_path, "ALFA", ["6861000001", "6861000002"]),
+        _artifact(tmp_path, "BETA", ["6861000002"]),  # not authorized to send
+        _artifact(tmp_path, "GAMMA", ["6861000003"]),
+    ]
+    captured = {}
+    def prepare(**kwargs):
+        captured[kwargs["isolated_branch_key"]] = kwargs["allowed_phones"]
+        return {"status": "PREPARED", "campaign_id": len(captured)}
+    monkeypatch.setattr(svc, "prepare_cobranza_iventas_campaign", prepare)
+    monkeypatch.setattr(
+        svc, "_queue_branch",
+        lambda day, branch, campaign_id, settings: {
+            "status": "QUEUED", "job_id": campaign_id, "recipient_count": 1,
+        },
+    )
+    result = svc.process_multi_branch(
+        day=DAY, artifacts=files,
+        settings=_settings(branches=("ALFA", "GAMMA")),
+    )
+    assert result["ambiguous_phones_excluded"] == 1
+    assert captured == {
+        "ALFA": frozenset({"6861000001"}),
+        "GAMMA": frozenset({"6861000003"}),
+    }
