@@ -521,3 +521,106 @@ def test_sensitized_forecast_matches_forecast_layout_and_keeps_formulas(
     assert "AVERAGEIFS(" in str(info["AI4"].value)
     assert str(info["AJ4"].value).startswith("=COUNTIFS(")
     assert "AVERAGEIFS(" in str(info["AK4"].value)
+
+
+def test_metas_op_socios_columns_preserve_layout_and_missing_values():
+    """Extensión a la derecha: formulas existentes y nulos no son ceros."""
+    from openpyxl import Workbook
+
+    book = Workbook()
+    sheet = book.active
+    service._setup_track_sheet(
+        worksheet=sheet,
+        track_date=date(2026, 11, 11),
+        generation_mode="manual_preview",
+        days_in_month=30,
+        resolved_version=SimpleNamespace(
+            generated_at_utc=None, finished_at_utc=None, started_at_utc=None
+        ),
+    )
+    sheet["D4"], sheet["M4"] = 810, 1200
+    sheet["D5"], sheet["M5"] = 600, 300
+    service._write_subtotal_row(
+        worksheet=sheet, totals_row=6, label="Subtotales 1 GYMS",
+        first_data_row=4, last_data_row=4,
+    )
+    service._write_subtotal_row(
+        worksheet=sheet, totals_row=7, label="Subtotales Nuevos",
+        first_data_row=5, last_data_row=5,
+    )
+    service._write_general_totals_row(
+        worksheet=sheet, totals_row=8,
+        base_totals_row=6, new_totals_row=7,
+    )
+    service._write_equivalencias_track(
+        worksheet=sheet,
+        base_rows=[SimpleNamespace(sucursal_canon="VILLA_VERDE")],
+        new_rows=[SimpleNamespace(sucursal_canon="SERRANIA")],
+        base_start_row=4, new_start_row=5,
+        base_totals_row=6, new_totals_row=7, general_totals_row=8,
+        equivalencias={
+            "estado": "incompleto",
+            "fecha_corte": "2026-11-11",
+            "por_sucursal": {
+                "VILLA_VERDE": {
+                    "socios_wellhub_eq": Decimal("15.1"),
+                    "socios_totalpass_eq": Decimal("8.833333333333333"),
+                },
+                "SERRANIA": {
+                    "socios_wellhub_eq": Decimal("5.6"),
+                    "socios_totalpass_eq": None,
+                },
+            },
+        },
+    )
+    service._apply_track_sheet_formatting(worksheet=sheet, last_row=8)
+    assert sheet["M3"].value == "Socios Ultra al 11 noviembre"
+    assert sheet["H3"].value == "Ocupación Ultra 11 noviembre"
+    assert [sheet[f"{col}3"].value for col in ("BC", "BD", "BE", "BF", "BG")] == [
+        "Wellhub", "TotalPass", "Socios agregadoras", "Socios totales",
+        "Ocupación total",
+    ]
+    assert "Eq" not in " ".join(str(sheet[f"{col}3"].value) for col in ("BC","BD","BE","BF","BG"))
+    assert sheet["BC4"].value == 15.1
+    assert sheet["BD4"].value > 8.83
+    assert sheet["BD5"].value is None
+    assert sheet["BE4"].value == '=IF(COUNT(BC4:BD4)=2,SUM(BC4:BD4),"")'
+    assert sheet["BF4"].value == '=IF(AND(ISNUMBER(M4),ISNUMBER(BE4)),M4+BE4,"")'
+    assert sheet["BG4"].value == '=IF(AND(ISNUMBER(BF4),D4>0),BF4/D4,"")'
+    assert sheet["BD7"].value.startswith("=IF(COUNT(BD5:BD5)=ROWS(")
+    assert sheet["BF8"].value.startswith("=IF(COUNT(BF6,BF7)=COUNT(D6,D7),")
+    assert sheet["BG8"].value == '=IF(AND(ISNUMBER(BF8),D8>0),BF8/D8,"")'
+    assert sheet["H4"].value is None or sheet["H4"].data_type in ("f", "n")
+    assert sheet.auto_filter.ref == "B3:BG8"
+    assert sheet["BC4"].number_format == service.SOCIOS_FORMAT
+    assert sheet["BG4"].number_format == service.OCCUPANCY_DECIMAL_FORMAT
+    assert "cobertura incompleta" in sheet["BC1"].value
+
+
+def test_metas_op_historical_totalpass_not_fabricated():
+    from openpyxl import Workbook
+
+    sheet = Workbook().active
+    service._write_equivalencias_track(
+        worksheet=sheet,
+        base_rows=[SimpleNamespace(sucursal_canon="VILLAS_DEL_REY")],
+        new_rows=[],
+        base_start_row=4, new_start_row=5,
+        base_totals_row=5, new_totals_row=6, general_totals_row=7,
+        equivalencias={
+            "estado": "parcial_tarifa_historica",
+            "fecha_corte": "2025-01-31",
+            "por_sucursal": {
+                "VILLAS_DEL_REY": {
+                    "socios_wellhub_eq": Decimal("32.5"),
+                    "socios_totalpass_eq": None,
+                }
+            },
+        },
+    )
+    assert sheet["BC4"].value == 32.5
+    assert sheet["BD4"].value is None
+    assert "sin tabulador histórico" in sheet["BC1"].value
+    assert sheet["BE4"].value.startswith("=IF(COUNT(BC4:BD4)=2,")
+    assert sheet["BD5"].value.startswith("=IF(COUNT(BD4:BD4)=ROWS(")
+    assert sheet["BD6"].value is None
