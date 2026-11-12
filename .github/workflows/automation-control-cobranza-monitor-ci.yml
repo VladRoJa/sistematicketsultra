@@ -36,6 +36,8 @@ jobs:
         working-directory: backend
         env:
           PYTHONPATH: .
+          SECRET_KEY: synthetic-ci-only-key-not-for-prod
+          JWT_SECRET_KEY: synthetic-ci-only-jwt-not-for-prod
         run: |
           python -m pytest -q tests/automation_control/test_cobranza_multibranch_observation.py tests/automation_control/test_job_catalog.py tests/automation_control/test_read_api.py tests/automation_control/test_effective_schedule.py tests/automation_control/test_timeline.py tests/automation_control/test_all_workers_batch.py tests/automation_control/test_reports_cobranza_recurrente.py tests/warehouse/test_cobranza_iventas_multibranch.py
   frontend-monitor:
