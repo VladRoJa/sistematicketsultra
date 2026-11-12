@@ -9,6 +9,10 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Any
 
+from app.services.automation_control.cobranza_multibranch_observation_service import (
+    JOB_KEY as MULTIBRANCH_JOB_KEY,
+    multibranch_last_error, multibranch_run_diagnostic,
+)
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM, MarketingIventasBranchFailureORM
 from app.models.routine_control import RoutineControlPipelineRunORM
@@ -191,6 +195,8 @@ def _diagnostic_with_structured_evidence(job_key: str, row: Any) -> dict:
 
 
 def run_diagnostic(job_key: str, run_id: int) -> dict | None:
+    if job_key == MULTIBRANCH_JOB_KEY:
+        return multibranch_run_diagnostic(run_id)
     if run_id <= 0:
         return None
     model, query = _attributed_query(job_key)
@@ -203,6 +209,8 @@ def run_diagnostic(job_key: str, run_id: int) -> dict | None:
 
 
 def last_error_diagnostic(job_key: str, *, business_date: date | None = None) -> dict:
+    if job_key == MULTIBRANCH_JOB_KEY:
+        return multibranch_last_error(business_date)
     model, query = _attributed_query(job_key)
     if model is None:
         return {
