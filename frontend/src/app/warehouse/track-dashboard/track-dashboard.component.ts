@@ -2436,6 +2436,9 @@ private formatIsoDateTimeLabel(value: string): string {
     if (response.equivalencias_estado === 'completo' && response.equivalencias_corte) {
       return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)}`;
     }
+    if (response.equivalencias_estado === 'incompleto' && response.equivalencias_corte) {
+      return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)} · cobertura incompleta`;
+    }
     return response.rows?.length ? 'Socios Eq: sin corte común disponible en el mes' : '';
   }
 
