@@ -666,7 +666,7 @@ export interface TrackDailyMartResponse {
   track_date?: string;
   generation_mode?: TrackGenerationMode;
   resolved_version?: TrackResolvedVersion | null;
-  equivalencias_estado?: 'completo' | 'parcial_tarifa_historica' | 'sin_corte';
+  equivalencias_estado?: 'completo' | 'incompleto' | 'parcial_tarifa_historica' | 'sin_corte';
   equivalencias_corte?: string | null;
   equivalencias_snapshot_id_wellhub?: number | null;
   equivalencias_snapshot_id_totalpass?: number | null;
