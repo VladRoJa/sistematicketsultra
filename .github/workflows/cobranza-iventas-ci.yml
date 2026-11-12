@@ -6,6 +6,8 @@ on:
       - 'backend/app/warehouse/jobs/cobranza_iventas_preparation.py'
       - 'backend/app/warehouse/jobs/cobranza_iventas_pilot.py'
       - 'backend/app/warehouse/jobs/cobranza_iventas_auto_pilot.py'
+      - 'backend/app/warehouse/jobs/cobranza_iventas_multibranch.py'
+      - 'backend/tests/warehouse/test_cobranza_iventas_multibranch.py'
       - 'backend/app/services/automation_control/cobranza_pilot_event_service.py'
       - 'backend/app/routes/automation_control_routes.py'
       - 'frontend/src/app/layout/**'
@@ -40,13 +42,13 @@ jobs:
           python -m pip install -r backend/requirements.txt pytest
       - name: Compile changed Python modules
         run: |
-          python -m py_compile backend/app/warehouse/jobs/cobranza_iventas_auto_pilot.py backend/app/services/automation_control/cobranza_pilot_event_service.py backend/app/routes/automation_control_routes.py backend/app/warehouse/jobs/cobranza_iventas_preparation.py backend/app/warehouse/jobs/cobranza_iventas_pilot.py backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py backend/app/services/marketing_campaign_v2_cobranza_send_service.py backend/app/services/marketing_campaign_v2_excel_import_service.py backend/app/services/marketing_campaign_v2_query_service.py backend/app/routes/marketing_campaign_v2_routes.py
+          python -m py_compile backend/app/warehouse/jobs/cobranza_iventas_multibranch.py backend/app/warehouse/jobs/cobranza_iventas_auto_pilot.py backend/app/services/automation_control/cobranza_pilot_event_service.py backend/app/routes/automation_control_routes.py backend/app/warehouse/jobs/cobranza_iventas_preparation.py backend/app/warehouse/jobs/cobranza_iventas_pilot.py backend/app/warehouse/jobs/cobranza_recurrente_rechazados_job.py backend/app/services/marketing_campaign_v2_cobranza_send_service.py backend/app/services/marketing_campaign_v2_excel_import_service.py backend/app/services/marketing_campaign_v2_query_service.py backend/app/routes/marketing_campaign_v2_routes.py
       - name: Cobranza audience and campaign regressions (no provider calls)
         working-directory: backend
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest -q tests/warehouse/test_cobranza_iventas_auto_pilot.py tests/automation_control/test_cobranza_pilot_event_service.py tests/warehouse/test_cobranza_iventas_preparation.py tests/warehouse/test_cobranza_iventas_send_orchestration.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
+          python -m pytest -q tests/warehouse/test_cobranza_iventas_multibranch.py tests/warehouse/test_cobranza_iventas_auto_pilot.py tests/automation_control/test_cobranza_pilot_event_service.py tests/warehouse/test_cobranza_iventas_preparation.py tests/warehouse/test_cobranza_iventas_send_orchestration.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
   frontend-cobranza:
     runs-on: ubuntu-latest
     steps:
