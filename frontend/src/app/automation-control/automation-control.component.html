@@ -88,6 +88,12 @@
           <td>
             <span class="run-result" [ngClass]="'run-result-'+latestRunState(job)"
               [attr.aria-label]="latestRunStatus(job)">{{latestRunStatus(job)}}</span>
+            <small *ngIf="isCobranzaMultibranch(job) && latestRun(job)?.counts as summary"
+              class="cobranza-summary">
+              {{summary.branches_pending || 0}} pendientes ·
+              {{(summary.branches_review || 0) + (summary.branches_skipped || 0) + (summary.branches_missing || 0)}} por revisar
+              <span *ngIf="summary.branches_expected"> · {{summary.branches_observed}}/{{summary.branches_expected}} sucursales registradas</span>
+            </small>
             <button type="button" *ngIf="latestRunIsFailure(job)"
               (click)="openLatestFailure(job)">Ver error</button>
           </td>
@@ -120,6 +126,28 @@
             <button type="button" *ngIf="canDiagnose(run)" (click)="openRunDiagnostic(run)">
               Ver diagnóstico
             </button>
+            <ng-container *ngIf="isCobranzaMultibranch(selected) && run.counts as counts">
+              <small>
+                {{counts.branches_submitted || 0}} aceptadas por iVentas ·
+                {{counts.branches_pending || 0}} pendientes ·
+                {{(counts.branches_review || 0) + (counts.branches_skipped || 0) + (counts.branches_missing || 0)}} por revisar
+              </small>
+            </ng-container>
+            <details *ngIf="isCobranzaMultibranch(selected) && run.branches?.length" class="cobranza-branches">
+              <summary>Ver sucursales ({{run.branches?.length}})</summary>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Sucursal</th><th>Resultado</th><th>Destinatarios</th><th>Motivo</th></tr></thead>
+                  <tbody><tr *ngFor="let branch of run.branches">
+                    <td>{{branch.branch}}</td>
+                    <td>{{cobranzaBranchStatus(branch.status)}}<small *ngIf="branch.job_status">{{branch.job_status}}</small></td>
+                    <td>{{branch.recipients}}</td>
+                    <td>{{branch.reason_code || '—'}}</td>
+                  </tr></tbody>
+                </table>
+              </div>
+              <p class="disclaimer">SUBMITTED confirma aceptación del lote en iVentas, no entrega ni lectura individual. Una sucursal en revisión no se reenvía automáticamente.</p>
+            </details>
           </td>
           <td>{{formatDate(run.started_at_utc)}}</td><td>{{formatDate(run.finished_at_utc)}}</td></tr>
           <tr *ngIf="!runs.length"><td colspan="4">Sin ejecuciones registradas.</td></tr></tbody>
