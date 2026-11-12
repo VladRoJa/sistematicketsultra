@@ -737,6 +737,10 @@ def get_track_daily_mart_endpoint():
         }
         serialized_rows = [_serialize_track_daily_mart_row(row) for row in rows]
         add_equivalentes_to_mart_rows(serialized_rows, report)
+        if report["estado"] == "completo" and any(
+            row["socios_agregadoras_eq"] is None for row in serialized_rows
+        ):
+            report["estado"] = "incompleto"
 
         return jsonify(
             {
