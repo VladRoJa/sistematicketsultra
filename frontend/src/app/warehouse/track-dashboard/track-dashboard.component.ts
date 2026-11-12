@@ -50,6 +50,11 @@ type TrackSortKey =
   | 'usuarios_inicio_mes'
   | 'proyeccion_usuarios_cierre_mes'
   | 'usuarios_activos_actual'
+  | 'socios_wellhub_eq'
+  | 'socios_totalpass_eq'
+  | 'socios_agregadoras_eq'
+  | 'socios_totales_eq'
+  | 'ocupacion_total_eq'
   | 'ocupacion_inicio_mes'
   | 'meta_ocupacion_px_m2'
   | 'meta_ocupacion_mes'
@@ -152,6 +157,11 @@ interface TrackViewRow {
   metaOcupacionPxM2: string;
   metaOcupacionMes: string;
   ocupacionActual: string;
+  sociosWellhubEq: string;
+  sociosTotalpassEq: string;
+  sociosAgregadorasEq: string;
+  sociosTotalesEq: string;
+  ocupacionTotalEq: string;
   diferenciaOcupacionInicioLabel: string;
   diferenciaOcupacionInicioTone: ProgressTone;
   avanceOcupacionLabel: string;
@@ -399,6 +409,7 @@ getTrackViewModeButtonClass(mode: TrackViewMode): string {
   selectedModeLabel = '';
   lastLoadedTrackDateLabel = '';
   agregadorasFreshnessLabel = '';
+  equivalenciasFreshnessLabel = '';
   resolvedVersion: TrackResolvedVersion | null = null;
   trackVersionLabel = '';
   trackGeneratedAtLabel = '';
@@ -827,6 +838,7 @@ private saveBlobAsFile(blob: Blob, filename: string): void {
 
           this.agregadorasFreshnessLabel =
             this.buildAgregadorasFreshnessLabel(visibleRows);
+          this.equivalenciasFreshnessLabel = this.buildEquivalenciasFreshnessLabel(response);
 
           this.summaryCards = this.buildSummaryCards(visibleRows);
           this.dataMartRows = visibleRows;
@@ -862,6 +874,7 @@ private saveBlobAsFile(blob: Blob, filename: string): void {
     this.trackVersionLabel = '';
     this.trackGeneratedAtLabel = '';
     this.agregadorasFreshnessLabel = '';
+    this.equivalenciasFreshnessLabel = '';
   }
 
 sortTrackTable(key: TrackSortKey): void {
@@ -1016,6 +1029,13 @@ private getTrackSortValue(
         row.usuarios_activos_actual,
         row.m2_sin_circulaciones,
       );
+
+    case 'socios_wellhub_eq':
+    case 'socios_totalpass_eq':
+    case 'socios_agregadoras_eq':
+    case 'socios_totales_eq':
+    case 'ocupacion_total_eq':
+      return row[key] ?? -1;
 
     case 'diferencia_ocupacion_inicio':
       return this.calculateDifference(
@@ -1287,6 +1307,11 @@ private getTrackSortColumnLabel(key: TrackSortKey): string {
     usuarios_inicio_mes: 'Usuarios inicio mes',
     proyeccion_usuarios_cierre_mes: 'Proyección cierre',
     usuarios_activos_actual: 'Usuarios activos',
+    socios_wellhub_eq: 'Wellhub Eq.',
+    socios_totalpass_eq: 'TotalPass Eq.',
+    socios_agregadoras_eq: 'Socios agregadoras Eq.',
+    socios_totales_eq: 'Socios totales Eq.',
+    ocupacion_total_eq: 'Ocupación total Eq.',
     ocupacion_inicio_mes: 'Ocupación inicio mes',
     meta_ocupacion_px_m2: 'Meta ocupación 2 px m²',
     meta_ocupacion_mes: 'Meta ocupación',
@@ -1827,6 +1852,11 @@ private buildTargetMonthFromTrackDate(): string {
     metaOcupacionPxM2: this.formatDecimal(2, 1),
     metaOcupacionMes: this.formatDecimal(metaOcupacionMes, 1),
     ocupacionActual: this.formatDecimal(ocupacionActual, 1),
+    sociosWellhubEq: this.formatOptionalEquivalentes(row.socios_wellhub_eq),
+    sociosTotalpassEq: this.formatOptionalEquivalentes(row.socios_totalpass_eq),
+    sociosAgregadorasEq: this.formatOptionalEquivalentes(row.socios_agregadoras_eq),
+    sociosTotalesEq: this.formatOptionalEquivalentes(row.socios_totales_eq),
+    ocupacionTotalEq: this.formatOptionalEquivalentes(row.ocupacion_total_eq),
     diferenciaOcupacionInicioLabel: this.formatSignedDecimal(diferenciaOcupacionInicio, 1),
     diferenciaOcupacionInicioTone: this.getDifferenceTone(diferenciaOcupacionInicio),
     avanceOcupacionLabel: this.formatPercentWithDecimals(avanceOcupacion, 2),
@@ -2157,6 +2187,11 @@ private buildTargetMonthFromTrackDate(): string {
   ): TrackDailyMartRow {
     const totalIngresoReal = this.sumNumber(rows, 'ingreso_real_mtd');
     const totalUsuariosActivos = this.sumNumber(rows, 'usuarios_activos_actual');
+    const whEq = this.sumCompleteEquivalentes(rows, 'socios_wellhub_eq');
+    const tpEq = this.sumCompleteEquivalentes(rows, 'socios_totalpass_eq');
+    const agregadorasEq = this.sumCompleteEquivalentes(rows, 'socios_agregadoras_eq');
+    const totalEq = this.sumCompleteEquivalentes(rows, 'socios_totales_eq');
+    const totalM2 = this.sumNumber(rows, 'm2_sin_circulaciones');
     const totalMetaFaycgo = this.sumNumber(rows, 'meta_faycgo_mes');
 
     const totalProyeccionUsuariosCierre = this.sumNumber(
@@ -2186,6 +2221,11 @@ private buildTargetMonthFromTrackDate(): string {
       meta_venta_tienda_mes: this.sumNumber(rows, 'meta_venta_tienda_mes'),
       venta_tienda_real_mtd: this.sumNumber(rows, 'venta_tienda_real_mtd'),
       usuarios_activos_actual: totalUsuariosActivos,
+      socios_wellhub_eq: whEq,
+      socios_totalpass_eq: tpEq,
+      socios_agregadoras_eq: agregadorasEq,
+      socios_totales_eq: totalEq,
+      ocupacion_total_eq: totalEq !== null && totalM2 > 0 ? totalEq / totalM2 : null,
       reactivaciones_real_mtd: this.sumNumber(rows, 'reactivaciones_real_mtd'),
       bajas_reales_mtd: this.sumNumber(rows, 'bajas_reales_mtd'),
       ingreso_real_base_mtd: this.sumNumber(rows, 'ingreso_real_base_mtd'),
@@ -2387,6 +2427,21 @@ private formatIsoDateTimeLabel(value: string): string {
     hour12: false,
   }).format(parsedDate);
 }
+  private buildEquivalenciasFreshnessLabel(response: TrackDailyMartResponse): string {
+    if (response.equivalencias_estado === 'parcial_tarifa_historica') {
+      return response.equivalencias_corte
+        ? `Socios Eq: Wellhub al ${this.formatIsoDateLabel(response.equivalencias_corte)} · TotalPass sin tabulador histórico`
+        : 'Socios Eq: TotalPass sin tabulador histórico';
+    }
+    if (response.equivalencias_estado === 'completo' && response.equivalencias_corte) {
+      return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)}`;
+    }
+    if (response.equivalencias_estado === 'incompleto' && response.equivalencias_corte) {
+      return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)} · cobertura incompleta`;
+    }
+    return response.rows?.length ? 'Socios Eq: sin corte común disponible en el mes' : '';
+  }
+
   private buildAgregadorasFreshnessLabel(rows: TrackDailyMartRow[]): string {
     const uniqueDates = Array.from(
       new Set(
@@ -2521,6 +2576,22 @@ private getDaysInMonth(year: number, month: number): number {
     return new Intl.NumberFormat('es-MX', {
       maximumFractionDigits: 0,
     }).format(value ?? 0);
+  }
+
+  private formatOptionalEquivalentes(value: number | null | undefined): string {
+    return value === null || value === undefined || !Number.isFinite(value)
+      ? '—'
+      : this.formatDecimal(value, 1);
+  }
+
+  private sumCompleteEquivalentes(
+    rows: TrackDailyMartRow[],
+    key: 'socios_wellhub_eq' | 'socios_totalpass_eq' | 'socios_agregadoras_eq' | 'socios_totales_eq',
+  ): number | null {
+    if (rows.length === 0 || rows.some((row) => row[key] === null || row[key] === undefined)) {
+      return null;
+    }
+    return rows.reduce((sum, row) => sum + Number(row[key]), 0);
   }
 
   private formatDecimal(

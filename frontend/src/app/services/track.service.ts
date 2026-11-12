@@ -638,6 +638,11 @@ export interface TrackDailyMartRow {
   source_business_date_tienda: string | null;
   source_snapshot_id_tienda: number | null;
   usuarios_activos_actual: number | null;
+  socios_wellhub_eq?: number | null;
+  socios_totalpass_eq?: number | null;
+  socios_agregadoras_eq?: number | null;
+  socios_totales_eq?: number | null;
+  ocupacion_total_eq?: number | null;
   reactivaciones_real_mtd: number | null;
   bajas_reales_mtd: number | null;
   ingreso_real_base_mtd: number | null;
@@ -661,6 +666,10 @@ export interface TrackDailyMartResponse {
   track_date?: string;
   generation_mode?: TrackGenerationMode;
   resolved_version?: TrackResolvedVersion | null;
+  equivalencias_estado?: 'completo' | 'incompleto' | 'parcial_tarifa_historica' | 'sin_corte';
+  equivalencias_corte?: string | null;
+  equivalencias_snapshot_id_wellhub?: number | null;
+  equivalencias_snapshot_id_totalpass?: number | null;
   total_rows?: number;
   rows?: TrackDailyMartRow[];
   message?: string;

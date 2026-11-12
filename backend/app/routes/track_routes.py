@@ -28,6 +28,10 @@ from app.warehouse.services.track_daily_pipeline_service import (
 from app.warehouse.services.track_excel_export_service import (
     build_track_daily_mart_excel,
 )
+from app.warehouse.services.track_socios_equivalentes_service import (
+    socios_equivalentes_por_fecha,
+    add_equivalentes_to_mart_rows,
+)
 from app.warehouse.services.track_daily_query_version_service import (
     PREFERRED_TRACK_VERSION_TYPES,
     resolve_effective_track_daily_version,
@@ -723,6 +727,21 @@ def get_track_daily_mart_endpoint():
                 .all()
             )
 
+        # Proyección de lectura independiente de las versiones históricas.
+        report = socios_equivalentes_por_fecha(track_date) if rows else {
+            "estado": "sin_corte",
+            "fecha_corte": None,
+            "snapshot_id_wellhub": None,
+            "snapshot_id_totalpass": None,
+            "por_sucursal": {},
+        }
+        serialized_rows = [_serialize_track_daily_mart_row(row) for row in rows]
+        add_equivalentes_to_mart_rows(serialized_rows, report)
+        if report["estado"] == "completo" and any(
+            row["socios_agregadoras_eq"] is None for row in serialized_rows
+        ):
+            report["estado"] = "incompleto"
+
         return jsonify(
             {
                 "status": "ok",
@@ -753,7 +772,11 @@ def get_track_daily_mart_endpoint():
                     else None
                 ),
                 "total_rows": len(rows),
-                "rows": [_serialize_track_daily_mart_row(row) for row in rows],
+                "rows": serialized_rows,
+                "equivalencias_estado": report["estado"],
+                "equivalencias_corte": report["fecha_corte"],
+                "equivalencias_snapshot_id_wellhub": report["snapshot_id_wellhub"],
+                "equivalencias_snapshot_id_totalpass": report["snapshot_id_totalpass"],
             }
         ), 200
 
