@@ -1307,11 +1307,11 @@ private getTrackSortColumnLabel(key: TrackSortKey): string {
     usuarios_inicio_mes: 'Usuarios inicio mes',
     proyeccion_usuarios_cierre_mes: 'Proyección cierre',
     usuarios_activos_actual: 'Usuarios activos',
-    socios_wellhub_eq: 'Wellhub Eq.',
-    socios_totalpass_eq: 'TotalPass Eq.',
-    socios_agregadoras_eq: 'Socios agregadoras Eq.',
-    socios_totales_eq: 'Socios totales Eq.',
-    ocupacion_total_eq: 'Ocupación total Eq.',
+    socios_wellhub_eq: 'Wellhub',
+    socios_totalpass_eq: 'TotalPass',
+    socios_agregadoras_eq: 'Socios agregadoras',
+    socios_totales_eq: 'Socios totales',
+    ocupacion_total_eq: 'Ocupación total',
     ocupacion_inicio_mes: 'Ocupación inicio mes',
     meta_ocupacion_px_m2: 'Meta ocupación 2 px m²',
     meta_ocupacion_mes: 'Meta ocupación',
@@ -2430,16 +2430,16 @@ private formatIsoDateTimeLabel(value: string): string {
   private buildEquivalenciasFreshnessLabel(response: TrackDailyMartResponse): string {
     if (response.equivalencias_estado === 'parcial_tarifa_historica') {
       return response.equivalencias_corte
-        ? `Socios Eq: Wellhub al ${this.formatIsoDateLabel(response.equivalencias_corte)} · TotalPass sin tabulador histórico`
-        : 'Socios Eq: TotalPass sin tabulador histórico';
+        ? `Socios: Wellhub al ${this.formatIsoDateLabel(response.equivalencias_corte)} · TotalPass sin tabulador histórico`
+        : 'Socios: TotalPass sin tabulador histórico';
     }
     if (response.equivalencias_estado === 'completo' && response.equivalencias_corte) {
-      return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)}`;
+      return `Socios al ${this.formatIsoDateLabel(response.equivalencias_corte)}`;
     }
     if (response.equivalencias_estado === 'incompleto' && response.equivalencias_corte) {
-      return `Socios Eq al ${this.formatIsoDateLabel(response.equivalencias_corte)} · cobertura incompleta`;
+      return `Socios al ${this.formatIsoDateLabel(response.equivalencias_corte)} · cobertura incompleta`;
     }
-    return response.rows?.length ? 'Socios Eq: sin corte común disponible en el mes' : '';
+    return response.rows?.length ? 'Socios: sin corte común disponible en el mes' : '';
   }
 
   private buildAgregadorasFreshnessLabel(rows: TrackDailyMartRow[]): string {
