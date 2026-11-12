@@ -65,9 +65,6 @@ def build_import_bytes(
     artifacts: list[dict[str, Any]], *, allowed_phones: frozenset[str] | None = None,
 ) -> tuple[bytes, int]:
     """Translate generated XLSX to the exact Excel importer contract."""
-    book = Workbook(write_only=True)
-    sheet = book.create_sheet("Destinatarios")
-    sheet.append(["sucursal", "telefono"])
     recipients: dict[str, str] = {}
     ambiguous: set[str] = set()
     for artifact in artifacts:
@@ -98,11 +95,16 @@ def build_import_bytes(
                     recipients[phone] = branch
         finally:
             source.close()
-    for phone, branch in sorted(recipients.items()):
-        sheet.append([branch, phone])
     count = len(recipients)
     if not count:
         raise CobranzaCampaignPreparationError("Los archivos de cobranza no contienen telefonos validos.")
+    # Allocate write-only worksheet only after validation; an invalid file
+    # must not strand an open XML streaming writer inside the long-lived scheduler.
+    book = Workbook(write_only=True)
+    sheet = book.create_sheet("Destinatarios")
+    sheet.append(["sucursal", "telefono"])
+    for phone, branch in sorted(recipients.items()):
+        sheet.append([branch, phone])
     output = io.BytesIO()
     book.save(output)
     return output.getvalue(), count
