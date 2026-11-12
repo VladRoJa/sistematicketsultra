@@ -17,6 +17,9 @@ from playwright.sync_api import Page, sync_playwright
 
 from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
 from app.warehouse.jobs.cobranza_iventas_preparation import prepare_cobranza_iventas_campaign
+from app.warehouse.jobs.cobranza_iventas_auto_pilot import (
+    PILOT_BRANCH, auto_pilot_config, queue_auto_pilot, mark_auto_pilot_blocked,
+)
 from app.warehouse.jobs.cobranza_recurrente_rechazados_publisher import (
     publish_cobranza_recurrente_rechazados_outputs,
 )
@@ -853,9 +856,32 @@ def run_once(business_date: date | None = None) -> dict:
             # Campaign preparation does not send; its failure must not turn a
             # successfully published daily report into a failed report job.
             try:
+                auto_settings = auto_pilot_config(date.fromisoformat(today_str))
                 campaign_preparation = prepare_cobranza_iventas_campaign(
                     business_date=today_str, artifacts=processing_result["artifacts"],
+                    pilot_branch_key=PILOT_BRANCH if auto_settings else None,
+                    auto_pilot_date=date.fromisoformat(today_str) if auto_settings else None,
                 )
+                if auto_settings and campaign_preparation.get("status") in (
+                    "PREPARED", "ALREADY_PREPARED"
+                ):
+                    try:
+                        dispatch = queue_auto_pilot(
+                            day=date.fromisoformat(today_str),
+                            campaign_id=int(campaign_preparation["campaign_id"]),
+                            settings=auto_settings,
+                        )
+                        campaign_preparation["auto_send"] = dispatch
+                    except Exception:
+                        from app.extensions import db
+                        db.session.rollback()
+                        logger.exception("Piloto de cobranza bloqueado; no se enviaron mensajes desde scheduler")
+                        try:
+                            mark_auto_pilot_blocked(int(campaign_preparation["campaign_id"]))
+                        except Exception:
+                            db.session.rollback()
+                            logger.exception("No se pudo registrar bloqueo del piloto")
+                        campaign_preparation["auto_send"] = {"status": "BLOCKED"}
                 logger.info("Cobranza iVentas preparacion: %s", campaign_preparation)
             except Exception:
                 from app.extensions import db

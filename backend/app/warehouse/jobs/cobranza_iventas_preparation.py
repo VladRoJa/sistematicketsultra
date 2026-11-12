@@ -108,6 +108,7 @@ def build_import_bytes(artifacts: list[dict[str, Any]]) -> tuple[bytes, int]:
 def prepare_cobranza_iventas_campaign(
     *, business_date: date | str, artifacts: list[dict[str, Any]],
     pilot_branch_key: str | None = None,
+    auto_pilot_date: date | None = None,
 ) -> dict[str, Any]:
     """Freeze one idempotent daily campaign, without sending a message."""
     day = date.fromisoformat(str(business_date))
@@ -200,6 +201,7 @@ def prepare_cobranza_iventas_campaign(
             "generated_rows_with_phone": rows,
             "skipped_branches": skipped_branches,
             **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
+            **({"auto_pilot_date": day.isoformat()} if auto_pilot_date == day else {}),
         },
     )
     return {

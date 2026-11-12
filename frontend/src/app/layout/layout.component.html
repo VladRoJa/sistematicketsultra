@@ -141,6 +141,20 @@
      ========================================================================== -->
 
 <div class="suite-floating-layer" *ngIf="!esProveedorFunnel">
+  <section *ngIf="shouldShowCobranzaPilotEvent" class="cobranza-pilot-event" role="status"
+           aria-live="polite" aria-label="Evento de cobranza">
+    <mat-icon aria-hidden="true">notifications_active</mat-icon>
+    <div>
+      <strong>{{ cobranzaPilotTitle }}</strong>
+      <small>{{ cobranzaPilotSubtitle }}</small>
+      <small>La aceptación no garantiza entrega o lectura.</small>
+    </div>
+    <button type="button" aria-label="Cerrar aviso de cobranza"
+            (click)="dismissCobranzaPilotEvent()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </section>
+
   <div
     *ngIf="shouldShowValidationAlert"
     class="validation-floating-alert"

@@ -21,7 +21,7 @@ import { AuthActivityService } from '../core/auth/auth-activity.service';
 import { SessionRefreshService } from '../core/auth/session-refresh.service';
 import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
 import { TicketService, TicketValidationSummary } from '../services/ticket.service';
-import { AutomationControlService } from '../automation-control/automation-control.service';
+import { AutomationControlService, CobranzaPilotEvent } from '../automation-control/automation-control.service';
 import { SchedulerAlertSummary, SchedulerAlertState } from '../automation-control/automation-control.models';
 import { Subscription } from 'rxjs';
 import { RefrescoService } from '../services/refresco.service';
@@ -157,6 +157,50 @@ isMoreMenuActive(): boolean {
   private readonly validationAlertSnoozeKey = 'suite.ticketValidationAlert.snoozeUntil';
   private readonly validationAlertPositionKey = 'suite.ticketValidationAlert.position';
 
+  cobranzaPilotEvent: CobranzaPilotEvent | null = null;
+  private cobranzaPilotEventLoading = false;
+  private readonly cobranzaPilotDismissKey = 'suite.cobranzaPilot.dismissedEvent';
+
+  get shouldShowCobranzaPilotEvent(): boolean {
+    return this.puedeVerAlertaAutomatizaciones
+      && this.cobranzaPilotEvent !== null
+      && localStorage.getItem(this.cobranzaPilotDismissKey) !== this.cobranzaPilotEvent.event_id;
+  }
+
+  get cobranzaPilotTitle(): string {
+    const e = this.cobranzaPilotEvent;
+    if (!e) return '';
+    if (e.stage === 'COMPLETED' && e.accepted_count > 0) return 'Cobranza aceptada por iVentas';
+    if (e.stage === 'REVIEW_REQUIRED' || e.stage === 'STOPPED' || e.stage === 'AUTO_SEND_BLOCKED') return 'Cobranza requiere revisión';
+    if (e.stage === 'QUEUED' || e.stage === 'RUNNING') return 'Cobranza en proceso';
+    return 'Archivo de cobranza generado';
+  }
+
+  get cobranzaPilotSubtitle(): string {
+    const e = this.cobranzaPilotEvent;
+    if (!e) return '';
+    return `Villas del Rey · ${e.accepted_count}/${e.recipient_count} aceptados · 12 nov.`;
+  }
+
+  dismissCobranzaPilotEvent(): void {
+    if (this.cobranzaPilotEvent) {
+      localStorage.setItem(this.cobranzaPilotDismissKey, this.cobranzaPilotEvent.event_id);
+    }
+  }
+
+  private cargarCobranzaPilotEvent(): void {
+    if (this.cobranzaPilotEventLoading) return;
+    this.cobranzaPilotEventLoading = true;
+    this.automationControlService.cobranzaPilotEvent().subscribe({
+      next: result => {
+        this.cobranzaPilotEvent = result.event;
+        this.cobranzaPilotEventLoading = false;
+      },
+      error: () => {
+        this.cobranzaPilotEventLoading = false;
+      },
+    });
+  }
   automationAlertSummary: SchedulerAlertSummary | null = null;
   automationAlertUnavailable = false;
   automationAlertPosition = { x: 0, y: 0 };
@@ -1453,6 +1497,7 @@ get puedeVerAlertaAutomatizaciones(): boolean {
 }
 
 private cargarAutomationAlerts(): void {
+  this.cargarCobranzaPilotEvent();
   if (this.automationAlertLoading) {
     return;
   }

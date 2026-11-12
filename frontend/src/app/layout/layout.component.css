@@ -875,3 +875,31 @@
     bottom: 90px;
   }
 }
+
+/* Aviso de un solo piloto; no reemplaza alertas operativas existentes. */
+.cobranza-pilot-event {
+  position: absolute;
+  top: 80px;
+  right: 24px;
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: #f8fafc;
+  color: #142033;
+  border: 1px solid #94a3b8;
+  border-left: 4px solid #2563eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.16);
+  pointer-events: auto;
+}
+.cobranza-pilot-event div { display: grid; gap: 4px; flex: 1; }
+.cobranza-pilot-event strong { font-size: 14px; }
+.cobranza-pilot-event small { font-size: 12px; line-height: 1.4; }
+.cobranza-pilot-event button {
+  border: 0; background: transparent; cursor: pointer; color: inherit;
+}
+@media (max-width: 760px) {
+  .cobranza-pilot-event { top: 100px; right: 16px; }
+}

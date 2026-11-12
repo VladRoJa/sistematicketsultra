@@ -54,7 +54,7 @@ EXPECTED_COUNTS = {
     "purchase_requisition": 24,
     "system_daily_check": 5,
     "system_daily_check_bi": 11,
-    "automation_control": 14,
+    "automation_control": 15,
 }
 HTTP = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 WRITES = HTTP - {"GET"}
@@ -123,7 +123,7 @@ def test_p27_registry_is_exactly_the_reviewed_five_families(registry):
         for blueprint in EXPECTED_WRITES
     }
     assert got == EXPECTED_WRITES
-    assert len(registry) == 72
+    assert len(registry) == 73
     assert sum(len(v) for v in got.values()) == 32
 
 
