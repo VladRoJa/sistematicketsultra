@@ -1300,6 +1300,7 @@ export interface CampaignV2CampaignQuery {
   page_size: number;
   purpose?: CampaignV2Purpose;
   source?: CampaignV2Source;
+  include_qa?: boolean;
 }
 
 export interface CampaignV2TariffClassificationRequest {
