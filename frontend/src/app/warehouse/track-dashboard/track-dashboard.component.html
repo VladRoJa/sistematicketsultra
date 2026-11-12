@@ -52,6 +52,9 @@
           >
             <strong>{{ agregadorasFreshnessLabel }}</strong>
           </span>
+          <span class="track-topbar__mode-value" *ngIf="equivalenciasFreshnessLabel">
+            <strong>{{ equivalenciasFreshnessLabel }}</strong>
+          </span>
         </div>
 
         <!-- Formulario de consulta / generación -->
@@ -382,6 +385,16 @@
                 </button>
               </th>
 
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_agregadoras_eq')" (click)="sortTrackTable('socios_agregadoras_eq')">
+                  Socios agregadoras Eq. <span>{{ getTrackSortIndicator('socios_agregadoras_eq') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_totales_eq')" (click)="sortTrackTable('socios_totales_eq')">
+                  Socios totales Eq. <span>{{ getTrackSortIndicator('socios_totales_eq') }}</span>
+                </button>
+              </th>
               <th class="cell-right">
                 <button
                   type="button"
@@ -767,6 +780,8 @@
             <ng-container *ngIf="isTrackColumnGroupVisible('ocupacion')">
               <td class="cell-right">{{ row.m2SinCirculaciones }}</td>
               <td class="cell-right">{{ row.usuariosActivos }}</td>
+              <td class="cell-right">{{ row.sociosAgregadorasEq }}</td>
+              <td class="cell-right">{{ row.sociosTotalesEq }}</td>
               <td class="cell-right">{{ row.ocupacionActual }}</td>
 
               <td class="cell-right">
@@ -941,12 +956,42 @@
               </th>
 
               <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('usuarios_activos_actual')" (click)="sortTrackTable('usuarios_activos_actual')">
+                  Socios Ultra <span>{{ getTrackSortIndicator('usuarios_activos_actual') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_wellhub_eq')" (click)="sortTrackTable('socios_wellhub_eq')">
+                  Wellhub Eq. <span>{{ getTrackSortIndicator('socios_wellhub_eq') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_totalpass_eq')" (click)="sortTrackTable('socios_totalpass_eq')">
+                  TotalPass Eq. <span>{{ getTrackSortIndicator('socios_totalpass_eq') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_agregadoras_eq')" (click)="sortTrackTable('socios_agregadoras_eq')">
+                  Agregadoras Eq. <span>{{ getTrackSortIndicator('socios_agregadoras_eq') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('socios_totales_eq')" (click)="sortTrackTable('socios_totales_eq')">
+                  Socios totales Eq. <span>{{ getTrackSortIndicator('socios_totales_eq') }}</span>
+                </button>
+              </th>
+              <th class="cell-right">
                 <button type="button" [class]="getTrackSortHeaderClass('ocupacion_actual')" (click)="sortTrackTable('ocupacion_actual')">
                   Ocupación {{ getTrackDayMonthShortLabel() }}
                   <span>{{ getTrackSortIndicator('ocupacion_actual') }}</span>
                 </button>
               </th>
 
+              <th class="cell-right">
+                <button type="button" [class]="getTrackSortHeaderClass('ocupacion_total_eq')" (click)="sortTrackTable('ocupacion_total_eq')">
+                  Ocupación total Eq. <span>{{ getTrackSortIndicator('ocupacion_total_eq') }}</span>
+                </button>
+              </th>
               <th class="cell-right">
                 <button type="button" [class]="getTrackSortHeaderClass('diferencia_ocupacion_inicio')" (click)="sortTrackTable('diferencia_ocupacion_inicio')">
                   Dif Inicio de mes VS Día Actual
@@ -1328,7 +1373,13 @@
               <td class="cell-right">{{ row.ocupacionInicioMes }}</td>
               <td class="cell-right">{{ row.metaOcupacionPxM2 }}</td>
               <td class="cell-right">{{ row.metaOcupacionMes }}</td>
+              <td class="cell-right">{{ row.usuariosActivos }}</td>
+              <td class="cell-right">{{ row.sociosWellhubEq }}</td>
+              <td class="cell-right">{{ row.sociosTotalpassEq }}</td>
+              <td class="cell-right">{{ row.sociosAgregadorasEq }}</td>
+              <td class="cell-right">{{ row.sociosTotalesEq }}</td>
               <td class="cell-right">{{ row.ocupacionActual }}</td>
+              <td class="cell-right">{{ row.ocupacionTotalEq }}</td>
               <td class="cell-right"><span [class]="getProgressBadgeClass(row.diferenciaOcupacionInicioTone)">{{ row.diferenciaOcupacionInicioLabel }}</span></td>
               <td class="cell-right"><span [class]="getProgressBadgeClass(row.avanceOcupacionTone)">{{ row.avanceOcupacionLabel }}</span></td>
             </ng-container>
