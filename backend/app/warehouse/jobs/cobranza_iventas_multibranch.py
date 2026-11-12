@@ -95,7 +95,9 @@ def _extract_phones(artifact: dict[str, Any]) -> set[str]:
     payload, _ = build_import_bytes([artifact])
     workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
     try:
-        return {str(row[1]) for row in list(workbook.active.values)[1:] if row[1]}
+        rows = iter(workbook.active.values)
+        next(rows, None)  # header
+        return {str(row[1]) for row in rows if len(row) > 1 and row[1]}
     finally:
         workbook.close()
 
