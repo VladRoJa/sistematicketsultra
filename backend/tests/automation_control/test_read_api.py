@@ -34,6 +34,7 @@ def _actor(*, username="ADMICORP", role="ADMINISTRADOR"):
     "/api/automation-control/datasets",
     "/api/automation-control/jobs/marketing.iventas_sync",
     "/api/automation-control/jobs/marketing.iventas_sync/runs",
+    "/api/automation-control/jobs/reports.cobranza_iventas_multibranch/runs",
 ])
 def test_all_endpoints_require_jwt(api, path):
     client, _ = api
@@ -228,3 +229,26 @@ def test_supported_runs_uses_only_confirmed_evidence():
     assert job_read_service.has_run_source("track.base_nocturna_retry")
     assert not job_read_service.has_run_source("track.warehouse_retention")
     assert not job_read_service.has_run_source("track.pending_manual_canonical_close")
+
+
+def test_multibranch_job_history_requires_admicorp_and_is_read_only(api):
+    from unittest.mock import patch
+    client, headers = api
+    url = "/api/automation-control/jobs/reports.cobranza_iventas_multibranch/runs"
+    with patch("app.routes.automation_control_routes.UserORM.get_by_id",
+               return_value=_actor(username="branch_user", role="GERENTE")):
+        assert client.get(url, headers=headers).status_code == 403
+    fake = {
+        "coverage": "DOMAIN_RUNS", "rows": [], "has_more": False,
+        "limit": 20, "offset": 0,
+    }
+    with patch("app.routes.automation_control_routes.UserORM.get_by_id",
+               return_value=_actor()), patch(
+        "app.routes.automation_control_routes.list_job_runs", return_value=fake,
+    ) as read:
+        response = client.get(url, headers=headers)
+    assert response.status_code == 200
+    assert response.get_json()["rows"] == []
+    read.assert_called_once_with(
+        "reports.cobranza_iventas_multibranch", limit=20, offset=0,
+    )
