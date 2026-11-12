@@ -9,6 +9,7 @@ from app.services.automation_control.freshness_service import read_freshness
 from app.services.marketing_access import resolve_marketing_access, MarketingAuthorizationError
 from app.services.automation_control.worker_health_service import read_worker_health
 from app.services.automation_control.scheduler_alert_service import read_scheduler_alert_summary
+from app.services.automation_control.cobranza_pilot_event_service import read_cobranza_pilot_event
 from app.services.automation_control.gasca_sms_health_service import read_gasca_sms_queue
 from app.services.automation_control.gasca_sms_pulse_service import read_pulse_health
 from app.services.automation_control.effective_schedule_service import read_effective_schedules
@@ -397,3 +398,16 @@ def automation_control_gasca_sms_pulse():
             "status": "error",
             "message": "No fue posible verificar el pulso SMS.",
         }), 503
+
+
+@automation_control_bp.get("/cobranza/pilot-event")
+@jwt_required()
+def automation_control_cobranza_pilot_event():
+    """Read-only event, visible solely to authorized Control operators."""
+    if not _require_read_access():
+        return _deny()
+    try:
+        return jsonify({"status": "ok", "event": read_cobranza_pilot_event()})
+    except Exception:
+        current_app.logger.exception("No fue posible consultar evento de cobranza")
+        return jsonify({"status": "error", "message": "Evento no disponible."}), 503

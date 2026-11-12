@@ -7,6 +7,10 @@ import { Job, Run, RunsResponse, Summary, Dataset, TimelineResponse, AutomationD
 export class AutomationControlService {
   private readonly url = `${environment.apiUrl}/automation-control`;
   constructor(private readonly http: HttpClient) {}
+  cobranzaPilotEvent(): Observable<{status:string; event: CobranzaPilotEvent | null}> {
+    return this.http.get<{status:string; event:CobranzaPilotEvent | null}>(
+      `${this.url}/cobranza/pilot-event`);
+  }
   alertSummary():Observable<SchedulerAlertSummary> {
     return this.http.get<SchedulerAlertSummary>(`${this.url}/alerts/summary`);
   }
@@ -39,4 +43,15 @@ export class AutomationControlService {
     const params = new HttpParams().set('offset',String(offset)).set('limit',String(limit));
     return this.http.get<RunsResponse>(`${this.url}/jobs/${encodeURIComponent(jobKey)}/runs`,{params});
   }
+}
+
+export interface CobranzaPilotEvent {
+  event_id: string;
+  campaign_id: number;
+  business_date: string;
+  branch: string;
+  recipient_count: number;
+  accepted_count: number;
+  stage: 'PREPARED' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'REVIEW_REQUIRED' | 'STOPPED' | 'STOP_REQUESTED' | 'AUTO_SEND_BLOCKED';
+  has_job: boolean;
 }
