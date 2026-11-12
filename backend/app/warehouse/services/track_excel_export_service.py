@@ -51,11 +51,12 @@ MONTH_NAMES_ES = {
 
 TRACK_START_ROW = 4
 TRACK_FIRST_COL = 2
-TRACK_LAST_COL = 54
+TRACK_LAST_COL = 59
 
 CURRENCY_FORMAT = '$#,##0.00;$#,##0.00;$0.00'
 INTEGER_FORMAT = '#,##0;#,##0;0'
 DECIMAL_FORMAT = '#,##0.00;#,##0.00;0.00'
+SOCIOS_FORMAT = '#,##0.0;#,##0.0;0.0'
 OCCUPANCY_DECIMAL_FORMAT = '#,##0.00000;#,##0.00000;0.00000'
 PERCENT_FORMAT = '0.0%;0.0%;0.0%'
 
@@ -86,6 +87,7 @@ TRACK_GROUPS = [
     ("AR2:AT2", "D o m i c i l i a d o s"),
     ("AU2:AX2", "A  R  P  U"),
     ("AY2:BB2", "Tienda"),
+    ("BC2:BG2", "Socios y ocupación total"),
 ]
 
 TRACK_BRANCH_ORDER = [
@@ -133,12 +135,12 @@ BASE_HEADERS = {
     "E": "Ocupación 1 {month}",
     "F": "Meta Ocupación 2 px m2 ",
     "G": "Meta Ocupación {month}",
-    "H": "Ocupación {day_month}",
+    "H": "Ocupación Ultra {day_month}",
     "I": "Dif Inicio de mes VS Día Actual",
     "J": "% Alcance meta Ocupación",
     "K": "Usuarios 1 {month}",
     "L": "Proyección Usuarios activos al cierre {month}",
-    "M": "Usuarios activos al {day_month}",
+    "M": "Socios Ultra al {day_month}",
     "N": "DIF INICIO MES",
     "O": "Dif meta  vs Real (##)",
     "P": "% Alcance meta crecimiento",
@@ -180,6 +182,11 @@ BASE_HEADERS = {
     "AZ": "Real {day_month}",
     "BA": "Diferencia $$",
     "BB": "% alcance real",
+    "BC": "Wellhub",
+    "BD": "TotalPass",
+    "BE": "Socios agregadoras",
+    "BF": "Socios totales",
+    "BG": "Ocupación total",
 }
 
 FORECAST_START_ROW = 4
@@ -256,8 +263,9 @@ def build_track_daily_mart_excel(
     generation_mode: str,
     resolved_version: Any,
     rows: Sequence[Any],
+    equivalencias: dict[str, Any] | None = None,
 ) -> bytes:
-    """Build an .xlsx export that mirrors the original Track 'Metas OP' columns."""
+    """Build Track export preserving existing cell references and formulas."""
 
     workbook = Workbook()
     track_sheet = workbook.active
@@ -345,6 +353,18 @@ def build_track_daily_mart_excel(
         totals_row=general_totals_row,
         base_totals_row=base_totals_row,
         new_totals_row=new_totals_row,
+    )
+
+    _write_equivalencias_track(
+        worksheet=track_sheet,
+        base_rows=base_rows,
+        new_rows=new_rows,
+        base_start_row=base_start_row,
+        new_start_row=new_start_row,
+        base_totals_row=base_totals_row,
+        new_totals_row=new_totals_row,
+        general_totals_row=general_totals_row,
+        equivalencias=equivalencias,
     )
 
     _apply_track_sheet_formatting(
@@ -598,6 +618,88 @@ def _write_general_totals_row(
     worksheet[f"BB{totals_row}"] = f"=IFERROR(AZ{totals_row}/AY{totals_row},0)"
 
 
+def _write_equivalencias_track(
+    *,
+    worksheet: Worksheet,
+    base_rows: Sequence[Any],
+    new_rows: Sequence[Any],
+    base_start_row: int,
+    new_start_row: int,
+    base_totals_row: int,
+    new_totals_row: int,
+    general_totals_row: int,
+    equivalencias: dict[str, Any] | None,
+) -> None:
+    """Append equivalent-member metrics without shifting legacy Metas OP columns.
+
+    Missing provider/branch/tariff values stay blank, never become false zeros.
+    All aggregation formulas retain full precision; only number formats round.
+    """
+    report = equivalencias or {}
+    per_branch = report.get("por_sucursal") or {}
+    cutoff = report.get("fecha_corte")
+    status = report.get("estado")
+    if cutoff:
+        message = f"Agregadoras al {cutoff}"
+        if status == "parcial_tarifa_historica":
+            message += " | TotalPass sin tabulador histórico"
+        elif status == "incompleto":
+            message += " | cobertura incompleta"
+    else:
+        message = "Agregadoras sin corte común disponible"
+    worksheet.merge_cells("BC1:BG1")
+    worksheet["BC1"] = message
+
+    for start_row, members in ((base_start_row, base_rows), (new_start_row, new_rows)):
+        for row_idx, mart_row in enumerate(members, start=start_row):
+            branch = _normalize_branch_key(getattr(mart_row, "sucursal_canon", ""))
+            values = per_branch.get(branch, {})
+            worksheet[f"BC{row_idx}"] = _to_number(values.get("socios_wellhub_eq"))
+            worksheet[f"BD{row_idx}"] = _to_number(values.get("socios_totalpass_eq"))
+            worksheet[f"BE{row_idx}"] = (
+                f'=IF(COUNT(BC{row_idx}:BD{row_idx})=2,'
+                f'SUM(BC{row_idx}:BD{row_idx}),"")'
+            )
+            worksheet[f"BF{row_idx}"] = (
+                f'=IF(AND(ISNUMBER(M{row_idx}),ISNUMBER(BE{row_idx})),'
+                f'M{row_idx}+BE{row_idx},"")'
+            )
+            worksheet[f"BG{row_idx}"] = (
+                f'=IF(AND(ISNUMBER(BF{row_idx}),D{row_idx}>0),'
+                f'BF{row_idx}/D{row_idx},"")'
+            )
+
+    # Los subtotales van DESPUÉS de ambos grupos de datos.
+    # Nunca incluir el otro grupo ni una fila de subtotal en el rango.
+    for start_row, end_row, subtotal in (
+        (base_start_row, new_start_row - 1, base_totals_row),
+        (new_start_row, base_totals_row - 1, new_totals_row),
+    ):
+        if end_row < start_row:
+            continue
+        for col in ("BC", "BD", "BE", "BF"):
+            worksheet[f"{col}{subtotal}"] = (
+                f'=IF(COUNT({col}{start_row}:{col}{end_row})='
+                f'ROWS({col}{start_row}:{col}{end_row}),'
+                f'SUM({col}{start_row}:{col}{end_row}),"")'
+            )
+        worksheet[f"BG{subtotal}"] = (
+            f'=IF(AND(ISNUMBER(BF{subtotal}),D{subtotal}>0),'
+            f'BF{subtotal}/D{subtotal},"")'
+        )
+
+    for col in ("BC", "BD", "BE", "BF"):
+        worksheet[f"{col}{general_totals_row}"] = (
+            f'=IF(COUNT({col}{base_totals_row},{col}{new_totals_row})='
+            f'COUNT(D{base_totals_row},D{new_totals_row}),'
+            f'SUM({col}{base_totals_row},{col}{new_totals_row}),"")'
+        )
+    worksheet[f"BG{general_totals_row}"] = (
+        f'=IF(AND(ISNUMBER(BF{general_totals_row}),D{general_totals_row}>0),'
+        f'BF{general_totals_row}/D{general_totals_row},"")'
+    )
+
+
 def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> None:
     black_fill = PatternFill("solid", fgColor="1F1F1F")
     red_fill = PatternFill("solid", fgColor="E54525")
@@ -674,7 +776,14 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
     )
     _set_number_format(
         worksheet=worksheet,
-        column_letters=["E", "G", "H", "I"],
+        column_letters=["BC", "BD", "BE", "BF"],
+        start_row=TRACK_START_ROW,
+        end_row=last_row,
+        number_format=SOCIOS_FORMAT,
+    )
+    _set_number_format(
+        worksheet=worksheet,
+        column_letters=["E", "G", "H", "I", "BG"],
         start_row=TRACK_START_ROW,
         end_row=last_row,
         number_format=OCCUPANCY_DECIMAL_FORMAT,
@@ -708,6 +817,11 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
         "V": 18,
         "X": 16,
         "Y": 18,
+        "BC": 16,
+        "BD": 16,
+        "BE": 21,
+        "BF": 20,
+        "BG": 20,
     }
 
     for col_idx in range(TRACK_FIRST_COL, TRACK_LAST_COL + 1):
@@ -730,7 +844,7 @@ def _apply_track_sheet_formatting(*, worksheet: Worksheet, last_row: int) -> Non
         last_row=last_row,
     )
 
-    worksheet.auto_filter.ref = f"B3:BB{last_row}"
+    worksheet.auto_filter.ref = f"B3:BG{last_row}"
 
 
 def _apply_zebra_rows(
@@ -799,6 +913,7 @@ def _apply_track_segment_formatting(
         "AR": ULTRA_BLUE,
         "AU": ULTRA_CHARCOAL,
         "AY": ULTRA_ORANGE,
+        "BC": ULTRA_BLUE,
     }
 
     segment_ranges = [
@@ -810,6 +925,7 @@ def _apply_track_segment_formatting(
         ("AR", "AT", "Domiciliados"),
         ("AU", "AX", "ARPU"),
         ("AY", "BB", "Tienda"),
+        ("BC", "BG", "Socios y ocupación total"),
     ]
 
     header_fill = PatternFill("solid", fgColor=HEADER_DARK)

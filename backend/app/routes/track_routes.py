@@ -863,11 +863,14 @@ def export_track_daily_mart_xlsx_endpoint():
                 }
             ), 404
 
+        # Mismo cálculo de lectura que el dashboard; sin mutar el mart.
+        equivalencias = socios_equivalentes_por_fecha(track_date)
         excel_bytes = build_track_daily_mart_excel(
             track_date=track_date,
             generation_mode=generation_mode,
             resolved_version=resolved_version,
             rows=rows,
+            equivalencias=equivalencias,
         )
 
         filename = f"Track_{track_date.isoformat()}_{generation_mode}.xlsx"

@@ -102,7 +102,10 @@ def test_26_sucursales_reproducen_totalpass_11_noviembre(monkeypatch):
     values = result["por_sucursal"]
     tp_total = sum((r["socios_totalpass_eq"] for r in values.values()), Decimal(0))
     general = sum((r["socios_agregadoras_eq"] for r in values.values()), Decimal(0))
-    assert tp_total == Decimal(8216 - 1136) / 10 + Decimal(1136) / 12
+    # Decimal(1/12) es periódico: sumas por sucursal pueden diferir en la
+    # última cifra de precisión del contexto, sin alterar el resultado útil.
+    expected_tp = Decimal(8216 - 1136) / 10 + Decimal(1136) / 12
+    assert abs(tp_total - expected_tp) < Decimal("0.0000001")
     assert general.quantize(Decimal("0.1")) == Decimal("1881.9")
     assert values["SERRANIA"]["socios_totalpass_eq"] == Decimal("28.3")
     assert values["SALTILLO_VILLALTA"]["socios_totalpass_eq"] == Decimal("80.2")
