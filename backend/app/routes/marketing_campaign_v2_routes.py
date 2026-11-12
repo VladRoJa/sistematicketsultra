@@ -730,13 +730,14 @@ def classify_campaign_v2_tariff_endpoint(tarifa_key: str):
 def list_campaign_v2_endpoint():
     try:
         _, access = _resolve_campaign_v2_request()
-        _validate_query_args({"page", "page_size", "purpose", "source"})
+        _validate_query_args({"page", "page_size", "purpose", "source", "include_qa"})
         result = list_campaign_v2(
             allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
             page=request.args.get("page", 1),
             page_size=request.args.get("page_size", 50),
             purpose=request.args.get("purpose"),
             source=request.args.get("source"),
+            include_qa=request.args.get("include_qa", "true"),
             session=db.session,
         )
         return jsonify(result), 200

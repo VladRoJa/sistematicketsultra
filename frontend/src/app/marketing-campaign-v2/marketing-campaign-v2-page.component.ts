@@ -227,6 +227,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   reportingError = '';
   reportingSuccess = '';
 
+  showQaCampaigns = false;
   campaignPage = 1;
   readonly campaignPageSize = 25;
   campaignTotal = 0;
@@ -1216,6 +1217,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       page_size: this.campaignPageSize,
       purpose: this.historyPurpose.value || undefined,
       source: this.historySource.value || undefined,
+      include_qa: this.showQaCampaigns,
     })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -1299,6 +1301,11 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       }
     }
     return this.loadingCommercialSummaries ? '…' : '—';
+  }
+
+  onQaVisibilityChange(checked: boolean): void {
+    this.showQaCampaigns = checked;
+    this.loadCampaigns(1);
   }
 
   previousCampaignPage(): void {

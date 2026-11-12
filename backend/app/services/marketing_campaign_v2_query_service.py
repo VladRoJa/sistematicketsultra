@@ -57,6 +57,7 @@ def list_campaign_v2(
     page_size: Any = 50,
     purpose: Any = None,
     source: Any = None,
+    include_qa: Any = True,
     session=None,
 ) -> dict[str, Any]:
     active_session = session if session is not None else db.session
@@ -68,6 +69,13 @@ def list_campaign_v2(
     )
     normalized_purpose = _normalize_optional_purpose(purpose)
     normalized_source = _normalize_optional_source(source)
+    # Preserve the original API response for consumers that omit this option.
+    if type(include_qa) is bool:
+        normalized_include_qa = include_qa
+    elif isinstance(include_qa, str) and include_qa.lower() in {"true", "false"}:
+        normalized_include_qa = include_qa.lower() == "true"
+    else:
+        raise MarketingCampaignV2QueryValidationError("include_qa debe ser true o false.")
     normalized_scope = _normalize_current_scope(allowed_sucursal_keys)
 
     query = (
@@ -84,6 +92,8 @@ def list_campaign_v2(
         query = query.filter(MarketingCampaignV2ORM.purpose == normalized_purpose)
     if normalized_source is not None:
         query = query.filter(MarketingCampaignV2ORM.source == normalized_source)
+    if not normalized_include_qa:
+        query = query.filter(MarketingCampaignV2ORM.source != "QA_MANUAL")
 
     rows = (
         query.group_by(MarketingCampaignV2ORM.id)

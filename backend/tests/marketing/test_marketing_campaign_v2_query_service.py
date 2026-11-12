@@ -725,3 +725,57 @@ def test_query_source_filter_accepts_funnel_portfolio():
     from app.services import marketing_campaign_v2_query_service as service
 
     assert service._normalize_optional_source("funnel_portfolio") == "FUNNEL_PORTFOLIO"
+
+
+def test_history_excludes_qa_before_pagination_but_keeps_real_campaigns(session):
+    session.add_all([
+        MarketingCampaignV2ORM(
+            id=6, name="QA comercial real (no es QA_MANUAL)",
+            purpose="ACTIVE_MEMBERS", source="ACTIVE_MEMBERS",
+            audience_definition_json=_definition(["BRANCH A"]),
+            frozen_at=NOW, created_at=NOW, updated_at=NOW,
+        ),
+        MarketingCampaignV2ORM(
+            id=7, name="QA Plantilla 14-test",
+            purpose="ACTIVE_MEMBERS", source="QA_MANUAL",
+            audience_definition_json=_definition(["BRANCH A"]),
+            frozen_at=NOW, created_at=NOW, updated_at=NOW,
+        ),
+    ])
+    session.commit()
+
+    filtered = list_campaign_v2(
+        allowed_sucursal_keys=("BRANCH A", "BRANCH B"),
+        page=1, page_size=1, include_qa=False, session=session,
+    )
+    assert filtered["total"] == 3
+    assert filtered["total_pages"] == 3
+    assert [row["id"] for row in filtered["rows"]] == [6]
+    second = list_campaign_v2(
+        allowed_sucursal_keys=("BRANCH A", "BRANCH B"),
+        page=2, page_size=1, include_qa="false", session=session,
+    )
+    assert [row["id"] for row in second["rows"]] == [3]
+
+    # Old API clients, and the enabled checkbox, retain QA visibility.
+    for kwargs in ({}, {"include_qa": True}, {"include_qa": "true"}):
+        all_rows = list_campaign_v2(
+            allowed_sucursal_keys=("BRANCH A", "BRANCH B"),
+            page=1, page_size=1, session=session, **kwargs,
+        )
+        assert all_rows["total"] == 4
+        assert all_rows["total_pages"] == 4
+        assert [row["id"] for row in all_rows["rows"]] == [7]
+
+    # The list visibility toggle must not remove direct-detail authorization.
+    assert get_campaign_v2(
+        campaign_id=7, allowed_sucursal_keys=("BRANCH A",), session=session,
+    )["source"] == "QA_MANUAL"
+
+
+@pytest.mark.parametrize("value", ["yes", "", None, 0, 1, {}, []])
+def test_history_rejects_invalid_include_qa_flag(session, value):
+    with pytest.raises(MarketingCampaignV2QueryValidationError, match="include_qa"):
+        list_campaign_v2(
+            allowed_sucursal_keys=None, include_qa=value, session=session,
+        )
