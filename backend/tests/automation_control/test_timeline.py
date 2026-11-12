@@ -36,7 +36,7 @@ def test_reference_schedule_is_never_verified():
     assert result["timezone"] == "America/Tijuana"
     assert len(result["workers"]) == 6
     reports = next(w for w in result["workers"] if w["worker_key"] == "reports-scheduler")
-    assert len(reports["jobs"]) == 6
+    assert len(reports["jobs"]) == 7
     assert reports["jobs"][0]["reference_slots"] == ["09:00"] or any(
         j["reference_slots"] == ["09:00"] for j in reports["jobs"]
     )
