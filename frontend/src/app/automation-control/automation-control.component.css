@@ -131,3 +131,12 @@ td .run-result+button{margin-left:7px}
 .sms-pulse-details>div{display:flex;flex-direction:column;gap:4px;min-width:0;padding:8px;background:#f8fafc}
 .sms-pulse-details strong{font-size:12px;overflow-wrap:anywhere}
 @media(max-width:640px){.sms-pulse-details{grid-template-columns:1fr}}
+
+/* Cobranza multicucursal: detalle de evidencias, sin datos personales. */
+.cobranza-summary{display:block;margin-top:4px;color:#64748b;font-size:11px;max-width:230px;white-space:normal}
+.cobranza-branches{margin-top:8px;max-width:100%;min-width:260px}
+.cobranza-branches>summary{cursor:pointer;color:#1d4ed8;font-weight:600;padding:4px 0}
+.cobranza-branches .table-wrap{max-height:340px;overflow:auto;margin-top:7px}
+.cobranza-branches table{min-width:365px}
+.cobranza-branches td,.cobranza-branches th{font-size:11px;padding:5px 7px}
+.cobranza-branches .disclaimer{max-width:480px;line-height:1.5}
