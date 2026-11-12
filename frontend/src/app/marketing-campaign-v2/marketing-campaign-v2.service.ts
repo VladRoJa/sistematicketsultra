@@ -198,6 +198,9 @@ export class MarketingCampaignV2Service {
     if (query.source) {
       params = params.set('source', query.source);
     }
+    if (query.include_qa !== undefined) {
+      params = params.set('include_qa', String(query.include_qa));
+    }
 
     return this.http.get<CampaignV2CampaignPage>(this.apiUrl, { params });
   }
