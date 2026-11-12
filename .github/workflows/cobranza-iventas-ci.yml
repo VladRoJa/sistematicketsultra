@@ -8,6 +8,7 @@ on:
       - 'backend/app/warehouse/jobs/cobranza_iventas_auto_pilot.py'
       - 'backend/app/warehouse/jobs/cobranza_iventas_multibranch.py'
       - 'backend/tests/warehouse/test_cobranza_iventas_multibranch.py'
+      - 'backend/tests/marketing/test_cobranza_multibranch_worker_continuation.py'
       - 'backend/app/services/automation_control/cobranza_pilot_event_service.py'
       - 'backend/app/routes/automation_control_routes.py'
       - 'frontend/src/app/layout/**'
@@ -48,7 +49,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest -q tests/warehouse/test_cobranza_iventas_multibranch.py tests/warehouse/test_cobranza_iventas_auto_pilot.py tests/automation_control/test_cobranza_pilot_event_service.py tests/warehouse/test_cobranza_iventas_preparation.py tests/warehouse/test_cobranza_iventas_send_orchestration.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
+          python -m pytest -q tests/marketing/test_cobranza_multibranch_worker_continuation.py tests/warehouse/test_cobranza_iventas_multibranch.py tests/warehouse/test_cobranza_iventas_auto_pilot.py tests/automation_control/test_cobranza_pilot_event_service.py tests/warehouse/test_cobranza_iventas_preparation.py tests/warehouse/test_cobranza_iventas_send_orchestration.py tests/marketing/test_marketing_campaign_v2_excel_import.py tests/marketing/test_marketing_campaign_v2_preflight_service.py tests/automation_control/test_reports_cobranza_recurrente.py
   frontend-cobranza:
     runs-on: ubuntu-latest
     steps:
