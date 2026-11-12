@@ -777,6 +777,9 @@
             <mat-option *ngFor="let value of options.purposes" [value]="value">{{ purposeLabel(value) }}</mat-option>
           </mat-select>
         </mat-form-field>
+        <mat-checkbox class="history-qa-toggle" [checked]="showQaCampaigns"
+                      [disabled]="loadingCampaigns"
+                      (change)="onQaVisibilityChange($event.checked)">Mostrar QA</mat-checkbox>
         <button mat-stroked-button type="button" (click)="loadCampaigns(1)" [disabled]="loadingCampaigns">Aplicar filtros</button>
       </div>
 
