@@ -61,11 +61,10 @@ def _phone(value: object) -> str:
     return str(value).strip()
 
 
-def build_import_bytes(artifacts: list[dict[str, Any]]) -> tuple[bytes, int]:
+def build_import_bytes(
+    artifacts: list[dict[str, Any]], *, allowed_phones: frozenset[str] | None = None,
+) -> tuple[bytes, int]:
     """Translate generated XLSX to the exact Excel importer contract."""
-    book = Workbook(write_only=True)
-    sheet = book.create_sheet("Destinatarios")
-    sheet.append(["sucursal", "telefono"])
     recipients: dict[str, str] = {}
     ambiguous: set[str] = set()
     for artifact in artifacts:
@@ -85,7 +84,8 @@ def build_import_bytes(artifacts: list[dict[str, Any]]) -> tuple[bytes, int]:
             column = matches[0]
             for cells in values:
                 phone = normalize_phone(_phone(cells[column] if len(cells) > column else None))
-                if not phone or phone in ambiguous:
+                if (not phone or phone in ambiguous or
+                        (allowed_phones is not None and phone not in allowed_phones)):
                     continue
                 previous = recipients.get(phone)
                 if previous is not None and previous != branch:
@@ -95,11 +95,16 @@ def build_import_bytes(artifacts: list[dict[str, Any]]) -> tuple[bytes, int]:
                     recipients[phone] = branch
         finally:
             source.close()
-    for phone, branch in sorted(recipients.items()):
-        sheet.append([branch, phone])
     count = len(recipients)
     if not count:
         raise CobranzaCampaignPreparationError("Los archivos de cobranza no contienen telefonos validos.")
+    # Allocate write-only worksheet only after validation; an invalid file
+    # must not strand an open XML streaming writer inside the long-lived scheduler.
+    book = Workbook(write_only=True)
+    sheet = book.create_sheet("Destinatarios")
+    sheet.append(["sucursal", "telefono"])
+    for phone, branch in sorted(recipients.items()):
+        sheet.append([branch, phone])
     output = io.BytesIO()
     book.save(output)
     return output.getvalue(), count
@@ -109,10 +114,19 @@ def prepare_cobranza_iventas_campaign(
     *, business_date: date | str, artifacts: list[dict[str, Any]],
     pilot_branch_key: str | None = None,
     auto_pilot_date: date | None = None,
+    isolated_branch_key: str | None = None,
+    allowed_phones: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     """Freeze one idempotent daily campaign, without sending a message."""
     day = date.fromisoformat(str(business_date))
+    if isolated_branch_key is not None:
+        if (not re.fullmatch(r"[A-Z0-9_]{2,100}", isolated_branch_key)
+                or pilot_branch_key is not None or auto_pilot_date is not None
+                or allowed_phones is None):
+            raise CobranzaCampaignPreparationError("Aislamiento de sucursal inválido.")
     name = f"{CAMPAIGN_PREFIX} - {day.isoformat()}"
+    if isolated_branch_key is not None:
+        name += f" - {isolated_branch_key}"
     if pilot_branch_key is not None and (
         not isinstance(pilot_branch_key, str) or
         not pilot_branch_key.strip() or pilot_branch_key != pilot_branch_key.strip()
@@ -126,7 +140,10 @@ def prepare_cobranza_iventas_campaign(
         metadata = (existing.audience_definition_json or {}).get("source_metadata") or {}
         if metadata.get("automation_job") != JOB_KEY:
             raise CobranzaCampaignPreparationError("Nombre de campana reservado ocupado.")
-        if metadata.get("pilot_branch_key") != pilot_branch_key:
+        if (metadata.get("pilot_branch_key") != pilot_branch_key or
+                metadata.get("isolated_branch_key") != isolated_branch_key or
+                (isolated_branch_key is not None and
+                 metadata.get("auto_multibranch_date") != day.isoformat())):
             raise CobranzaCampaignPreparationError(
                 "Ya existe una campana del mismo corte con otro alcance. "
                 "No se mezclaran un piloto y una campana general."
@@ -134,6 +151,7 @@ def prepare_cobranza_iventas_campaign(
         return {
             "status": "ALREADY_PREPARED", "campaign_id": int(existing.id),
             **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
+            **({"isolated_branch_key": isolated_branch_key} if isolated_branch_key else {}),
         }
 
     # A fixed template binding is configuration, not a send switch. Missing
@@ -165,6 +183,8 @@ def prepare_cobranza_iventas_campaign(
             continue
         if pilot_branch_key is not None and branch.sucursal_canon != pilot_branch_key:
             continue  # Intentionally out of scope, not a delivery error.
+        if isolated_branch_key is not None and branch.sucursal_canon != isolated_branch_key:
+            continue
         pilot_found = True
         binding = resolve_dispatch_channel_binding(
             sucursal_id=branch.sucursal_id, session=db.session,
@@ -175,16 +195,16 @@ def prepare_cobranza_iventas_campaign(
             skipped_branches.append({"sucursal": branch_raw, "reason": "CANAL_O_PLANTILLA"})
             continue
         try:
-            build_import_bytes([artifact])
+            build_import_bytes([artifact], allowed_phones=allowed_phones)
         except CobranzaCampaignPreparationError:
             skipped_branches.append({"sucursal": branch_raw, "reason": "ARCHIVO_O_TELEFONOS"})
             continue
         eligible.append(artifact)
-    if pilot_branch_key is not None and not pilot_found:
+    if (pilot_branch_key is not None or isolated_branch_key is not None) and not pilot_found:
         raise CobranzaCampaignPreparationError("La sucursal piloto no aparece en el corte diario.")
     if not eligible:
         raise CobranzaCampaignPreparationError("Ninguna sucursal tiene cobranza enviable.")
-    payload, rows = build_import_bytes(eligible)
+    payload, rows = build_import_bytes(eligible, allowed_phones=allowed_phones)
     filename = f"cobranza_recurrente_{day.isoformat()}.xlsx"
     args = dict(
         file_bytes=payload, filename=filename, name=name,
@@ -202,6 +222,10 @@ def prepare_cobranza_iventas_campaign(
             "skipped_branches": skipped_branches,
             **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
             **({"auto_pilot_date": day.isoformat()} if auto_pilot_date == day else {}),
+            **({
+                "isolated_branch_key": isolated_branch_key,
+                "auto_multibranch_date": day.isoformat(),
+            } if isolated_branch_key else {}),
         },
     )
     return {
@@ -211,4 +235,5 @@ def prepare_cobranza_iventas_campaign(
         "blacklist_excluded_count": int(result["blacklist_excluded_count"]),
         "skipped_branches": skipped_branches,
         "pilot_branch_key": pilot_branch_key,
+        "isolated_branch_key": isolated_branch_key,
     }
