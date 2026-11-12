@@ -17,6 +17,9 @@ from playwright.sync_api import Page, sync_playwright
 
 from app.warehouse.jobs._cobranza_recurrente_rechazados_xlsx import procesar_archivo
 from app.warehouse.jobs.cobranza_iventas_preparation import prepare_cobranza_iventas_campaign
+from app.warehouse.jobs.cobranza_iventas_multibranch import (
+    multi_branch_config, process_multi_branch,
+)
 from app.warehouse.jobs.cobranza_iventas_auto_pilot import (
     PILOT_BRANCH, auto_pilot_config, queue_auto_pilot, mark_auto_pilot_blocked,
 )
@@ -856,12 +859,22 @@ def run_once(business_date: date | None = None) -> dict:
             # Campaign preparation does not send; its failure must not turn a
             # successfully published daily report into a failed report job.
             try:
-                auto_settings = auto_pilot_config(date.fromisoformat(today_str))
-                campaign_preparation = prepare_cobranza_iventas_campaign(
-                    business_date=today_str, artifacts=processing_result["artifacts"],
-                    pilot_branch_key=PILOT_BRANCH if auto_settings else None,
-                    auto_pilot_date=date.fromisoformat(today_str) if auto_settings else None,
-                )
+                day = date.fromisoformat(today_str)
+                auto_settings = auto_pilot_config(day)
+                multi_settings = multi_branch_config(day)
+                if auto_settings and multi_settings:
+                    raise ValueError("El piloto y la operación multicucursal no pueden coexistir.")
+                if multi_settings is not None:
+                    campaign_preparation = process_multi_branch(
+                        day=day, artifacts=processing_result["artifacts"],
+                        settings=multi_settings,
+                    )
+                else:
+                    campaign_preparation = prepare_cobranza_iventas_campaign(
+                        business_date=day, artifacts=processing_result["artifacts"],
+                        pilot_branch_key=PILOT_BRANCH if auto_settings else None,
+                        auto_pilot_date=day if auto_settings else None,
+                    )
                 if auto_settings and campaign_preparation.get("status") in (
                     "PREPARED", "ALREADY_PREPARED"
                 ):
