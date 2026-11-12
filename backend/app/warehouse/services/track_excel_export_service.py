@@ -669,9 +669,11 @@ def _write_equivalencias_track(
                 f'BF{row_idx}/D{row_idx},"")'
             )
 
+    # Los subtotales van DESPUÉS de ambos grupos de datos.
+    # Nunca incluir el otro grupo ni una fila de subtotal en el rango.
     for start_row, end_row, subtotal in (
-        (base_start_row, base_totals_row - 1, base_totals_row),
-        (new_start_row, new_totals_row - 1, new_totals_row),
+        (base_start_row, new_start_row - 1, base_totals_row),
+        (new_start_row, base_totals_row - 1, new_totals_row),
     ):
         if end_row < start_row:
             continue
