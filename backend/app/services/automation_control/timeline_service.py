@@ -10,7 +10,7 @@ from app.models.routine_control import RoutineControlPipelineRunORM
 from app.models.rpa import GascaSmsRequestORM
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 from app.services.automation_control.cobranza_multibranch_observation_service import (
-    JOB_KEY as MULTIBRANCH_JOB_KEY, list_multibranch_runs,
+    JOB_KEY as MULTIBRANCH_JOB_KEY, _read_day,
 )
 from app.services.automation_control.job_catalog import get_job_catalog
 from app.services.automation_control.job_read_service import (
@@ -31,7 +31,8 @@ _REFERENCE = {
     "reports.reactivation_sources_daily": ("09:00",),
     "reports.reactivation_outcomes_daily": ("09:15",),
     "reports.cobranza_recurrente_rechazados": ("08:00",),
-    "reports.cobranza_iventas_multibranch": ("08:00",),
+    # No tiene slot independiente: se ejecuta después de descargar el reporte Gasca.
+    "reports.cobranza_iventas_multibranch": (),
     "routine_control.scheduled_pipeline": ("09:20", "13:20", "17:20", "21:20"),
 }
 _TRIGGERS = {
@@ -61,17 +62,15 @@ def _local_start(value: datetime | None) -> datetime | None:
 
 def _observations(job_key: str, day: date) -> list[dict]:
     if job_key == MULTIBRANCH_JOB_KEY:
-        rows = list_multibranch_runs(limit=10, offset=0)["rows"]
-        result = []
-        for run in rows:
-            if run["business_date"] != day.isoformat() or not run["observed_at_utc"]:
-                continue
-            stamp = datetime.fromisoformat(run["observed_at_utc"]).astimezone(LOCAL_TZ)
-            result.append({
-                **run, "observed_hour": stamp.strftime("%H:00"),
-                "observed_time": stamp.strftime("%H:%M"),
-            })
-        return result
+        # Consultar la fecha solicitada, no una ventana de las últimas diez.
+        run = _read_day(day.isoformat())
+        if run is None or not run["observed_at_utc"]:
+            return []
+        stamp = datetime.fromisoformat(run["observed_at_utc"]).astimezone(LOCAL_TZ)
+        return [{
+            **run, "observed_hour": stamp.strftime("%H:00"),
+            "observed_time": stamp.strftime("%H:%M"),
+        }]
     model = _MODELS.get(job_key)
     if model is None:
         return []
@@ -145,7 +144,8 @@ def daily_timeline(day: date) -> dict:
             "schedule_verified": False,
             "observed": by_hour,
             "coverage": (
-                "COMPLETION_MARKERS_ONLY" if _MODELS.get(job.key) is WarehouseAuditLogORM
+                "OBSERVED_RUNS" if job.key == MULTIBRANCH_JOB_KEY
+                else "COMPLETION_MARKERS_ONLY" if _MODELS.get(job.key) is WarehouseAuditLogORM
                 else "OBSERVED_RUNS" if job.key in _MODELS
                 else "NOT_INSTRUMENTED"
             ),

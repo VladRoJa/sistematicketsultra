@@ -227,7 +227,7 @@ _JOBS = (
         domain="reports",
         label="Cobranza iVentas · multicucursal",
         schedule_kind="DAILY_TIME_OPTIONAL_GATED",
-        schedule_reference="08:40 nominal; requiere reporte Gasca y autorización multicucursal",
+        schedule_reference="Tras reporte Gasca (inicio 08:00 por defecto; envío sin hora fija)",
         schedule_env_keys=(
             "COBRANZA_RECURRENTE_ENABLED",
             "COBRANZA_RECURRENTE_RUN_HOUR",
