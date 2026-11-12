@@ -1030,6 +1030,18 @@ def _resolved_schedule_snapshot() -> dict:
         "reports.cobranza_recurrente_rechazados": daily(
             "COBRANZA_RECURRENTE", "", 8, 0, "COBRANZA_RECURRENTE_ENABLED",
         ),
+        "reports.cobranza_iventas_multibranch": schedule_spec(
+            enabled=(
+                _env_bool("COBRANZA_IVENTAS_MULTI_BRANCH_ENABLED", False)
+                and _env_bool("COBRANZA_RECURRENTE_ENABLED", False)
+            ),
+            timezone_name=tz, kind="DAILY_TIME",
+            slots=schedule_hour(
+                "COBRANZA_RECURRENTE_RUN_HOUR",
+                "COBRANZA_RECURRENTE_RUN_MINUTE", 8, 0,
+            ),
+            conditional=True,
+        ),
         "reports.commercial_daily_reports": daily(
             "COMMERCIAL_DAILY_REPORTS", "", 1, 20,
             "COMMERCIAL_DAILY_REPORTS_ENABLED",

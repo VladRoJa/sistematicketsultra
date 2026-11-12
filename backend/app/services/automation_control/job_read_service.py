@@ -8,6 +8,9 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Any
 
+from app.services.automation_control.cobranza_multibranch_observation_service import (
+    JOB_KEY as MULTIBRANCH_JOB_KEY, list_multibranch_runs,
+)
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM
 from app.models.routine_control import RoutineControlPipelineRunORM
@@ -34,6 +37,7 @@ _RUN_SOURCES: dict[str, tuple[type, str | None]] = {
     "reports.cobranza_recurrente_rechazados": (
         WarehouseAuditLogORM, "cobranza_recurrente_rechazados",
     ),
+    MULTIBRANCH_JOB_KEY: (WarehouseAuditLogORM, "cobranza_iventas_multibranch"),
     "reports.commercial_daily_reports": (
         WarehouseAuditLogORM, "commercial_daily_reports",
     ),
@@ -61,7 +65,8 @@ def has_run_source(job_key: str) -> bool:
 
 def has_completion_marker_source(job_key: str) -> bool:
     source = _RUN_SOURCES.get(job_key)
-    return source is not None and source[0] is WarehouseAuditLogORM
+    return (source is not None and source[0] is WarehouseAuditLogORM
+            and job_key != MULTIBRANCH_JOB_KEY)
 
 
 def _utc_iso(value: datetime | None) -> str | None:
@@ -245,6 +250,8 @@ def list_job_runs(
     if not (1 <= limit <= 100 and 0 <= offset <= 10000):
         raise ValueError("Paginación fuera de rango.")
 
+    if job_key == MULTIBRANCH_JOB_KEY:
+        return list_multibranch_runs(limit=limit, offset=offset)
     source = _RUN_SOURCES.get(job_key)
     if source is None:
         return {

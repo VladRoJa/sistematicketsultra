@@ -369,11 +369,31 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
     }
     // El audit de reportes solo acredita finalizaciones, no captura fallos.
     if(job.run_history_coverage==='COMPLETION_MARKERS_ONLY')return 'Finalización observada';
+    if(job.key==='reports.cobranza_iventas_multibranch'){
+      const counts=run.counts;
+      const accepted=counts?.branches_submitted??0;
+      const total=counts?.branches_expected??counts?.branches_observed??0;
+      if(this.latestRunState(job)==='completed')return accepted+'/'+total+' aceptadas';
+      if(this.latestRunState(job)==='running')return 'En proceso · '+accepted+'/'+total;
+      return 'Revisar · '+accepted+'/'+total;
+    }
     const labels:Record<ObservationState,string>={
       completed:'OK',replaced:'Sustituida',running:'Ejecutando',
       partial:'Parcial',error:'FALLÓ',unknown:'No verificable',
     };
     return labels[this.latestRunState(job)];
+  }
+  isCobranzaMultibranch(job:Job|null):boolean {
+    return job?.key==='reports.cobranza_iventas_multibranch';
+  }
+  cobranzaBranchStatus(status:string):string {
+    const labels:Record<string,string>={
+      SUBMITTED:'Aceptada por iVentas',
+      PENDING:'Pendiente/en proceso',
+      SKIPPED:'Omitida',
+      REVIEW_REQUIRED:'Requiere revisión',
+    };
+    return labels[status]??'No verificable';
   }
   latestRunIsFailure(job:Job):boolean {
     const run=this.latestRun(job);

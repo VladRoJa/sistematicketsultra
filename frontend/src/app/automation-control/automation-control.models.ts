@@ -1,5 +1,22 @@
 export interface Job { key:string; label:string; domain:string; worker_key:string; schedule_reference:string; priority_policy:string; run_history_coverage:string; worker_health:string; manual_run_supported:boolean; }
-export interface Run { run_id:number; business_date:string|null; started_at_utc:string|null; finished_at_utc:string|null; status_raw:string; is_canonical:boolean|null; is_current:boolean|null; version_type?:string; evidence_type?:string; observed_at_utc?:string|null; error_available:boolean; }
+export interface CobranzaBranchObservation {
+  branch:string; status:'SUBMITTED'|'PENDING'|'SKIPPED'|'REVIEW_REQUIRED';
+  job_status:string|null; provider_status:string|null;
+  recipients:number; reason_code:string|null;
+}
+export interface Run {
+  run_id:number; business_date:string|null;
+  started_at_utc:string|null; finished_at_utc:string|null;
+  status_raw:string; is_canonical:boolean|null; is_current:boolean|null;
+  version_type?:string; evidence_type?:string; observed_at_utc?:string|null;
+  error_available:boolean; counts?:{
+    branches_expected?:number|null; branches_observed?:number;
+    branches_submitted?:number; branches_pending?:number;
+    branches_skipped?:number; branches_review?:number;
+    branches_missing?:number; recipients_submitted?:number;
+  };
+  branches?:CobranzaBranchObservation[];
+}
 export interface RunsResponse { rows:Run[]; coverage:string; has_more:boolean; limit:number; offset:number; }
 export interface Summary { worker_count:number; job_count:number; dataset_count:number; worker_health:string; manual_actions_enabled:boolean; }
 export interface Dataset { key:string; label:string; data_freshness:string; latest_complete_business_date:string|null; sources:unknown[]; }

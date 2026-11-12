@@ -10,7 +10,7 @@ def test_catalog_is_consistent_and_unique():
     catalog.validate_catalog()
     jobs = catalog.get_job_catalog()
     datasets = catalog.get_dataset_catalog()
-    assert len(jobs) == 19
+    assert len(jobs) == 20
     assert len(datasets) == 2
     assert len({job.key for job in jobs}) == len(jobs)
 

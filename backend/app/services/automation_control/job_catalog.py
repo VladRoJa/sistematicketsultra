@@ -222,6 +222,28 @@ _JOBS = (
         enabled_default=False,
     ),
     JobSpec(
+        key="reports.cobranza_iventas_multibranch",
+        worker_key="reports-scheduler",
+        domain="reports",
+        label="Cobranza iVentas · multicucursal",
+        schedule_kind="DAILY_TIME_OPTIONAL_GATED",
+        schedule_reference="Tras reporte Gasca (inicio 08:00 por defecto; envío sin hora fija)",
+        schedule_env_keys=(
+            "COBRANZA_RECURRENTE_ENABLED",
+            "COBRANZA_RECURRENTE_RUN_HOUR",
+            "COBRANZA_RECURRENTE_RUN_MINUTE",
+            "COBRANZA_IVENTAS_MULTI_BRANCH_ENABLED",
+            "COBRANZA_IVENTAS_MULTI_BRANCH_START_DATE",
+        ),
+        evidence_tables=(
+            "warehouse_audit_logs",
+            "marketing_campaign_v2_background_jobs",
+            "marketing_campaign_v2_provider_campaigns",
+        ),
+        priority_policy="SECONDARY_TRACK_WINDOW",
+        enabled_default=False,
+    ),
+    JobSpec(
         key="reports.commercial_daily_reports",
         worker_key="reports-scheduler",
         domain="reports",

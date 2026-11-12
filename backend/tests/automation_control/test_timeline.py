@@ -8,7 +8,7 @@ from flask_jwt_extended import JWTManager, create_access_token
 
 from app.routes.automation_control_routes import automation_control_bp
 from app.services.automation_control.timeline_service import (
-    _local_start, daily_timeline,
+    _local_start, _observations, daily_timeline,
 )
 
 
@@ -36,7 +36,7 @@ def test_reference_schedule_is_never_verified():
     assert result["timezone"] == "America/Tijuana"
     assert len(result["workers"]) == 6
     reports = next(w for w in result["workers"] if w["worker_key"] == "reports-scheduler")
-    assert len(reports["jobs"]) == 6
+    assert len(reports["jobs"]) == 7
     assert reports["jobs"][0]["reference_slots"] == ["09:00"] or any(
         j["reference_slots"] == ["09:00"] for j in reports["jobs"]
     )
@@ -53,6 +53,13 @@ def test_reference_schedule_is_never_verified():
         and j["reference_slots"] == ["08:00"]
         and j["schedule_verified"] is False
         and j["coverage"] == "COMPLETION_MARKERS_ONLY"
+        for j in reports["jobs"]
+    )
+    assert any(
+        j["job_key"] == "reports.cobranza_iventas_multibranch"
+        and j["reference_slots"] == []
+        and j["schedule_verified"] is False
+        and j["coverage"] == "OBSERVED_RUNS"
         for j in reports["jobs"]
     )
     assert any(
@@ -84,6 +91,36 @@ def test_reference_schedule_is_never_verified():
                     "08:20", "12:20", "16:20", "20:20"
                 ]
 
+
+
+def test_multibranch_timeline_queries_requested_historical_day():
+    day = date(2025, 5, 2)
+    run = {
+        "run_id": 140,
+        "business_date": "2025-05-02",
+        "observed_at_utc": "2025-05-02T18:25:00+00:00",
+        "status_raw": "PARTIAL",
+    }
+    with patch(
+        "app.services.automation_control.timeline_service._read_day",
+        return_value=run,
+    ) as read:
+        observations = _observations("reports.cobranza_iventas_multibranch", day)
+    read.assert_called_once_with("2025-05-02")
+    assert len(observations) == 1
+    assert observations[0]["observed_hour"] == "11:00"
+    assert observations[0]["observed_time"] == "11:25"
+    assert observations[0]["status_raw"] == "PARTIAL"
+
+
+def test_multibranch_timeline_without_audit_has_no_observations():
+    with patch(
+        "app.services.automation_control.timeline_service._read_day",
+        return_value=None,
+    ):
+        assert _observations(
+            "reports.cobranza_iventas_multibranch", date(2026, 11, 13)
+        ) == []
 
 def test_not_instrumented_cannot_be_reported_as_success():
     with patch("app.services.automation_control.timeline_service._observations", return_value=[]):
