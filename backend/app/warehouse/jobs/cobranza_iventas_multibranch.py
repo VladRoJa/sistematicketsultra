@@ -46,8 +46,6 @@ class MultiBranchConfig:
     start_date: date
     branch_keys: tuple[str, ...]
     operator_id: int
-    max_recipients_per_branch: int
-    max_daily_recipients: int
 
 
 def multi_branch_config(day: date) -> MultiBranchConfig | None:
@@ -57,22 +55,17 @@ def multi_branch_config(day: date) -> MultiBranchConfig | None:
     try:
         start = date.fromisoformat(os.environ["COBRANZA_IVENTAS_MULTI_BRANCH_START_DATE"])
         actor = int(os.environ["COBRANZA_IVENTAS_MULTI_BRANCH_OPERATOR_ID"])
-        per_branch = int(os.environ["COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH"])
-        total = int(os.environ["COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS"])
         raw_keys = os.environ["COBRANZA_IVENTAS_MULTI_BRANCH_KEYS"].split(",")
     except (ValueError, KeyError) as exc:
         raise MultiBranchBlocked("Configuración multicucursal incompleta.") from exc
     keys = tuple(key.strip() for key in raw_keys)
     if (start <= PILOT_DATE or actor <= 0 or not 1 <= len(keys) <= MAX_BRANCHES
             or len(keys) != len(set(keys))
-            or any(not re.fullmatch(r"[A-Z0-9_]{2,100}", key) for key in keys)
-            or not 1 <= per_branch <= 10000
-            or not 1 <= total <= 100000
-            or per_branch > total):
-        raise MultiBranchBlocked("Fecha, sucursales o límites multicucursal inválidos.")
+            or any(not re.fullmatch(r"[A-Z0-9_]{2,100}", key) for key in keys)):
+        raise MultiBranchBlocked("Fecha, sucursales u operador multicucursal inválidos.")
     if day < start:
         return None
-    return MultiBranchConfig(start, keys, actor, per_branch, total)
+    return MultiBranchConfig(start, keys, actor)
 
 
 def _require_global_authorization(settings: MultiBranchConfig) -> None:
@@ -193,8 +186,8 @@ def _queue_branch(day: date, branch: str, campaign_id: int,
         raise MultiBranchBlocked("Identidad de campaña aislada inválida.")
     recipients = int(db.session.query(func.count(Recipient.id))
                      .filter(Recipient.campaign_id == campaign_id).scalar() or 0)
-    if not 1 <= recipients <= settings.max_recipients_per_branch:
-        raise MultiBranchBlocked("Límite de destinatarios por sucursal.")
+    if recipients <= 0:
+        raise MultiBranchBlocked("La campaña no tiene destinatarios válidos.")
     template_id = meta.get("template_id_at_freeze")
     if type(template_id) is not int:
         raise MultiBranchBlocked("Plantilla congelada inválida.")
@@ -228,8 +221,6 @@ def process_multi_branch(*, day: date, artifacts: list[dict[str, Any]],
         artifacts, settings.branch_keys,
     )
     daily_total = sum(len(safe[key]) for key in settings.branch_keys if key not in invalid)
-    if daily_total > settings.max_daily_recipients:
-        raise MultiBranchBlocked("Se superó el límite diario multicucursal.")
     result: list[dict[str, Any]] = []
     for branch in settings.branch_keys:
         campaign_id = None
@@ -241,8 +232,6 @@ def process_multi_branch(*, day: date, artifacts: list[dict[str, Any]],
                 entry.update(status="SKIPPED", reason="NOT_IN_REPORT")
             elif not safe[branch]:
                 entry.update(status="SKIPPED", reason="NO_UNAMBIGUOUS_PHONES")
-            elif len(safe[branch]) > settings.max_recipients_per_branch:
-                entry.update(status="SKIPPED", reason="RECIPIENT_LIMIT")
             else:
                 # Every branch gets its own append-only audit before approving costs.
                 _audit(settings, day=day, branch=branch, status="STARTED",
@@ -292,6 +281,7 @@ def process_multi_branch(*, day: date, artifacts: list[dict[str, Any]],
         "status": "QUEUED_PARTIAL" if skipped_count else "QUEUED_ALL",
         "business_date": day.isoformat(),
         "queued_branches": queued_count,
+        "eligible_recipient_count": daily_total,
         "skipped_branches": skipped_count,
         "ambiguous_phones_excluded": ambiguous_count,
         "branches": result,
