@@ -1,7 +1,7 @@
 """Synthetic, no HTTP: independent daily cobranza batches and fail-closed gates."""
 from datetime import date
 from types import SimpleNamespace as NS
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from openpyxl import Workbook
@@ -19,8 +19,6 @@ def multi_env(monkeypatch):
     monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_START_DATE", "2026-11-13")
     monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_KEYS", "ALFA,BETA,GAMMA")
     monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_OPERATOR_ID", "47")
-    monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH", "30")
-    monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS", "60")
 
 
 def test_multibranch_is_off_by_default(monkeypatch):
@@ -39,8 +37,6 @@ def test_rollout_never_runs_before_start(multi_env):
     ("COBRANZA_IVENTAS_MULTI_BRANCH_KEYS", "ALFA,BETA, gamma"),
     ("COBRANZA_IVENTAS_MULTI_BRANCH_KEYS", "ALFA,,BETA"),
     ("COBRANZA_IVENTAS_MULTI_BRANCH_OPERATOR_ID", "0"),
-    ("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH", "10001"),
-    ("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS", "2"),
 ])
 def test_invalid_rollout_never_queues(multi_env, monkeypatch, name, value):
     monkeypatch.setenv(name, value)
@@ -59,10 +55,9 @@ def _artifact(tmp_path, branch, phones):
     return {"sucursal_raw": branch, "path": str(path)}
 
 
-def _settings(branches=("ALFA", "BETA", "GAMMA"), per_branch=30, daily=60):
+def _settings(branches=("ALFA", "BETA", "GAMMA")):
     return svc.MultiBranchConfig(
         start_date=DAY, branch_keys=tuple(branches), operator_id=47,
-        max_recipients_per_branch=per_branch, max_daily_recipients=daily,
     )
 
 
@@ -176,21 +171,52 @@ def test_invalid_file_skips_one_branch_and_next_proceeds(monkeypatch, tmp_path):
     assert result["branches"][1]["reason"] == "INVALID_BRANCH_FILE"
 
 
-def test_daily_limit_stops_before_any_dispatch(monkeypatch, tmp_path):
+def test_legacy_recipient_cap_env_values_do_not_block_rollout(multi_env, monkeypatch):
+    monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH", "invalid")
+    monkeypatch.setenv("COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS", "invalid")
+    settings = svc.multi_branch_config(DAY)
+    assert settings is not None
+    assert settings.branch_keys == ("ALFA", "BETA", "GAMMA")
+
+
+def test_more_than_1000_daily_and_200_per_branch_queues_independently(
+    monkeypatch, tmp_path,
+):
     fake_db = MagicMock()
-    _ready(monkeypatch, fake_db)
-    prepare = Mock(side_effect=AssertionError("Must not freeze cohort"))
-    monkeypatch.setattr(svc, "prepare_cobranza_iventas_campaign", prepare)
+    audits, blocked = _ready(monkeypatch, fake_db)
+    phones = [f"6861{i:06d}" for i in range(1125)]
     files = [
-        _artifact(tmp_path, "ALFA", ["6861000001", "6861000002"]),
-        _artifact(tmp_path, "BETA", ["6861000003"]),
+        _artifact(tmp_path, "ALFA", phones[:600]),
+        _artifact(tmp_path, "BETA", phones[600:]),
     ]
-    with pytest.raises(svc.MultiBranchBlocked, match="límite diario"):
-        svc.process_multi_branch(
-            day=DAY, artifacts=files,
-            settings=_settings(branches=("ALFA", "BETA"), daily=2),
-        )
-    prepare.assert_not_called()
+    approved = {}
+    def prepare(**kwargs):
+        branch = kwargs["isolated_branch_key"]
+        approved[branch] = len(kwargs["allowed_phones"])
+        return {"status": "PREPARED", "campaign_id": len(approved)}
+    monkeypatch.setattr(svc, "prepare_cobranza_iventas_campaign", prepare)
+    monkeypatch.setattr(
+        svc, "_queue_branch",
+        lambda day, branch, campaign_id, settings: {
+            "status": "QUEUED", "job_id": campaign_id,
+            "recipient_count": approved[branch],
+        },
+    )
+
+    result = svc.process_multi_branch(
+        day=DAY, artifacts=files, settings=_settings(branches=("ALFA", "BETA")),
+    )
+
+    assert result["status"] == "QUEUED_ALL"
+    assert result["eligible_recipient_count"] == 1125
+    assert result["queued_branches"] == 2
+    assert result["skipped_branches"] == 0
+    assert approved == {"ALFA": 600, "BETA": 525}
+    assert [(row["branch"], row["recipients"]) for row in result["branches"]] == [
+        ("ALFA", 600), ("BETA", 525),
+    ]
+    assert len([row for row in audits if row["status"] == "STARTED"]) == 2
+    assert not blocked
 
 
 def test_existing_general_campaign_blocks_all_branches(monkeypatch):

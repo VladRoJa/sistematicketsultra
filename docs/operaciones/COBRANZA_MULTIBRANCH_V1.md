@@ -6,9 +6,9 @@
 
 Se mantiene Gasca → Excel separado por sucursal → Warehouse/Nube, y luego:
 
-1. Se comprueba fecha, identidad técnica global, cuatro flags de envío gobernado y límites explícitos.
+1. Se comprueba fecha, identidad técnica global, cuatro flags de envío gobernado y sucursales autorizadas.
 2. Se lee la lista de sucursales autorizadas; se indexan los Excel de **todas las sucursales** para identificar teléfonos presentes en distintas sucursales. Los teléfonos ambiguos se excluyen de todas las campañas del corte, no se selecciona una sucursal arbitraria.
-3. Por sucursal configurada: si falta Excel, estructura, teléfonos o excede el límite, se registra `SKIPPED` y continúa con las demás.
+3. Por sucursal configurada: si falta Excel, estructura, teléfonos o falla su preflight/autorización, se registra `SKIPPED` y continúa con las demás. El volumen de otras sucursales nunca bloquea el corte completo.
 4. Una campaña por sucursal: `COBRANZA RECURRENTE RECHAZADOS - AAAA-MM-DD - SUCURSAL_CANON`. Conservar el **mismo corte** permite un conjunto lógico para reporte. Mantener nombre estable y metadata `isolated_branch_key` impide mezclarla con la campaña general o el piloto.
 5. Cada campaña conserva preflight, presupuesto/cuota, aprobación gobernada, manifiesto, job único e idempotencia del worker. NO se realizan llamadas iVentas desde el scheduler.
 6. Un job `REVIEW_REQUIRED` o una respuesta incierta afecta **únicamente esa sucursal**. El worker sigue procesando trabajos independientes en su siguiente ciclo. No se amplía la lista de rechazos confirmados ni se reintentan automáticamente.
@@ -23,13 +23,11 @@ COBRANZA_IVENTAS_MULTI_BRANCH_ENABLED=false
 COBRANZA_IVENTAS_MULTI_BRANCH_START_DATE=2026-11-13
 COBRANZA_IVENTAS_MULTI_BRANCH_KEYS=VILLAS_DEL_REY,VILLA_VERDE,SAN_LUIS
 COBRANZA_IVENTAS_MULTI_BRANCH_OPERATOR_ID=47
-COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH=1000
-COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS=10000
 ```
 
 Estos valores son **solo un ejemplo**. No copiarlos como configuración final sin cotejar roster/canales, población/costos reales y permisos; nunca asumir que todas las sucursales de Ultra Gym están en esa lista. El flag debe permanecer `false` hasta nueva autorización. Fecha de inicio es incluyente y no puede ser el día del piloto ni anterior.
 
-**Límites técnicos:** 1–30 sucursales explícitas sin repetidos; 1–10,000 destinatarios por sucursal; 1–100,000 diarios; el tope diario debe ser al menos igual al tope por sucursal. Si un tope falla, no se truncan listas.
+**Alcance técnico:** 1–30 sucursales explícitas sin repetidos. No existen topes artificiales de destinatarios por sucursal ni por día en este orquestador. Las variables heredadas `COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH` y `COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS` se ignoran si siguen presentes en `.env.docker`; se pueden retirar en una ventana de mantenimiento sin afectar el envío. Se conservan la exclusión de teléfonos ambiguos, los permisos globales, preflight, cotización, cuota, autorización gobernada, idempotencia y las restricciones efectivas de Campaign V2/proveedor. **Un volumen elevado puede aumentar los costos; vigilar las cuotas reales y los resultados del proveedor.**
 
 ## Seguimiento de faltantes (consulta sin enviar)
 
@@ -73,7 +71,7 @@ La preparación/fila de auditoría `QUEUED` no acredita entrega. `SUBMITTED` acr
 
 ## QA requerido previo a despliegue
 
-- Tests sintéticos: configuración OFF, fecha, operador, lista/límites, problemas por sucursal, duplicados entre sucursales, idempotencia por nombre y flujo de envío solo con preflight válido.
+- Tests sintéticos: configuración OFF, fecha, operador, lista autorizada, volúmenes mayores a los antiguos topes (200/sucursal y 1,000/día), problemas por sucursal, duplicados entre sucursales, idempotencia por nombre y flujo de envío solo con preflight válido.
 - CI focal de Cobranza, checks de seguridad, permisos y frontend.
 - Revisión manual de roster real, capacidades y canales de iVentas.
 - Despliegue en servidor con `git pull --ff-only`, `docker compose --profile scheduler up -d --build reports-scheduler`. No requiere nueva migración. El worker existente conserva su comportamiento y no se reconstruye por este paquete.
