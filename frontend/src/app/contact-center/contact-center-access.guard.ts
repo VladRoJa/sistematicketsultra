@@ -8,11 +8,13 @@ const CONTACT_CENTER_INITIAL_USERS = new Set([
   'ADMICORP',
   'SANDRA',
   'CANDY',
+  'DANIA',
 ]);
 
 const CONTACT_CENTER_INITIAL_ROLES = new Set([
   'SANDRA',
   'CANDY',
+  'DANIA',
 ]);
 
 // Opt-in de piloto regional. El backend verifica también el ID y sucursales.
