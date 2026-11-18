@@ -1581,3 +1581,54 @@ export interface CampaignV2TemplateProbeMatrix {
   sends_started: false;
   commercial_dispatch_authorized: false;
 }
+
+/** M1 — envío efectivo por child, no por fecha de snapshot. Sin teléfonos. */
+export interface CampaignV2PerformanceReport {
+  period: { from: string; to: string; timezone: string; basis: string };
+  source: string;
+  campaign_count: number;
+  summary: {
+    lots: number;
+    lots_with_snapshot: number;
+    lots_without_snapshot: number;
+    lots_with_recipient_mismatch: number;
+    recipient_count: number;
+    successful: number;
+    failed: number;
+    sent: number;
+    delivered: number;
+    viewed: number;
+    unique_successful_phones: number;
+    repeated_successful_phones: number;
+    evidence_status: 'COMPLETE' | 'INCOMPLETE';
+    estimated_delivered_usd: string;
+    estimated_delivery_count: number;
+  };
+  frequency: { once: number; twice: number; three: number; four_plus: number };
+  cost: {
+    currency: 'USD';
+    status: 'INDICATIVE_ONLY';
+    rate_version: string;
+    unit_cost_usd: string;
+    estimated_delivered_usd: string;
+    actual_billed_usd: null;
+    basis: string;
+  };
+  branches: Array<{
+    sucursal_canon: string;
+    lots: number;
+    lots_with_snapshot: number;
+    lots_without_snapshot: number;
+    recipient_count: number;
+    successful: number;
+    failed: number;
+    sent: number;
+    delivered: number;
+    viewed: number;
+    unique_successful_phones: number;
+    repeated_successful_phones: number;
+    evidence_status: 'COMPLETE' | 'INCOMPLETE';
+    estimated_delivered_usd: string;
+  }>;
+  caveats: string[];
+}
