@@ -8,10 +8,6 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.services.marketing_campaign_v2_performance_service import (
-    CampaignV2PerformanceValidationError,
-    build_campaign_v2_performance,
-)
 from app.models.user_model import UserORM
 from app.models.warehouse import TrackBranchCatalogORM
 from app.services.marketing_access import (
@@ -256,6 +252,10 @@ from app.services.marketing_campaign_v2_reporting_service import (
 from app.services.marketing_campaign_v2_reporting_excel_service import (
     XLSX_MIMETYPE,
     build_campaign_v2_reporting_excel,
+)
+from app.services.marketing_campaign_v2_performance_service import (
+    CampaignV2PerformanceValidationError,
+    build_campaign_v2_performance,
 )
 
 
