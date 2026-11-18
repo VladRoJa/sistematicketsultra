@@ -143,6 +143,7 @@ def build_campaign_v2_performance(
 
         selected_ids = [int(c.id) for c, _ in selected]
         snapshot_to_child = {}
+        snapshot_by_child = {}
         lots = []
         lots_by_branch = defaultdict(list)
         for child, branch in selected:
@@ -170,6 +171,7 @@ def build_campaign_v2_performance(
                         "Existe una identidad provider duplicada entre lotes; requiere conciliación."
                     )
                 snapshot_to_child[sid] = int(child.id)
+                snapshot_by_child[int(child.id)] = sid
             lots.append(lot)
             lots_by_branch[branch].append(lot)
 
@@ -190,12 +192,9 @@ def build_campaign_v2_performance(
             for lot in lots:
                 if not lot["has_snapshot"]:
                     continue
-                snapshot = next(
-                    s for s in latest_by_identity.values()
-                    if int(s.id) in snapshot_to_child and
-                    snapshot_to_child[int(s.id)] == lot["child_id"]
+                observed_success, observed_failed = counts.get(
+                    snapshot_by_child[lot["child_id"]], (0, 0)
                 )
-                observed_success, observed_failed = counts.get(int(snapshot.id), (0, 0))
                 lot["recipient_mismatch"] = (
                     observed_success != lot["successful"] or observed_failed != lot["failed"]
                 )
