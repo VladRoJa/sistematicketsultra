@@ -53,6 +53,7 @@ import {
   CampaignV2BudgetRateRevision,
   CampaignV2DispatchTemplate,
   CampaignV2ConsolidatedReport,
+  CampaignV2PerformanceReport,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoricalTargetingMatch,
   CampaignV2HistoricalTargetingMode,
@@ -154,6 +155,12 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly historySource = new FormControl<CampaignV2Source | ''>('', {
     nonNullable: true,
   });
+  readonly performanceFrom = new FormControl(
+    new Date().toISOString().slice(0, 7) + '-01', { nonNullable: true },
+  );
+  readonly performanceTo = new FormControl(
+    new Date().toISOString().slice(0, 10), { nonNullable: true },
+  );
   readonly reportingObservedFrom = new FormControl('', { nonNullable: true });
   readonly reportingObservedTo = new FormControl('', { nonNullable: true });
   readonly reportingPurpose = new FormControl<CampaignV2Purpose | ''>('', {
@@ -207,6 +214,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   commercialSummaryError = '';
   private commercialBatchRequestId = 0;
   reporting: CampaignV2ConsolidatedReport | null = null;
+  performance: CampaignV2PerformanceReport | null = null;
+  loadingPerformance = false;
+  performanceError = '';
   blacklistSummary: CampaignV2BlacklistSummary | null = null;
   funnelCutoffDates: string[] = [];
 
@@ -1113,6 +1123,33 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.reportingError = this.errorMessage(
             error,
             'No fue posible cargar Reporting Campaign V2.',
+          );
+        },
+      });
+  }
+
+  loadPerformance(): void {
+    if (this.loadingPerformance) {
+      return;
+    }
+    if (!this.performanceFrom.value || !this.performanceTo.value) {
+      this.performanceError = 'Selecciona el inicio y fin del periodo de envíos.';
+      return;
+    }
+    this.loadingPerformance = true;
+    this.performance = null;
+    this.performanceError = '';
+    this.service.getPerformance(this.performanceFrom.value, this.performanceTo.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.loadingPerformance = false;
+          this.performance = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingPerformance = false;
+          this.performanceError = this.errorMessage(
+            error, 'No fue posible cargar el rendimiento de los envíos.',
           );
         },
       });
