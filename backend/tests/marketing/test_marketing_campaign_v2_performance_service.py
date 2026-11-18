@@ -31,7 +31,7 @@ def _child(identifier, branch, campaign_id, provider_id, recipients=2):
         template_id=1, template_name="demo",
         recipient_count=recipients, status="SUBMITTED",
         dispatch_fingerprint=str(identifier % 10) * 64,
-        idempotency_key="child-key-" + str(identifier),
+        idempotency_key=str(identifier % 10) * 64,
         provider_campaign_id=provider_id,
         submitted_at=AT,
         created_at=AT, updated_at=AT,
