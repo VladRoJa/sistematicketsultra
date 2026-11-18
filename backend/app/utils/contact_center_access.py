@@ -11,11 +11,13 @@ CONTACT_CENTER_INITIAL_USERS = frozenset({
     "ADMICORP",
     "SANDRA",
     "CANDY",
+    "DANIA",
 })
 
 CONTACT_CENTER_INITIAL_ROLES = frozenset({
     "SANDRA",
     "CANDY",
+    "DANIA",
 })
 
 # Piloto regional explícito: ningún otro GERENTE_REGIONAL hereda acceso.
