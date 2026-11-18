@@ -66,6 +66,10 @@ def test_contact_center_frontend_access_covers_all_eighteen_pilot_branches():
     assert "'ADMICORP'" in guard
     assert "'SANDRA'" in guard
     assert "'CANDY'" in guard
+    initial_users = guard.split("const CONTACT_CENTER_INITIAL_USERS = new Set([", 1)[1].split("]);", 1)[0]
+    initial_roles = guard.split("const CONTACT_CENTER_INITIAL_ROLES = new Set([", 1)[1].split("]);", 1)[0]
+    assert "'DANIA'" in initial_users
+    assert "'DANIA'" in initial_roles
     assert "CONTACT_CENTER_INITIAL_ROLES" in guard
     assert "CONTACT_CENTER_INITIAL_USERS" in guard
     assert "CONTACT_CENTER_MANAGER_ALLOWED_BRANCH_IDS" in guard
