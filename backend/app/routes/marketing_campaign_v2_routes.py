@@ -8,6 +8,10 @@ from flask import Blueprint, current_app, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
+from app.services.marketing_campaign_v2_performance_service import (
+    CampaignV2PerformanceValidationError,
+    build_campaign_v2_performance,
+)
 from app.models.user_model import UserORM
 from app.models.warehouse import TrackBranchCatalogORM
 from app.services.marketing_access import (
@@ -950,6 +954,30 @@ def export_campaign_v2_reporting_endpoint():
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la exportación XLSX de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/performance")
+@jwt_required()
+def get_campaign_v2_performance_endpoint():
+    """M1 read-only child-level delivery, frequency and estimated cost."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args({"from", "to"})
+        result = build_campaign_v2_performance(
+            from_date=request.args.get("from"),
+            to_date=request.args.get("to"),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError,
+            CampaignV2PerformanceValidationError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("M1 Campaign V2 performance failed")
+        return _error("No fue posible calcular el desempeño de campañas.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/reporting")
