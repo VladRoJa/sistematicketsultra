@@ -578,6 +578,83 @@
         Define filtros opcionales y usa “Cargar reporte”.
       </p>
 
+      <section class="reporting-m1-panel" aria-labelledby="m1-results-title">
+        <div class="reporting-section-title">
+          <div>
+            <h3 id="m1-results-title">Envíos reales y frecuencia de contacto</h3>
+            <p>Fecha de envío en Tijuana. Incluye cada lote enviado, no cada snapshot ni campaña congelada.</p>
+          </div>
+        </div>
+        <div class="reporting-filters">
+          <mat-form-field appearance="fill">
+            <mat-label>Enviado desde</mat-label>
+            <input matInput type="date" [formControl]="performanceFrom">
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Enviado hasta</mat-label>
+            <input matInput type="date" [formControl]="performanceTo">
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="loadPerformance()"
+                  [disabled]="loadingPerformance">
+            {{ loadingPerformance ? 'Calculando…' : 'Medir envíos y repetición' }}
+          </button>
+        </div>
+        <p *ngIf="performanceError" class="inline-error" role="alert">{{ performanceError }}</p>
+        <div *ngIf="loadingPerformance" class="state-panel compact" role="status">
+          <mat-spinner diameter="20"></mat-spinner>
+          Consultando resultados por lote…
+        </div>
+        <ng-container *ngIf="performance as perf">
+          <p *ngIf="perf.summary.evidence_status === 'INCOMPLETE'" class="reporting-validation"
+             role="status">
+            Cobertura incompleta: {{ perf.summary.lots_without_snapshot }} lotes sin estadísticas;
+            {{ perf.summary.lots_with_recipient_mismatch }} con diferencia entre conteos y destinatarios observados.
+            Los faltantes no se consideran cero confirmado.
+          </p>
+          <div class="reporting-metric-grid">
+            <div class="reporting-metric"><span>Lotes enviados</span><strong>{{ perf.summary.lots | number }}</strong></div>
+            <div class="reporting-metric"><span>Con estadísticas</span><strong>{{ perf.summary.lots_with_snapshot | number }}</strong></div>
+            <div class="reporting-metric"><span>Exitosos iVentas</span><strong>{{ perf.summary.successful | number }}</strong></div>
+            <div class="reporting-metric"><span>Fallidos iVentas</span><strong>{{ perf.summary.failed | number }}</strong></div>
+            <div class="reporting-metric emphasized"><span>Teléfonos únicos con éxito</span><strong>{{ perf.summary.unique_successful_phones | number }}</strong></div>
+            <div class="reporting-metric"><span>Teléfonos con 2+ éxitos</span><strong>{{ perf.summary.repeated_successful_phones | number }}</strong></div>
+            <div class="reporting-metric"><span>Entregados + leídos</span><strong>{{ perf.summary.estimated_delivery_count | number }}</strong></div>
+            <div class="reporting-metric"><span>Costo indicativo USD</span><strong>{{ perf.cost.estimated_delivered_usd }}</strong></div>
+          </div>
+          <p class="helper-text">
+            Frecuencia: 1 éxito = {{ perf.frequency.once | number }};
+            2 = {{ perf.frequency.twice | number }};
+            3 = {{ perf.frequency.three | number }};
+            4 o más = {{ perf.frequency.four_plus | number }} teléfonos.
+            Costo únicamente estimado a {{ perf.cost.unit_cost_usd }} USD por entrega;
+            no es la factura ni incluye campañas enviadas desde el panel iVentas.
+          </p>
+          <div class="table-wrapper reporting-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sucursal</th><th>Lotes</th><th>Sin estadísticas</th>
+                  <th>Exitosos</th><th>Fallidos</th><th>Teléfonos únicos</th>
+                  <th>Con 2+ éxitos</th><th>Costo indicativo USD</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of perf.branches">
+                  <td>{{ reportingBranchLabel(row.sucursal_canon) }}</td>
+                  <td>{{ row.lots | number }}</td>
+                  <td>{{ row.lots_without_snapshot | number }}</td>
+                  <td>{{ row.successful | number }}</td>
+                  <td>{{ row.failed | number }}</td>
+                  <td>{{ row.unique_successful_phones | number }}</td>
+                  <td>{{ row.repeated_successful_phones | number }}</td>
+                  <td>{{ row.estimated_delivered_usd }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+      </section>
+
       <ng-container *ngIf="reporting as report">
         <p *ngIf="report.summary.campaign_count === 0" class="empty-state">
           No hay campañas visibles que coincidan con estos filtros.
