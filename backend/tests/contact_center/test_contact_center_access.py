@@ -86,6 +86,22 @@ def test_candy_profile_has_same_operator_access_as_sandra():
     assert access.is_manager is False
 
 
+@pytest.mark.parametrize("username,role", [
+    ("Dania", "USUARIO"),
+    ("otra_cuenta", "dania"),
+])
+def test_dania_username_and_profile_have_operator_permissions(username, role):
+    user = _user(username=username, role=role)
+
+    assert has_contact_center_access(user) is True
+    assert has_contact_center_operator_access(user) is True
+
+    access = resolve_contact_center_access(user)
+    assert access.is_supervisor is False
+    assert access.is_manager is False
+    assert access.allowed_branch_ids == ()
+
+
 def test_other_users_are_rejected():
     user = _user(username="otro", role="ADMINISTRADOR")
 
