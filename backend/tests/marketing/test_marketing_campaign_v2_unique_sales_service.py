@@ -168,3 +168,16 @@ def test_only_supported_windows_and_prevalidated_source_claims():
         with pytest.raises(UniqueSalesEvidenceError):
             run([], [], window=invalid)
     assert run([], [], window=7)["status"] == "EVIDENCE_PREVALIDATED"
+
+
+def test_global_distinct_buyers_not_sum_of_per_campaign_buyers():
+    early = contact(campaign=1, child=11)
+    late = contact(campaign=2, child=22, when=T0 + timedelta(days=2))
+    # The same phone bought twice. Each order goes to a different campaign.
+    first = purchase("order:one", when=T0 + timedelta(days=1), amount="599.00")
+    second = purchase("order:two", when=T0 + timedelta(days=3), amount="299.00")
+    result = run([early, late], [first, second])
+    assert result["transactions_observed"] == 2
+    assert result["buyers_observed"] == 1
+    assert [c["buyers_observed"] for c in result["campaigns"]] == [1, 1]
+    assert result["revenue_observed_mxn"] == "898.00"
