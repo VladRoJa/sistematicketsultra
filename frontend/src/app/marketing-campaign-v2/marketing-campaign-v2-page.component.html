@@ -680,6 +680,96 @@
         </ng-container>
       </section>
 
+      <section class="reporting-m1-panel" aria-labelledby="m2-results-title">
+        <div class="reporting-section-title">
+          <div>
+            <h3 id="m2-results-title">Ventas posteriores al envío · M2</h3>
+            <p>Conciliación por fecha de compra y último envío elegible de iVentas. Una venta se asigna a una sola campaña.</p>
+          </div>
+        </div>
+        <div class="reporting-filters">
+          <mat-form-field appearance="fill">
+            <mat-label>Ventas desde</mat-label>
+            <input matInput type="date" [formControl]="commercialMonthFrom">
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Ventas hasta</mat-label>
+            <input matInput type="date" [formControl]="commercialMonthTo">
+          </mat-form-field>
+          <mat-form-field appearance="fill">
+            <mat-label>Ventana posterior al envío</mat-label>
+            <mat-select [formControl]="commercialWindow">
+              <mat-option [value]="7">7 días</mat-option>
+              <mat-option [value]="14">14 días</mat-option>
+              <mat-option [value]="30">30 días</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="loadCommercialPerformance()"
+                  [disabled]="loadingCommercialPerformance">
+            {{ loadingCommercialPerformance ? 'Consultando…' : 'Consultar ventas relacionadas' }}
+          </button>
+        </div>
+        <p *ngIf="commercialPerformanceError" class="inline-error" role="alert">
+          {{ commercialPerformanceError }}
+        </p>
+        <div *ngIf="loadingCommercialPerformance" class="state-panel compact" role="status">
+          <mat-spinner diameter="20"></mat-spinner>
+          Consultando conciliación guardada, sin recalcular Gasca…
+        </div>
+        <ng-container *ngIf="commercialPerformance as commercial">
+          <p *ngIf="commercial.status !== 'READY'" class="reporting-validation" role="status">
+            La conciliación de este periodo todavía no está disponible ({{ commercial.status }}).
+            Requiere evidencia de iVentas, corte canónico de Venta Total y ejecución autorizada del worker.
+            La ausencia de resultados no significa cero ventas.
+          </p>
+          <ng-container *ngIf="commercial.status === 'READY'">
+            <div class="reporting-metric-grid">
+              <div class="reporting-metric">
+                <span>Operaciones posteriores al envío</span>
+                <strong>{{ commercial.transactions_observed | number }}</strong>
+              </div>
+              <div class="reporting-metric emphasized">
+                <span>Ingreso relacionado · MXN</span>
+                <strong>${{ commercial.revenue_observed_mxn | number:'1.2-2' }}</strong>
+              </div>
+              <div class="reporting-metric">
+                <span>Teléfonos compradores únicos</span>
+                <strong>{{ commercial.buyers_observed === null ? 'Sin total global' : (commercial.buyers_observed | number) }}</strong>
+              </div>
+              <div class="reporting-metric">
+                <span>ROAS / costo real</span>
+                <strong>Pendiente de conciliación</strong>
+              </div>
+            </div>
+            <p class="helper-text">
+              Corte Venta Total: {{ commercial.sale_business_date || 'Sin fecha' }}.
+              Ventana de {{ commercial.window_days }} días. No incluye ventas anteriores al envío.
+              Las compras asociadas no prueban causalidad; sin factura conciliada no se calcula ROAS.
+            </p>
+            <h4>Compras e ingresos observados por campaña</h4>
+            <div class="table-wrapper reporting-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Campaña</th><th>Compradores</th><th>Operaciones</th>
+                    <th>Ingreso relacionado MXN</th><th>Contactos asistentes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let row of commercial.campaigns">
+                    <td>#{{ row.campaign_id }} · {{ row.name }}</td>
+                    <td>{{ row.buyers_observed | number }}</td>
+                    <td>{{ row.transactions_observed | number }}</td>
+                    <td>${{ row.revenue_observed_mxn | number:'1.2-2' }}</td>
+                    <td>{{ row.assisted_transactions | number }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+        </ng-container>
+      </section>
+
       <ng-container *ngIf="reporting as report">
         <p *ngIf="report.summary.campaign_count === 0" class="empty-state">
           No hay campañas visibles que coincidan con estos filtros.
