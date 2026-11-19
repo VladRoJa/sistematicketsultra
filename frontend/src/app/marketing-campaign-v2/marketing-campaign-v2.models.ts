@@ -1614,6 +1614,23 @@ export interface CampaignV2PerformanceReport {
     actual_billed_usd: null;
     basis: string;
   };
+  campaigns: Array<{
+    campaign_id: number;
+    name: string;
+    lots: number;
+    lots_with_snapshot: number;
+    lots_without_snapshot: number;
+    recipient_count: number;
+    successful: number;
+    failed: number;
+    sent: number;
+    delivered: number;
+    viewed: number;
+    unique_successful_phones: number;
+    repeated_successful_phones: number;
+    evidence_status: 'COMPLETE' | 'INCOMPLETE';
+    estimated_delivered_usd: string;
+  }>;
   branches: Array<{
     sucursal_canon: string;
     lots: number;

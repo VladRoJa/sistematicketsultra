@@ -118,6 +118,12 @@ def test_m1_latest_snapshot_per_child_frequency_and_missing_evidence(active_sess
         allowed_sucursal_keys=None, session=active_session,
     )
     assert report["campaign_count"] == 1
+    assert len(report["campaigns"]) == 1
+    assert report["campaigns"][0]["name"] == "Multisucursal"
+    assert report["campaigns"][0]["lots"] == 3
+    assert report["campaigns"][0]["successful"] == 3
+    assert report["campaigns"][0]["unique_successful_phones"] == 2
+    assert report["campaigns"][0]["repeated_successful_phones"] == 1
     summary = report["summary"]
     assert summary["lots"] == 3
     assert summary["lots_with_snapshot"] == 2
@@ -144,6 +150,7 @@ def test_m1_does_not_leak_multibranch_campaign_to_partial_scope(active_session):
     assert report["campaign_count"] == 0
     assert report["summary"]["lots"] == 0
     assert report["branches"] == []
+    assert report["campaigns"] == []
 
 
 def test_m1_period_excludes_outside_and_invalid_ranges(active_session):

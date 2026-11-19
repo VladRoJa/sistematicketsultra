@@ -629,6 +629,31 @@
             Costo únicamente estimado a {{ perf.cost.unit_cost_usd }} USD por entrega;
             no es la factura ni incluye campañas enviadas desde el panel iVentas.
           </p>
+          <h4>Desempeño por campaña enviada</h4>
+          <div class="table-wrapper reporting-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaña</th><th>Lotes</th><th>Sin estadísticas</th>
+                  <th>Exitosos</th><th>Fallidos</th><th>Teléfonos únicos</th>
+                  <th>Con 2+ éxitos</th><th>Costo indicativo USD</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of perf.campaigns">
+                  <td>#{{ row.campaign_id }} · {{ row.name }}</td>
+                  <td>{{ row.lots | number }}</td>
+                  <td>{{ row.lots_without_snapshot | number }}</td>
+                  <td>{{ row.successful | number }}</td>
+                  <td>{{ row.failed | number }}</td>
+                  <td>{{ row.unique_successful_phones | number }}</td>
+                  <td>{{ row.repeated_successful_phones | number }}</td>
+                  <td>{{ row.estimated_delivered_usd }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h4>Desempeño por sucursal</h4>
           <div class="table-wrapper reporting-table">
             <table>
               <thead>

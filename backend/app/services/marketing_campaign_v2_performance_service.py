@@ -109,11 +109,13 @@ def build_campaign_v2_performance(
             ).all()
         )
         selected = []
+        visible_names = {}
         for child, campaign in rows:
             branch = normalize_socios_vencidos_branch_key(child.sucursal_canon)
             if (branch and _campaign_visible_to_scope(campaign, scope)
                     and (scope is None or branch in scope)):
                 selected.append((child, branch))
+                visible_names[int(campaign.id)] = str(campaign.name)
         selected.sort(key=lambda entry: (entry[1], int(entry[0].id)))
         campaign_ids = sorted({int(child.campaign_v2_id) for child, _ in selected})
         latest_by_identity = {}
@@ -146,6 +148,7 @@ def build_campaign_v2_performance(
         snapshot_by_child = {}
         lots = []
         lots_by_branch = defaultdict(list)
+        lots_by_campaign = defaultdict(list)
         for child, branch in selected:
             snapshot = latest_by_identity.get(
                 (int(child.campaign_v2_id), str(child.provider_campaign_id))
@@ -174,6 +177,7 @@ def build_campaign_v2_performance(
                 snapshot_by_child[int(child.id)] = sid
             lots.append(lot)
             lots_by_branch[branch].append(lot)
+            lots_by_campaign[int(child.campaign_v2_id)].append(lot)
 
         snapshot_ids = sorted(snapshot_to_child)
         if snapshot_ids:
@@ -206,6 +210,7 @@ def build_campaign_v2_performance(
         distinct_phones = 0
         repeated_phones = 0
         distinct_by_branch = {}
+        distinct_by_campaign = {}
         if snapshot_ids:
             phone_counts = (
                 active.query(
@@ -258,6 +263,44 @@ def build_campaign_v2_performance(
                 ) for row in branch_rows
             }
 
+            per_campaign_phone = (
+                active.query(
+                    Child.campaign_v2_id.label("campaign_id"),
+                    Obs.normalized_phone.label("phone"),
+                    func.count(Obs.id).label("frequency"),
+                ).select_from(Obs)
+                .join(Snapshot, Snapshot.id == Obs.snapshot_id)
+                .join(Child, and_(
+                    Child.campaign_v2_id == Snapshot.campaign_v2_id,
+                    Child.provider == Snapshot.provider,
+                    Child.provider_campaign_id == Snapshot.provider_campaign_id,
+                ))
+                .filter(
+                    Obs.snapshot_id.in_(snapshot_ids),
+                    Child.id.in_(selected_ids),
+                    Obs.outcome == "SUCCESSFUL",
+                ).group_by(Child.campaign_v2_id, Obs.normalized_phone).subquery()
+            )
+            campaign_rows = active.query(
+                per_campaign_phone.c.campaign_id,
+                func.count().label("unique"),
+                func.sum(case((per_campaign_phone.c.frequency >= 2, 1), else_=0)).label("repeated"),
+            ).group_by(per_campaign_phone.c.campaign_id).all()
+            distinct_by_campaign = {
+                int(row.campaign_id): (int(row.unique), int(row.repeated or 0))
+                for row in campaign_rows
+            }
+
+    campaigns = []
+    for campaign_id in sorted(lots_by_campaign):
+        item = _summarize_lots(lots_by_campaign[campaign_id])
+        item["campaign_id"] = campaign_id
+        item["name"] = visible_names[campaign_id]
+        item["unique_successful_phones"], item["repeated_successful_phones"] = (
+            distinct_by_campaign.get(campaign_id, (0, 0))
+        )
+        campaigns.append(item)
+
     branches = []
     for branch in sorted(lots_by_branch):
         item = _summarize_lots(lots_by_branch[branch])
@@ -278,6 +321,7 @@ def build_campaign_v2_performance(
             "repeated_successful_phones": repeated_phones,
         },
         "frequency": frequency,
+        "campaigns": campaigns,
         "branches": branches,
         "cost": {
             "currency": "USD",
