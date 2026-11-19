@@ -118,7 +118,11 @@ class RoutineEvidenceMatchingPolicyTestCase(unittest.TestCase):
         self.assertEqual(result.ambiguous_member_ids, (27, 28))
 
     def test_email_fallback_applies_identity_time_and_uniqueness(self) -> None:
-        conflicting_id = replace(self.candidate, email_normalized="other@example.com")
+        conflicting_id = replace(
+            self.candidate,
+            email_normalized="other@example.com",
+            member_name_normalized="persona distinta",
+        )
         email_candidate = replace(
             self.candidate,
             member_id=30,
