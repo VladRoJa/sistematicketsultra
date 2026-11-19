@@ -298,14 +298,18 @@ def reconcile_sale_month(
         except (CommercialChildResolutionError, UniqueSalesEvidenceError) as exc:
             return {**base, "status": "PENDING_PROVIDER_EVIDENCE", "reason": str(exc)}
 
+        campaign_by_child_id = {
+            int(child.id): int(child.campaign_v2_id) for child in children
+        }
         contacts = []
-        for child, phone in proof_rows:
+        for submitted, phone in proof_rows:
+            campaign_id = campaign_by_child_id[int(submitted.child_id)]
             contacts.append(ProvenContact(
-                campaign_id=int(child.campaign_v2_id), child_id=int(child.child_id),
-                provider_campaign_id=child.provider_campaign_id,
-                branch_id=int(child.sucursal_id), phone_mx10=phone,
-                sale_kind=campaign_kind[int(child.campaign_v2_id)],
-                submitted_at=_utc(child.submitted_at),
+                campaign_id=campaign_id, child_id=int(submitted.child_id),
+                provider_campaign_id=submitted.provider_campaign_id,
+                branch_id=int(submitted.sucursal_id), phone_mx10=phone,
+                sale_kind=campaign_kind[campaign_id],
+                submitted_at=_utc(submitted.submitted_at),
             ))
         # A valid empty success cohort still requires an actual canonical cut.
         month_end = (
