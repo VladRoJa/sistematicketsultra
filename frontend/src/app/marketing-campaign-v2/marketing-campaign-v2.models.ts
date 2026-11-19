@@ -1649,3 +1649,33 @@ export interface CampaignV2PerformanceReport {
   }>;
   caveats: string[];
 }
+
+
+/** M2 — persisted sale-month results, never queried live against Gasca by HTTP. */
+export interface CampaignV2CommercialPerformanceReport {
+  from: string;
+  to: string;
+  window_days: 7 | 14 | 30;
+  status: string;
+  timezone: 'America/Tijuana';
+  source: string;
+  attribution: string;
+  checked_at?: string | null;
+  buyers_observed: number | null;
+  transactions_observed: number | null;
+  revenue_observed_mxn: string | null;
+  cost_mxn: null;
+  roas: null;
+  rule_version?: string;
+  buyer_count_note?: string;
+  sale_snapshot_id?: number;
+  sale_business_date?: string;
+  campaigns: Array<{
+    campaign_id: number;
+    name: string;
+    buyers_observed: number;
+    transactions_observed: number;
+    revenue_observed_mxn: string;
+    assisted_transactions: number;
+  }>;
+}
