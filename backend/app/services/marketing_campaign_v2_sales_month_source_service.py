@@ -162,6 +162,7 @@ def _group_gasca_orders(
     """Filter real membership rows before order-level sum, no per-line conversions."""
     grouped = {}
     scanned = 0
+    phones_and_kinds = {(phone, kind) for phone, _, kind in contact_identities}
     first_utc = datetime.combine(first, time.min, _TZ).astimezone(timezone.utc)
     last_utc = datetime.combine(last + timedelta(days=1), time.min, _TZ).astimezone(timezone.utc)
     for row in rows:
@@ -176,7 +177,7 @@ def _group_gasca_orders(
             continue
         branch = branch_aliases.get(_normalize_text(row.sucursal))
         if branch is None:
-            if any(identity[0] == phone and identity[2] == kind for identity in contact_identities):
+            if (phone, kind) in phones_and_kinds:
                 raise UniqueSalesEvidenceError("Sucursal Gasca sin alias verificable para un contacto.")
             continue
         if (phone, branch, kind) not in contact_identities:
@@ -268,7 +269,16 @@ def reconcile_sale_month(
                 Snapshot.provider == "IVENTAS",
             ).all()
         )
-        snapshot_ids = {int(s.id) for s in snapshots}
+        latest_snapshot_ids = {}
+        valid_identities = {
+            (int(child.campaign_v2_id), str(child.provider_campaign_id)) for child in children
+        }
+        for snapshot in sorted(
+            snapshots, key=lambda row: (_utc(row.fetched_at), int(row.id)), reverse=True
+        ):
+            identity = (int(snapshot.campaign_v2_id), str(snapshot.provider_campaign_id))
+            if identity in valid_identities:
+                latest_snapshot_ids.setdefault(identity, int(snapshot.id))
         recipients = (
             active.query(MarketingCampaignV2RecipientORM).filter(
                 MarketingCampaignV2RecipientORM.campaign_id.in_(sorted(campaign_ids)),
@@ -276,10 +286,10 @@ def reconcile_sale_month(
         )
         observations = (
             active.query(Obs).filter(
-                Obs.snapshot_id.in_(sorted(snapshot_ids)),
+                Obs.snapshot_id.in_(sorted(latest_snapshot_ids.values())),
                 Obs.outcome == "SUCCESSFUL",
             ).all()
-        ) if snapshot_ids else []
+        ) if latest_snapshot_ids else []
         try:
             proof_rows = _proven_contacts(
                 children=children, recipients=recipients,
@@ -298,6 +308,10 @@ def reconcile_sale_month(
                 submitted_at=_utc(child.submitted_at),
             ))
         # A valid empty success cohort still requires an actual canonical cut.
+        month_end = (
+            date(last.year + 1, 1, 1) if last.month == 12
+            else date(last.year, last.month + 1, 1)
+        )
         venta = (
             active.query(VentaTotalSnapshotORM)
             .filter(
@@ -305,9 +319,7 @@ def reconcile_sale_month(
                 VentaTotalSnapshotORM.snapshot_kind == "daily",
                 VentaTotalSnapshotORM.is_canonical.is_(True),
                 VentaTotalSnapshotORM.business_date >= last,
-                VentaTotalSnapshotORM.business_date
-                < date(last.year + 1, 1, 1) if last.month == 12 else
-                VentaTotalSnapshotORM.business_date < date(last.year, last.month + 1, 1),
+                VentaTotalSnapshotORM.business_date < month_end,
                 VentaTotalSnapshotORM.captured_at >= sale_end,
             ).order_by(
                 VentaTotalSnapshotORM.business_date.desc(),
