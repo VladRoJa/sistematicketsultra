@@ -94,6 +94,15 @@ import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campai
 import { MarketingCampaignV2QaManualDialogComponent } from './marketing-campaign-v2-qa-manual-dialog.component';
 import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaign-v2-readiness-dialog.component';
 
+/** All M1 send-window dates follow Suite's business timezone, not UTC/browser locale. */
+function currentTijuanaDate(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Tijuana', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (kind: string): string => parts.find(part => part.type === kind)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
 @Component({
   selector: 'app-marketing-campaign-v2-page',
   standalone: true,
@@ -156,11 +165,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     nonNullable: true,
   });
   readonly performanceFrom = new FormControl(
-    new Date().toISOString().slice(0, 7) + '-01', { nonNullable: true },
+    currentTijuanaDate().slice(0, 7) + '-01', { nonNullable: true },
   );
-  readonly performanceTo = new FormControl(
-    new Date().toISOString().slice(0, 10), { nonNullable: true },
-  );
+  readonly performanceTo = new FormControl(currentTijuanaDate(), { nonNullable: true });
   readonly reportingObservedFrom = new FormControl('', { nonNullable: true });
   readonly reportingObservedTo = new FormControl('', { nonNullable: true });
   readonly reportingPurpose = new FormControl<CampaignV2Purpose | ''>('', {

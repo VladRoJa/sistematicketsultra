@@ -175,3 +175,10 @@ def test_m1_indicative_cost_is_not_submitted_or_real_invoice():
     assert result["estimated_delivery_count"] == 40
     assert result["estimated_delivered_usd"] == "2.1680"
     assert result["evidence_status"] == "INCOMPLETE"
+
+
+def test_m1_window_respects_tijuana_dst_offsets():
+    _, _, start, end = _window("2026-11-01", "2026-11-01")
+    assert start == datetime(2026, 11, 1, 7, 0, tzinfo=timezone.utc)
+    assert end == datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)
+    assert (end - start).total_seconds() == 25 * 3600
