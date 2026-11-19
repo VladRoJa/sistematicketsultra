@@ -162,6 +162,7 @@ def allocate_unique_membership_sales(
     allocated = defaultdict(lambda: {"transactions": 0, "revenue": Decimal("0"),
                                      "buyers": set(), "assists": 0})
     allocations = []
+    global_buyer_phones = set()
     unmatched = 0
     for key, sale in sorted(unique_sales.items(), key=lambda item: item[0]):
         occurred = _utc(sale.occurred_at, "ocurrió la venta")
@@ -182,6 +183,7 @@ def allocate_unique_membership_sales(
         metrics["transactions"] += 1
         metrics["revenue"] += Decimal(str(sale.amount_mxn))
         metrics["buyers"].add(sale.phone_mx10)
+        global_buyer_phones.add(sale.phone_mx10)
         for assisted_campaign in assists:
             allocated[assisted_campaign]["assists"] += 1
         allocations.append({
@@ -211,6 +213,7 @@ def allocate_unique_membership_sales(
         "transactions_seen": len(unique_sales),
         "duplicate_transaction_rows_ignored": duplicates,
         "transactions_observed": len(allocations),
+        "buyers_observed": len(global_buyer_phones),
         "transactions_unmatched": unmatched,
         "revenue_observed_mxn": format(revenue.quantize(Decimal("0.01")), ".2f"),
         "campaigns": campaigns,
