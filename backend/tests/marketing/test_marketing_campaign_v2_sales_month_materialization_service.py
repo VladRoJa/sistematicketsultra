@@ -6,6 +6,8 @@ import pytest
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 from sqlalchemy.orm import Session
 
+from app.services.marketing_campaign_v2_query_service import MarketingCampaignV2QueryValidationError
+
 from app.models.marketing import (
     MarketingCampaignV2ORM,
     MarketingCampaignV2CommercialSaleMonthORM,
@@ -106,14 +108,13 @@ def test_ready_materialization_restricts_campaigns_by_complete_scope(session):
     assert scoped["buyers_observed"] is None
     assert "Sucursal B" not in repr(scoped)
 
-    denied = read_sale_month_cache(
-        from_date=FROM.isoformat(), to_date=TO.isoformat(), window_days=14,
-        allowed_sucursal_keys=[], session=session,
-    )
-    assert denied["campaigns"] == []
-    assert denied["transactions_observed"] == 0
-    assert denied["revenue_observed_mxn"] == "0.00"
-    assert denied["buyers_observed"] is None
+    # Existing Campaign V2 backend access rejects an empty branch scope.
+    # Do not turn this authorization error into a misleading zero report.
+    with pytest.raises(MarketingCampaignV2QueryValidationError):
+        read_sale_month_cache(
+            from_date=FROM.isoformat(), to_date=TO.isoformat(), window_days=14,
+            allowed_sucursal_keys=[], session=session,
+        )
 
 
 def test_non_ready_cache_has_no_false_zero_or_cross_branch_detail(session):
