@@ -1055,6 +1055,31 @@ class MarketingCampaignV2CommercialResultORM(db.Model):
     )
 
 
+class MarketingCampaignV2CommercialSaleMonthORM(db.Model):
+    """One materialized, no-PII commercial result per sale-period and window."""
+
+    __tablename__ = "marketing_campaign_v2_commercial_sale_months"
+
+    sale_from = db.Column(db.Date, primary_key=True)
+    sale_to = db.Column(db.Date, primary_key=True)
+    window_days = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(48), nullable=False)
+    result_json = db.Column(db.JSON, nullable=False, default=dict)
+    checked_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "window_days IN (7, 14, 30)",
+            name="ck_mkt_v2_sale_month_window_days",
+        ),
+        db.CheckConstraint(
+            "sale_to >= sale_from",
+            name="ck_mkt_v2_sale_month_date_order",
+        ),
+        db.Index("ix_mkt_v2_sale_month_checked_at", "checked_at"),
+    )
+
+
 class MarketingCampaignV2ProviderCampaignORM(db.Model):
     __tablename__ = "marketing_campaign_v2_provider_campaigns"
 
