@@ -118,6 +118,30 @@ def _compatible_name_variant(
     ):
         return "EMAIL_NAME_PREFIX"
 
+    # Allow abbreviated given names only with an exact first given name
+    # and first surname. A second surname may be omitted, but never replaced.
+    # The caller enables this variant only for one unique email candidate.
+    if len(shorter) >= 2 and len(longer) >= 4 and len(shorter) < len(longer):
+        full_given_names = longer[:-2]
+        full_surnames = longer[-2:]
+        if (
+            shorter[0] == full_given_names[0]
+            and full_surnames[0] in shorter[1:]
+        ):
+            surname_start = shorter.index(full_surnames[0], 1)
+            short_given_names = shorter[:surname_start]
+            short_surnames = shorter[surname_start:]
+            given_names_iter = iter(full_given_names)
+            if (
+                len(short_given_names) < len(full_given_names)
+                and short_surnames in (full_surnames[:1], full_surnames)
+                and all(
+                    any(part == name for name in given_names_iter)
+                    for part in short_given_names
+                )
+            ):
+                return "EMAIL_GIVEN_NAMES_OMITTED"
+
     if len(evidence_parts) != len(candidate_parts) or len(evidence_parts) < 3:
         return None
 
