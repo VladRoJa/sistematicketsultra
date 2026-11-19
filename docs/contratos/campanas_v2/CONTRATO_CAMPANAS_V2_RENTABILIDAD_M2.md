@@ -1,5 +1,5 @@
 # Campañas V2 — M2: conversión y rentabilidad comercial
-Estado: CONTRATO PREPARADO · NO IMPLEMENTADO. Depende de evidencia M1. 2026-11-18.
+Estado: EN IMPLEMENTACIÓN EN RAMA M2. M1 mergeado (PR #1254). 2026-11-18.
 
 ## Objetivo
 Relacionar campañas de Suite con conversiones de membresía de Gasca y medir ingreso observado, costo por comprador y ROAS sin atribuir varias veces una venta. Reusar los servicios existentes de materialización comercial, Venta Total canónico, `marketing_campaign_v2_commercial_attribution_service.py` y resolver alias de `gasca_family`.
@@ -29,3 +29,9 @@ Relacionar campañas de Suite con conversiones de membresía de Gasca y medir in
 
 ## Puerta de salida
 M2 se acepta solo cuando ingresos consolidados no duplican operaciones, reportes explican su causalidad limitada, y los importes se reconcilian con un corte Gasca reproducible. No autoriza envío ni cambios productivos.
+
+## Avance de implementación M2 — primer corte funcional
+- `marketing_campaign_v2_unique_sales_service.py`: selector determinista, sin DB, de última campaña con envío probado, ventana 7/14/30 días, una venta por clave canónica y asistencias sin ingreso duplicado.
+- Pruebas de cruces multisucursal, recontactos, compras previas, corte de mes, diferencias entre snapshots, importes inválidos y no exposición de teléfonos.
+- **NO conectar al endpoint ni sumar con los resultados legacy hasta que el scheduler genere candidatos validados de Venta Total y contactos con SUCCESSFUL probado.** Los agregados legacy siguen siendo por campaña y NO son un total de ingresos únicos.
+- Pendiente implementar construcción materializada de candidatos, ventas realmente elegibles, control de cortes completos, persistencia/auditoría con Alembic si requiere esquema, conversión de moneda validada y vista ROAS/CPA; no hay atribución automática real todavía.
