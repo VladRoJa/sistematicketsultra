@@ -58,6 +58,71 @@ class RoutineMatchingNameVariantsTestCase(unittest.TestCase):
         self.assertEqual(result.status, MATCHED)
         self.assertEqual(result.identity_corroborator, "EMAIL_NAME_PREFIX")
 
+    def test_ruth_omitted_middle_name_and_last_surname(self):
+        result = self._match(
+            "ruth balderas", "ruth elizabeth balderas alfonso"
+        )
+        self.assertEqual((result.status, result.member_id), (MATCHED, 10))
+        self.assertEqual(result.match_method, "EMAIL")
+        self.assertEqual(result.identity_corroborator, "EMAIL_GIVEN_NAMES_OMITTED")
+        self.assertEqual(result.assignment_type, "POSTERIOR")
+
+    def test_omitted_multiple_given_names_in_order(self):
+        result = self._match(
+            "maria fernanda lopez", "maria jose fernanda lopez ramirez"
+        )
+        self.assertEqual(result.status, MATCHED)
+        self.assertEqual(result.identity_corroborator, "EMAIL_GIVEN_NAMES_OMITTED")
+
+    def test_omitted_middle_name_preserves_both_surnames(self):
+        result = self._match(
+            "ruth balderas alfonso", "ruth elizabeth balderas alfonso"
+        )
+        self.assertEqual(result.status, MATCHED)
+        self.assertEqual(result.identity_corroborator, "EMAIL_GIVEN_NAMES_OMITTED")
+
+    def test_abbreviation_cannot_omit_first_surname(self):
+        result = self._match(
+            "ruth alfonso", "ruth elizabeth balderas alfonso"
+        )
+        self.assertEqual(result.status, IDENTITY_CONFLICT)
+
+    def test_abbreviation_cannot_replace_second_surname(self):
+        result = self._match(
+            "ruth balderas garcia", "ruth elizabeth balderas alfonso"
+        )
+        self.assertEqual(result.status, IDENTITY_CONFLICT)
+
+    def test_abbreviation_cannot_omit_first_given_name(self):
+        result = self._match(
+            "elizabeth balderas", "ruth elizabeth balderas alfonso"
+        )
+        self.assertEqual(result.status, IDENTITY_CONFLICT)
+
+    def test_abbreviation_blocked_with_shared_email(self):
+        other = replace(
+            self.member, member_id=11, member_name_normalized="otra persona"
+        )
+        result = self._match(
+            "ruth balderas", "ruth elizabeth balderas alfonso",
+            other=(other,),
+        )
+        self.assertEqual(result.status, IDENTITY_CONFLICT)
+
+    def test_abbreviation_blocked_by_external_id_conflict(self):
+        result = self._match(
+            "ruth balderas", "ruth elizabeth balderas alfonso",
+            external_member_id="9999",
+        )
+        self.assertEqual(result.status, IDENTITY_CONFLICT)
+
+    def test_abbreviation_preserves_preexisting_30_day_limit(self):
+        result = self._match(
+            "ruth balderas", "ruth elizabeth balderas alfonso",
+            routine_activity_date=date(2026, 8, 1),
+        )
+        self.assertEqual(result.status, TEMPORALLY_INVALID)
+
     def test_middle_name_initial(self):
         result = self._match("carlos a rios mora", "carlos antonio rios mora")
         self.assertEqual((result.status, result.identity_corroborator),
