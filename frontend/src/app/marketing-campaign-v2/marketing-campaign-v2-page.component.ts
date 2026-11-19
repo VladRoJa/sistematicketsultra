@@ -54,6 +54,7 @@ import {
   CampaignV2DispatchTemplate,
   CampaignV2ConsolidatedReport,
   CampaignV2PerformanceReport,
+  CampaignV2CommercialPerformanceReport,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoricalTargetingMatch,
   CampaignV2HistoricalTargetingMode,
@@ -101,6 +102,17 @@ function currentTijuanaDate(): string {
   }).formatToParts(new Date());
   const value = (kind: string): string => parts.find(part => part.type === kind)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+/** Default to the last completed sale month; incomplete windows stay pending. */
+function previousCompleteTijuanaMonth(): { from: string; to: string } {
+  const today = currentTijuanaDate();
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  return {
+    from: new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 10),
+    to: new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10),
+  };
 }
 
 @Component({
@@ -168,6 +180,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
     currentTijuanaDate().slice(0, 7) + '-01', { nonNullable: true },
   );
   readonly performanceTo = new FormControl(currentTijuanaDate(), { nonNullable: true });
+  readonly commercialMonthFrom = new FormControl(
+    previousCompleteTijuanaMonth().from, { nonNullable: true },
+  );
+  readonly commercialMonthTo = new FormControl(
+    previousCompleteTijuanaMonth().to, { nonNullable: true },
+  );
+  readonly commercialWindow = new FormControl<7 | 14 | 30>(14, { nonNullable: true });
   readonly reportingObservedFrom = new FormControl('', { nonNullable: true });
   readonly reportingObservedTo = new FormControl('', { nonNullable: true });
   readonly reportingPurpose = new FormControl<CampaignV2Purpose | ''>('', {
@@ -224,6 +243,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   performance: CampaignV2PerformanceReport | null = null;
   loadingPerformance = false;
   performanceError = '';
+  commercialPerformance: CampaignV2CommercialPerformanceReport | null = null;
+  loadingCommercialPerformance = false;
+  commercialPerformanceError = '';
   blacklistSummary: CampaignV2BlacklistSummary | null = null;
   funnelCutoffDates: string[] = [];
 
@@ -1157,6 +1179,35 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.loadingPerformance = false;
           this.performanceError = this.errorMessage(
             error, 'No fue posible cargar el rendimiento de los envíos.',
+          );
+        },
+      });
+  }
+
+  loadCommercialPerformance(): void {
+    if (this.loadingCommercialPerformance) {
+      return;
+    }
+    const from = this.commercialMonthFrom.value;
+    const to = this.commercialMonthTo.value;
+    if (!from || !to) {
+      this.commercialPerformanceError = 'Selecciona un periodo de venta válido.';
+      return;
+    }
+    this.loadingCommercialPerformance = true;
+    this.commercialPerformance = null;
+    this.commercialPerformanceError = '';
+    this.service.getCommercialPerformance(from, to, this.commercialWindow.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: report => {
+          this.loadingCommercialPerformance = false;
+          this.commercialPerformance = report;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingCommercialPerformance = false;
+          this.commercialPerformanceError = this.errorMessage(
+            error, 'No fue posible consultar el cierre comercial.',
           );
         },
       });

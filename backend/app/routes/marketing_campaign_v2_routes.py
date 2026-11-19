@@ -257,6 +257,12 @@ from app.services.marketing_campaign_v2_performance_service import (
     CampaignV2PerformanceValidationError,
     build_campaign_v2_performance,
 )
+from app.services.marketing_campaign_v2_sales_month_materialization_service import (
+    read_sale_month_cache,
+)
+from app.services.marketing_campaign_v2_unique_sales_service import (
+    UniqueSalesEvidenceError,
+)
 
 
 marketing_campaign_v2_bp = Blueprint("marketing_campaign_v2", __name__)
@@ -954,6 +960,34 @@ def export_campaign_v2_reporting_endpoint():
         return _error(str(exc), 400)
     except Exception:
         return _error("Falló la exportación XLSX de Campaign V2.", 500)
+
+
+@marketing_campaign_v2_bp.get("/campaigns-v2/commercial-performance")
+@jwt_required()
+def get_campaign_v2_commercial_performance_endpoint():
+    """M2: only read worker-materialized sale-month aggregates; no Gasca scans."""
+    try:
+        _, access = _resolve_campaign_v2_request()
+        _validate_query_args({"from", "to", "window"})
+        raw_window = request.args.get("window")
+        if raw_window not in {"7", "14", "30"}:
+            raise UniqueSalesEvidenceError("Ventana inválida (7, 14 o 30).")
+        result = read_sale_month_cache(
+            from_date=request.args.get("from"),
+            to_date=request.args.get("to"),
+            window_days=int(raw_window),
+            allowed_sucursal_keys=_campaign_v2_allowed_sucursal_keys(access),
+            session=db.session,
+        )
+        return jsonify(result), 200
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except (MarketingCampaignV2RouteValidationError,
+            UniqueSalesEvidenceError) as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("M2 Campaign V2 commercial reporting failed")
+        return _error("No fue posible consultar ventas comerciales M2.", 500)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/performance")

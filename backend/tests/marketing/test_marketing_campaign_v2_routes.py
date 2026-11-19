@@ -3481,3 +3481,59 @@ class TestMarketingCampaignV2Routes:
             )
         assert response.status_code == 400
         applied.assert_not_called()
+
+    def test_m2_commercial_cache_endpoint_is_readonly_and_scoped(self):
+        expected = {"status": "NOT_MATERIALIZED", "campaigns": []}
+        with (
+            self._auth(self.partial_access),
+            patch(
+                "app.routes.marketing_campaign_v2_routes.marketing_branch_keys_by_sucursal_ids",
+                return_value={11: "AZAHARES_CUL", 22: "SEND_CUL"},
+            ),
+            patch.object(routes, "read_sale_month_cache",
+                         return_value=expected) as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/commercial-performance"
+                "?from=2026-10-01&to=2026-10-31&window=14",
+                headers=self.headers,
+            )
+        assert response.status_code == 200
+        assert response.get_json() == expected
+        assert service.call_args.kwargs["allowed_sucursal_keys"] == (
+            "AZAHARES_CUL", "SEND_CUL"
+        )
+        assert service.call_args.kwargs["window_days"] == 14
+
+    def test_m2_commercial_cache_cannot_bypass_marketing_access(self):
+        access = SimpleNamespace(
+            is_global=True, branch_ids=(), can_edit_inputs=False,
+        )
+        with (
+            self._auth(access),
+            patch.object(routes, "read_sale_month_cache") as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/commercial-performance"
+                "?from=2026-10-01&to=2026-10-31&window=14",
+                headers=self.headers,
+            )
+        assert response.status_code == 403
+        service.assert_not_called()
+
+    @pytest.mark.parametrize("query", [
+        "?from=2026-10-01&to=2026-10-31&window=8",
+        "?from=2026-10-01&to=2026-10-31",
+        "?from=2026-10-01&to=2026-10-31&window=14&refresh=true",
+    ])
+    def test_m2_commercial_cache_rejects_unknown_or_unsafe_params(self, query):
+        with (
+            self._auth(),
+            patch.object(routes, "read_sale_month_cache") as service,
+        ):
+            response = self.client.get(
+                "/api/marketing/campaigns-v2/commercial-performance" + query,
+                headers=self.headers,
+            )
+        assert response.status_code == 400
+        service.assert_not_called()

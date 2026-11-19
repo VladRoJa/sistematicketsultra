@@ -18,6 +18,7 @@ import {
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
   CampaignV2PerformanceReport,
+  CampaignV2CommercialPerformanceReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
   CampaignV2ChannelPortfolioEvidence,
@@ -675,6 +676,15 @@ export class MarketingCampaignV2Service {
     return this.http.get<CampaignV2PerformanceReport>(
       `${this.apiUrl}/performance`,
       { params: new HttpParams().set('from', from).set('to', to) },
+    );
+  }
+
+  getCommercialPerformance(
+    from: string, to: string, windowDays: 7 | 14 | 30,
+  ): Observable<CampaignV2CommercialPerformanceReport> {
+    return this.http.get<CampaignV2CommercialPerformanceReport>(
+      `${this.apiUrl}/commercial-performance`,
+      { params: new HttpParams().set('from', from).set('to', to).set('window', String(windowDays)) },
     );
   }
 

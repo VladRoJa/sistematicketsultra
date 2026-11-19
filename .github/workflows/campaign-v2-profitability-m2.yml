@@ -1,0 +1,77 @@
+name: Campaign V2 Profitability M2 CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/marketing_campaign_v2_unique_sales_service.py"
+      - "backend/app/services/marketing_campaign_v2_sales_month_source_service.py"
+      - "backend/app/services/marketing_campaign_v2_sales_month_materialization_service.py"
+      - "backend/scripts/campaign_v2_m2_*.py"
+      - "backend/app/models/marketing.py"
+      - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/migrations/versions/m1234m2sales111826_campaign_sales_months.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_unique_sales_service.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_sales_month_*"
+      - "backend/tests/marketing/test_marketing_permissions_p26_9_integral_inventory.py"
+      - "frontend/src/app/marketing-campaign-v2/**"
+      - ".github/workflows/campaign-v2-profitability-m2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-m2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SECRET_KEY: synthetic-m2-core-ci
+      JWT_SECRET_KEY: synthetic-m2-core-jwt-ci
+      CAMPAIGN_V2_PROVIDER_SEND_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt pytest==8.3.5
+      - name: Compile M2 services and commands
+        working-directory: backend
+        run: |
+          python -m py_compile \
+            app/services/marketing_campaign_v2_unique_sales_service.py \
+            app/services/marketing_campaign_v2_sales_month_source_service.py \
+            app/services/marketing_campaign_v2_sales_month_materialization_service.py \
+            scripts/campaign_v2_m2_sales_month_readonly.py \
+            scripts/campaign_v2_m2_materialize_sales_month.py \
+            app/routes/marketing_campaign_v2_routes.py
+      - name: M2 integration and Marketing ACL regressions
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -q --tb=short \
+            tests/marketing/test_marketing_campaign_v2_unique_sales_service.py \
+            tests/marketing/test_marketing_campaign_v2_sales_month_source_service.py \
+            tests/marketing/test_marketing_campaign_v2_sales_month_materialization_service.py \
+            tests/marketing/test_marketing_campaign_v2_commercial_materialization_service.py \
+            tests/marketing/test_marketing_permissions_p26_9_integral_inventory.py \
+            tests/marketing/test_marketing_campaign_v2_routes.py
+
+  frontend-m2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Angular production build
+        working-directory: frontend
+        run: npm run build
