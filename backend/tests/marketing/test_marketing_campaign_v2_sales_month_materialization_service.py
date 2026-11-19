@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 from sqlalchemy.orm import Session
 
 from app.models.marketing import (
@@ -24,6 +24,7 @@ NOW = datetime(2026, 11, 18, 20, tzinfo=timezone.utc)
 def session():
     engine = create_engine("sqlite://")
     metadata = MetaData()
+    Table("users", metadata, Column("id", Integer, primary_key=True))
     for model in (MarketingCampaignV2ORM, MarketingCampaignV2CommercialSaleMonthORM):
         model.__table__.to_metadata(metadata)
     metadata.create_all(engine)
