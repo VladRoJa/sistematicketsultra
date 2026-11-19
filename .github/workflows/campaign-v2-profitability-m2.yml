@@ -5,6 +5,7 @@ on:
     paths:
       - "backend/app/services/marketing_campaign_v2_unique_sales_service.py"
       - "backend/app/services/marketing_campaign_v2_sales_month_source_service.py"
+      - "backend/scripts/campaign_v2_m2_sales_month_readonly.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_unique_sales_service.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_sales_month_source_service.py"
       - ".github/workflows/campaign-v2-profitability-m2.yml"
@@ -34,7 +35,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m py_compile app/services/marketing_campaign_v2_unique_sales_service.py app/services/marketing_campaign_v2_sales_month_source_service.py
+          python -m py_compile app/services/marketing_campaign_v2_unique_sales_service.py app/services/marketing_campaign_v2_sales_month_source_service.py scripts/campaign_v2_m2_sales_month_readonly.py
           python -m pytest -q --tb=short \
             tests/marketing/test_marketing_campaign_v2_unique_sales_service.py \
             tests/marketing/test_marketing_campaign_v2_sales_month_source_service.py \
