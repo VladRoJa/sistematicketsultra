@@ -53,6 +53,7 @@ import {
   CampaignV2BudgetRateRevision,
   CampaignV2DispatchTemplate,
   CampaignV2ConsolidatedReport,
+  CampaignV2PerformanceReport,
   CampaignV2HistoryDeliveryBucket,
   CampaignV2HistoricalTargetingMatch,
   CampaignV2HistoricalTargetingMode,
@@ -92,6 +93,15 @@ import { MarketingCampaignV2CobranzaSendDialogComponent } from './marketing-camp
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
 import { MarketingCampaignV2QaManualDialogComponent } from './marketing-campaign-v2-qa-manual-dialog.component';
 import { MarketingCampaignV2ReadinessDialogComponent } from './marketing-campaign-v2-readiness-dialog.component';
+
+/** All M1 send-window dates follow Suite's business timezone, not UTC/browser locale. */
+function currentTijuanaDate(): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Tijuana', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const value = (kind: string): string => parts.find(part => part.type === kind)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
 
 @Component({
   selector: 'app-marketing-campaign-v2-page',
@@ -154,6 +164,10 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   readonly historySource = new FormControl<CampaignV2Source | ''>('', {
     nonNullable: true,
   });
+  readonly performanceFrom = new FormControl(
+    currentTijuanaDate().slice(0, 7) + '-01', { nonNullable: true },
+  );
+  readonly performanceTo = new FormControl(currentTijuanaDate(), { nonNullable: true });
   readonly reportingObservedFrom = new FormControl('', { nonNullable: true });
   readonly reportingObservedTo = new FormControl('', { nonNullable: true });
   readonly reportingPurpose = new FormControl<CampaignV2Purpose | ''>('', {
@@ -207,6 +221,9 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   commercialSummaryError = '';
   private commercialBatchRequestId = 0;
   reporting: CampaignV2ConsolidatedReport | null = null;
+  performance: CampaignV2PerformanceReport | null = null;
+  loadingPerformance = false;
+  performanceError = '';
   blacklistSummary: CampaignV2BlacklistSummary | null = null;
   funnelCutoffDates: string[] = [];
 
@@ -1113,6 +1130,33 @@ export class MarketingCampaignV2PageComponent implements OnInit {
           this.reportingError = this.errorMessage(
             error,
             'No fue posible cargar Reporting Campaign V2.',
+          );
+        },
+      });
+  }
+
+  loadPerformance(): void {
+    if (this.loadingPerformance) {
+      return;
+    }
+    if (!this.performanceFrom.value || !this.performanceTo.value) {
+      this.performanceError = 'Selecciona el inicio y fin del periodo de envíos.';
+      return;
+    }
+    this.loadingPerformance = true;
+    this.performance = null;
+    this.performanceError = '';
+    this.service.getPerformance(this.performanceFrom.value, this.performanceTo.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: result => {
+          this.loadingPerformance = false;
+          this.performance = result;
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loadingPerformance = false;
+          this.performanceError = this.errorMessage(
+            error, 'No fue posible cargar el rendimiento de los envíos.',
           );
         },
       });

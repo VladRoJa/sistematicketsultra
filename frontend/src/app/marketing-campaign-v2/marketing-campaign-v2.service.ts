@@ -17,6 +17,7 @@ import {
   CampaignV2CampaignPage,
   CampaignV2CampaignQuery,
   CampaignV2ConsolidatedReport,
+  CampaignV2PerformanceReport,
   CampaignV2DispatchTemplatesResponse,
   CampaignV2BudgetRateRevision,
   CampaignV2ChannelPortfolioEvidence,
@@ -667,6 +668,13 @@ export class MarketingCampaignV2Service {
   getCampaignReport(campaignId: number): Observable<CampaignV2IndividualReport> {
     return this.http.get<CampaignV2IndividualReport>(
       `${this.apiUrl}/${campaignId}/report`,
+    );
+  }
+
+  getPerformance(from: string, to: string): Observable<CampaignV2PerformanceReport> {
+    return this.http.get<CampaignV2PerformanceReport>(
+      `${this.apiUrl}/performance`,
+      { params: new HttpParams().set('from', from).set('to', to) },
     );
   }
 
