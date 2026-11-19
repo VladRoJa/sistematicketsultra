@@ -189,3 +189,32 @@ def test_m1_window_respects_tijuana_dst_offsets():
     assert start == datetime(2026, 11, 1, 7, 0, tzinfo=timezone.utc)
     assert end == datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)
     assert (end - start).total_seconds() == 25 * 3600
+
+
+def test_m1_cross_campaign_phones_are_global_unique_but_repeat_in_frequency(active_session):
+    active_session.add(MarketingCampaignV2ORM(
+        id=8, name="Segundo esfuerzo", purpose="REACTIVATION",
+        source="EXPIRED_MEMBERS", provider=None, provider_campaign_id=None,
+        audience_definition_json={
+            "filters": {"allowed_sucursal_keys": ["AZAHARES_CUL"]}
+        }, frozen_at=AT, created_at=AT, updated_at=AT,
+    ))
+    active_session.add(_child(104, "AZAHARES_CUL", 8, "provider-c", 1))
+    latest = _snapshot(204, "provider-c", AT, 1, 0, 0, 1, 0)
+    latest.campaign_v2_id = 8
+    active_session.add(latest)
+    active_session.add(_observation(204, "6860000001", "SUCCESSFUL", "DELIVERED"))
+    active_session.commit()
+
+    report = build_campaign_v2_performance(
+        from_date="2026-10-01", to_date="2026-10-31",
+        allowed_sucursal_keys=None, session=active_session,
+    )
+    assert report["campaign_count"] == 2
+    assert [row["campaign_id"] for row in report["campaigns"]] == [7, 8]
+    assert [row["successful"] for row in report["campaigns"]] == [3, 1]
+    assert [row["unique_successful_phones"] for row in report["campaigns"]] == [2, 1]
+    assert report["summary"]["successful"] == 4
+    assert report["summary"]["unique_successful_phones"] == 2
+    assert report["frequency"] == {"once": 1, "twice": 0, "three": 1, "four_plus": 0}
+    assert report["summary"]["repeated_successful_phones"] == 1
