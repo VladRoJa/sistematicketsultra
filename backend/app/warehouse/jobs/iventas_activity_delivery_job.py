@@ -11,7 +11,8 @@ from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 
 from flask import current_app
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
+from sqlalchemy.engine import Row
 from sqlalchemy.orm import aliased
 from app.extensions import db
 from app.models.warehouse import (
@@ -23,6 +24,7 @@ from app.models.warehouse import (
 from app.utils.email_sender import EmailAttachment, EmailDeliveryUncertain, send_email_html
 from app.utils.warehouse_audit import log_warehouse_audit
 from app.warehouse.jobs.iventas_activity_hourly_job import run_job as generate_xlsx
+from app.warehouse.services.iventas_activity_export_service import EXPORT_LAYOUT_VERSION
 from app.warehouse.services.warehouse_document_upload_service import create_warehouse_document_upload
 from app.warehouse.services.warehouse_upload_loader import load_warehouse_upload
 
@@ -31,6 +33,7 @@ REPORT_TYPE_KEY = "iventas_actividad_horaria"
 FULL_REPORT_TYPE_KEY = "iventas_actividad_acumulado_horario"
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PUBLISHED = "IVENTAS_EXPORT_READY"
+PUBLICATION_ACTIONS = ("UPLOAD", PUBLISHED)
 BASELINE = "IVENTAS_DELTA_BASELINE"
 EMPTY = "IVENTAS_DELTA_EMPTY"
 EMAIL_ATTEMPT = "IVENTAS_EMAIL_ATTEMPT"
@@ -94,7 +97,7 @@ def _delta_audits():
     return db.session.query(WarehouseAuditLogORM).filter(
         WarehouseAuditLogORM.details["producer"].as_string() == REPORT_TYPE_KEY,
         WarehouseAuditLogORM.details["export_mode"].as_string() == "delta",
-        WarehouseAuditLogORM.action.in_(("UPLOAD", PUBLISHED, BASELINE, EMPTY)),
+        WarehouseAuditLogORM.action.in_((*PUBLICATION_ACTIONS, BASELINE, EMPTY)),
     )
 
 
@@ -128,9 +131,10 @@ def _publish(*, source_id: int, operator_id: int, details: dict, now: datetime) 
         ) for key in evidence.get("movement_keys", ())
     }
     full_published = db.session.query(WarehouseAuditLogORM.id).filter(
-        WarehouseAuditLogORM.action.in_(("UPLOAD", PUBLISHED)),
+        WarehouseAuditLogORM.action.in_(PUBLICATION_ACTIONS),
         WarehouseAuditLogORM.details["producer"].as_string() == FULL_REPORT_TYPE_KEY,
         WarehouseAuditLogORM.details["cutoff_hour_utc"].as_string() == details["cutoff_hour_utc"],
+        WarehouseAuditLogORM.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
     ).first() is not None
 
     with TemporaryDirectory(prefix="iventas-activity-") as workspace:
@@ -164,7 +168,7 @@ def _publish(*, source_id: int, operator_id: int, details: dict, now: datetime) 
     return "published"
 
 
-def _pending_email() -> WarehouseAuditLogORM | None:
+def _pending_email() -> Row[tuple[WarehouseAuditLogORM, int]] | None:
     delivery = aliased(WarehouseAuditLogORM)
     delivery_hour = delivery.details["cutoff_hour_utc"].as_string()
     last_attempts = (
@@ -177,21 +181,38 @@ def _pending_email() -> WarehouseAuditLogORM | None:
         .group_by(delivery_hour).subquery()
     )
     current_hour = WarehouseAuditLogORM.details["cutoff_hour_utc"].as_string()
-    return _delta_audits().join(
+    full_export = aliased(WarehouseAuditLogORM)
+    full_upload = aliased(WarehouseUploadORM)
+    return _delta_audits().add_columns(full_export.upload_id).join(
+        full_export,
+        and_(
+            full_export.details["cutoff_hour_utc"].as_string() == current_hour,
+            full_export.details["producer"].as_string() == FULL_REPORT_TYPE_KEY,
+            full_export.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
+            full_export.action.in_(PUBLICATION_ACTIONS),
+        ),
+    ).join(full_upload, full_upload.id == full_export.upload_id).outerjoin(
         WarehouseUploadORM, WarehouseUploadORM.id == WarehouseAuditLogORM.upload_id,
     ).outerjoin(last_attempts, last_attempts.c.cutoff_hour == current_hour).outerjoin(
         delivery, delivery.id == last_attempts.c.audit_id,
     ).filter(
-        WarehouseAuditLogORM.action.in_(("UPLOAD", PUBLISHED)),
-        WarehouseUploadORM.status == "ACTIVE",
-        WarehouseUploadORM.source_file_deleted_at.is_(None),
+        WarehouseAuditLogORM.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
+        full_upload.status == "ACTIVE",
+        full_upload.source_file_deleted_at.is_(None),
+        or_(
+            WarehouseAuditLogORM.action.in_((BASELINE, EMPTY)),
+            and_(
+                WarehouseUploadORM.status == "ACTIVE",
+                WarehouseUploadORM.source_file_deleted_at.is_(None),
+            ),
+        ),
         or_(delivery.action.is_(None), delivery.action == EMAIL_FAILED),
     ).order_by(WarehouseAuditLogORM.id).first()
 
 
-def _attachment(upload_id: int) -> EmailAttachment:
+def _attachment(upload_id: int, report_type_key: str) -> EmailAttachment:
     metadata = load_warehouse_upload(warehouse_upload_id=upload_id)
-    if metadata is None or metadata["report_type_key"] != REPORT_TYPE_KEY or not metadata["storage_path"]:
+    if metadata is None or metadata["report_type_key"] != report_type_key or not metadata["storage_path"]:
         raise RuntimeError("No se pudo recuperar el XLSX de iVentas registrado en Warehouse.")
     stored = db.session.get(WarehouseUploadORM, upload_id)
     content = Path(metadata["storage_path"]).read_bytes()
@@ -200,31 +221,57 @@ def _attachment(upload_id: int) -> EmailAttachment:
     return EmailAttachment(metadata["original_filename"], content, XLSX_CONTENT_TYPE)
 
 
-def _send_pending_email(published: WarehouseAuditLogORM, *, operator_id: int, recipient: str) -> str:
+def _email_address(value: str, setting: str) -> str:
     try:
-        address = Address(addr_spec=recipient.strip())
+        address = Address(addr_spec=value.strip())
     except (ValueError, HeaderParseError):
-        raise RuntimeError("Configura IVENTAS_ACTIVITY_EMAIL_TO con un correo válido.") from None
+        raise RuntimeError(f"Configura {setting} con un correo válido.") from None
     if not address.username or not address.domain:
-        raise RuntimeError("Configura IVENTAS_ACTIVITY_EMAIL_TO con un correo válido.")
+        raise RuntimeError(f"Configura {setting} con un correo válido.")
+    return address.addr_spec
 
-    upload_id = published.upload_id
-    attachment = _attachment(upload_id)
-    hour = datetime.fromisoformat(published.details["cutoff_hour_utc"])
+
+def _send_pending_email(
+    completed_cut: WarehouseAuditLogORM,
+    full_upload_id: int,
+    *,
+    operator_id: int,
+    recipient: str,
+    recipient_cc: str,
+) -> str:
+    address = _email_address(recipient, "IVENTAS_ACTIVITY_EMAIL_TO")
+    cc_addresses = recipient_cc.split(",") if recipient_cc.strip() else ()
+    cc = [_email_address(value, "IVENTAS_ACTIVITY_EMAIL_CC") for value in cc_addresses]
+
+    delta_upload_id = completed_cut.upload_id
+    attachments = [_attachment(full_upload_id, FULL_REPORT_TYPE_KEY)]
+    body = "<p>Adjuntamos el acumulado del mes de pases de cortesía, recorridos y ventas de Ultra Gym."
+    if delta_upload_id is not None:
+        attachments.append(_attachment(delta_upload_id, REPORT_TYPE_KEY))
+        body += " También se adjuntan los movimientos nuevos del corte."
+    body += "</p>"
+
+    upload_id = delta_upload_id or full_upload_id
+    hour = datetime.fromisoformat(completed_cut.details["cutoff_hour_utc"])
     message_id = f"<iventas-actividad.{hour:%Y%m%d%H}@suiteultragym.com>"
+    local_cut = hour.astimezone(TIJUANA).strftime("%d/%m/%Y %H:%M")
+    # Preserve the delivery audit key used by earlier versions.
     details = {
         "producer": REPORT_TYPE_KEY, "export_mode": "delta", "cutoff_hour_utc": hour.isoformat(),
-        "message_id": message_id, "recipient": address.addr_spec,
+        "message_id": message_id, "recipient": address, "cc": cc,
+        "full_upload_id": full_upload_id, "delta_upload_id": delta_upload_id,
     }
     _record(action=EMAIL_ATTEMPT, operator_id=operator_id, upload_id=upload_id, details=details)
     try:
         send_email_html(
-            [address.addr_spec], "Ultra Gym | Movimientos nuevos de pases, recorridos y ventas",
-            "<p>Adjuntamos los movimientos nuevos de pases de cortesía, recorridos y ventas de Ultra Gym.</p>",
-            attachments=(attachment,), message_id=message_id,
+            [address], f"Ultra Gym | Pases, recorridos y ventas | {local_cut}", body,
+            cc_list=cc, attachments=attachments, message_id=message_id,
         )
-    except EmailDeliveryUncertain:
-        current_app.logger.warning("iVentas SMTP sin confirmación: upload_id=%s message_id=%s", upload_id, message_id)
+    except EmailDeliveryUncertain as exc:
+        current_app.logger.warning(
+            "iVentas SMTP sin confirmación completa: upload_id=%s message_id=%s motivo=%s",
+            upload_id, message_id, exc,
+        )
         return "delivery_uncertain"
     except Exception as exc:
         _record(action=EMAIL_FAILED, operator_id=operator_id, upload_id=upload_id,
@@ -235,7 +282,7 @@ def _send_pending_email(published: WarehouseAuditLogORM, *, operator_id: int, re
     return "sent"
 
 
-def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: str) -> str:
+def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: str, recipient_cc: str = "") -> str:
     """Publish a full export and at most one delta for each hourly Track cut."""
     with _publication_lock() as acquired:
         if not acquired:
@@ -255,6 +302,7 @@ def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: st
                 source_id=source_id, operator_id=operator_id, now=now,
                 details={
                     "producer": REPORT_TYPE_KEY, "export_mode": "delta",
+                    "export_layout_version": EXPORT_LAYOUT_VERSION,
                     "cutoff_hour_utc": hour.isoformat(), "business_month": now.astimezone(TIJUANA).strftime("%Y-%m"),
                     "track_preview_id": version_id, "venta_total_upload_id": source_id,
                 },
@@ -262,5 +310,7 @@ def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: st
         if email_enabled:
             pending = _pending_email()
             if pending is not None:
-                return _send_pending_email(pending, operator_id=operator_id, recipient=recipient)
+                return _send_pending_email(
+                    *pending, operator_id=operator_id, recipient=recipient, recipient_cc=recipient_cc,
+                )
         return status

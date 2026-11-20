@@ -64,7 +64,7 @@ def _validar_config(host, user, pw, from_email, security):
         )
 
 
-def send_email_html(to_list, subject, html, *, attachments=(), message_id=None):
+def send_email_html(to_list, subject, html, *, cc_list=(), attachments=(), message_id=None):
     host, port, user, pw, from_email, display_from, reply_to, security = _get_env()
     _validar_config(host, user, pw, from_email, security)
 
@@ -75,6 +75,8 @@ def send_email_html(to_list, subject, html, *, attachments=(), message_id=None):
     msg["Subject"] = subject
     msg["From"] = f"{display_from} <{from_email}>"
     msg["To"] = ", ".join(to_list)
+    if cc_list:
+        msg["Cc"] = ", ".join(cc_list)
     msg["Reply-To"] = reply_to
     if message_id:
         msg["Message-ID"] = message_id
@@ -110,7 +112,7 @@ def send_email_html(to_list, subject, html, *, attachments=(), message_id=None):
                 s.ehlo()
             s.login(user, pw)
             try:
-                s.send_message(msg)
+                refused = s.send_message(msg)
             except (smtplib.SMTPRecipientsRefused, smtplib.SMTPResponseException):
                 raise
             except OSError as exc:
@@ -119,6 +121,9 @@ def send_email_html(to_list, subject, html, *, attachments=(), message_id=None):
                 submission_uncertain = True
                 raise EmailDeliveryUncertain("El servidor SMTP no confirmó la entrega.") from exc
             accepted = True
+            if refused and cc_list:
+                submission_uncertain = True
+                raise EmailDeliveryUncertain("El servidor SMTP solo aceptó parte de los destinatarios.")
     except OSError as exc:
         if submission_uncertain:
             raise EmailDeliveryUncertain("El servidor SMTP no confirmó la entrega.") from exc

@@ -55,9 +55,9 @@ def test_iventas_export_applies_filters_and_keeps_layout(tmp_path, exclude, expe
     output = tmp_path / "iventas.xlsx"
     active_cutoff = date(2026, 11, 19)
     active_members = SociosActivosParseResult(rows=(
+        SimpleNamespace(id_socio="20", tarifa="ESTUDIANTE", fecha_vencimiento_date=date(2026, 12, 19)),
         SimpleNamespace(id_socio="20", tarifa="ESTUDIANTE", fecha_vencimiento_date=active_cutoff),
         SimpleNamespace(id_socio="21", tarifa="PASE RECORRIDO", fecha_vencimiento_date=active_cutoff),
-        SimpleNamespace(id_socio="22", tarifa="ESTUDIANTE", fecha_vencimiento_date=date(2026, 11, 18)),
     ))
 
     result = write_iventas_activity_xlsx(
@@ -68,11 +68,13 @@ def test_iventas_export_applies_filters_and_keeps_layout(tmp_path, exclude, expe
     workbook = load_workbook(output, read_only=True, data_only=True)
     try:
         assert workbook.sheetnames == ["Hoja1"]
-        headings, *rows = workbook.active.values
-        assert headings == ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio")
-        assert [row[-1] for row in rows] == expected_members
+        headings, *rows = workbook.active.iter_rows(max_col=6, values_only=True)
+        assert headings == ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio", "Fecha Vencimiento")
+        assert [row[4] for row in rows] == expected_members
+        expiry_by_member = {20: "19-12-26", 21: "19-11-26", 22: None}
+        assert [row[5] for row in rows] == [expiry_by_member[member] for member in expected_members]
         assert [row for row in rows if row[2] == "ESTUDIANTE"] == [
-            ("18-11-26", "TEC MXL", "ESTUDIANTE", "6860000000", 20),
+            ("18-11-26", "TEC MXL", "ESTUDIANTE", "6860000000", 20, "19-12-26"),
         ]
     finally:
         workbook.close()
@@ -96,7 +98,9 @@ def test_delta_only_exports_new_movements_even_if_registered_with_an_older_date(
     sales = _venta_total(tmp_path)
     baseline_path = tmp_path / "baseline.xlsx"
     settings = {
-        "active_members": SociosActivosParseResult(),
+        "active_members": SociosActivosParseResult(rows=(
+            SimpleNamespace(id_socio="20", tarifa="ESTUDIANTE", fecha_vencimiento_date=date(2026, 12, 19)),
+        )),
         "sales_cutoff": date(2026, 11, 19),
         "active_cutoff": date(2026, 11, 19),
     }
@@ -118,7 +122,7 @@ def test_delta_only_exports_new_movements_even_if_registered_with_an_older_date(
     workbook = load_workbook(output, read_only=True)
     try:
         assert list(workbook.active.values)[1:] == [
-            ("17-11-26", "TEC MXL", "PASE 1 DIAS GRATIS", "6861111111", 20),
+            ("17-11-26", "TEC MXL", "PASE 1 DIAS GRATIS", "6861111111", 20, "19-12-26"),
         ]
     finally:
         workbook.close()
