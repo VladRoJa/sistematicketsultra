@@ -6,7 +6,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,14 +16,18 @@ from openpyxl import load_workbook
 from openpyxl.utils.datetime import WINDOWS_EPOCH, from_excel
 from openpyxl.utils.exceptions import InvalidFileException
 
-from app.routine_control.domain.commands import RegisterRoutineEvidenceCommand
+from app.routine_control.domain.commands import (
+    TRAININGYM_POWER_BI_SOURCE,
+    TRAININGYM_REPORT_SOURCE_KEY,
+    RegisterRoutineEvidenceCommand,
+)
 from app.routine_control.domain.identity_normalization import (
     normalize_identity_name,
 )
 
 
 _SHEET_NAME = "Export"
-_REQUIRED_HEADERS = frozenset(
+TRAININGYM_XLSX_REQUIRED_HEADERS = frozenset(
     {
         "id",
         "Idsocioexterno",
@@ -110,6 +114,41 @@ class TrainingymEvidenceBatch:
     commands: tuple[RegisterRoutineEvidenceCommand, ...]
     rejected_rows: tuple[TrainingymRejectedRow, ...]
     total_source_rows: int
+
+
+def mark_trainingym_power_bi_batch(
+    batch: TrainingymEvidenceBatch,
+) -> TrainingymEvidenceBatch:
+    return replace(
+        batch,
+        commands=tuple(
+            replace(
+                command,
+                source_metadata={
+                    **(command.source_metadata or {}),
+                    TRAININGYM_REPORT_SOURCE_KEY: TRAININGYM_POWER_BI_SOURCE,
+                },
+            )
+            for command in batch.commands
+        ),
+    )
+
+
+def merge_trainingym_evidence_batches(
+    primary: TrainingymEvidenceBatch,
+    supplemental: TrainingymEvidenceBatch,
+) -> TrainingymEvidenceBatch:
+    commands_by_key = {
+        command.evidence_identity_key: command
+        for command in primary.commands
+    }
+    for command in supplemental.commands:
+        commands_by_key.setdefault(command.evidence_identity_key, command)
+    return TrainingymEvidenceBatch(
+        commands=tuple(commands_by_key.values()),
+        rejected_rows=primary.rejected_rows + supplemental.rejected_rows,
+        total_source_rows=primary.total_source_rows + supplemental.total_source_rows,
+    )
 
 
 def _clean_text(value: Any) -> str | None:
@@ -571,7 +610,7 @@ def _headers(worksheet: Any) -> tuple[str | None, ...]:
         raise TrainingymInvalidWorkbookError(
             "La hoja Export contiene headers duplicados."
         )
-    missing = sorted(_REQUIRED_HEADERS.difference(headers))
+    missing = sorted(TRAININGYM_XLSX_REQUIRED_HEADERS.difference(headers))
     if missing:
         raise TrainingymMissingHeaderError(
             f"Faltan headers obligatorios: {', '.join(missing)}."

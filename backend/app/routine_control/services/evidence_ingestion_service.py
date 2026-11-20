@@ -7,7 +7,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.routine_control import RoutineAssignmentEvidenceORM
-from app.routine_control.domain.commands import RegisterRoutineEvidenceCommand
+from app.routine_control.domain.commands import (
+    TRAININGYM_POWER_BI_SOURCE,
+    TRAININGYM_REPORT_SOURCE_KEY,
+    RegisterRoutineEvidenceCommand,
+)
 from app.routine_control.domain.identity_normalization import (
     normalize_identity_name,
 )
@@ -164,13 +168,24 @@ def _update_evidence(
     previous_payload_hash = evidence.payload_hash
     previous_last_observed_at = evidence.last_observed_at
     source_values = _source_values(command)
-    source_changed = any(
-        getattr(evidence, field_name) != source_values[field_name]
-        for field_name in _SOURCE_FIELDS
+    from_power_bi = (
+        (command.source_metadata or {}).get(TRAININGYM_REPORT_SOURCE_KEY)
+        == TRAININGYM_POWER_BI_SOURCE
     )
-
-    for field_name in _SOURCE_FIELDS:
-        setattr(evidence, field_name, source_values[field_name])
+    existing_from_power_bi = (
+        (evidence.source_metadata or {}).get(TRAININGYM_REPORT_SOURCE_KEY)
+        == TRAININGYM_POWER_BI_SOURCE
+    )
+    # A Power BI-only cut can refresh the observation without replacing
+    # stronger evidence already stored from the native report.
+    source_changed = False
+    if not from_power_bi or existing_from_power_bi:
+        source_changed = any(
+            getattr(evidence, field_name) != source_values[field_name]
+            for field_name in _SOURCE_FIELDS
+        )
+        for field_name in _SOURCE_FIELDS:
+            setattr(evidence, field_name, source_values[field_name])
 
     if command.provider_run_id is not None and (
         observed_at_utc >= previous_last_observed_at

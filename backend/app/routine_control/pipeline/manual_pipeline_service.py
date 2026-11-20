@@ -44,9 +44,12 @@ from app.routine_control.providers.gasca_member_normalizer import (
     load_gasca_member_commands_from_xlsx,
 )
 from app.routine_control.providers.trainingym_evidence_normalizer import (
+    TrainingymEvidenceBatch,
     TrainingymNormalizationError,
     load_trainingym_evidence_commands_from_csv,
     load_trainingym_evidence_commands_from_xlsx,
+    mark_trainingym_power_bi_batch,
+    merge_trainingym_evidence_batches,
 )
 from app.routine_control.repositories.evidence_repository import (
     RoutineAssignmentEvidenceRepository,
@@ -223,7 +226,7 @@ def _load_trainingym_evidence_batch(
     observed_at_utc: datetime,
     provider_run_id: int | None,
     center_resolver: Callable[[str], int | None],
-):
+) -> TrainingymEvidenceBatch:
     suffix = path.suffix.casefold()
 
     if suffix == ".csv":
@@ -244,6 +247,34 @@ def _load_trainingym_evidence_batch(
 
     raise ManualRoutineControlPipelineError(
         "trainingym_xlsx debe ser un archivo CSV o XLSX."
+    )
+
+
+def _load_trainingym_reports(
+    path: Path,
+    *,
+    supplemental_path: Path | None,
+    primary_is_power_bi: bool,
+    observed_at_utc: datetime,
+    provider_run_id: int,
+    center_resolver: Callable[[str], int | None],
+) -> TrainingymEvidenceBatch:
+    primary = _load_trainingym_evidence_batch(
+        path,
+        observed_at_utc=observed_at_utc,
+        provider_run_id=provider_run_id,
+        center_resolver=center_resolver,
+    )
+    if supplemental_path is None:
+        return mark_trainingym_power_bi_batch(primary) if primary_is_power_bi else primary
+    supplemental = _load_trainingym_evidence_batch(
+        supplemental_path,
+        observed_at_utc=observed_at_utc,
+        provider_run_id=provider_run_id,
+        center_resolver=center_resolver,
+    )
+    return merge_trainingym_evidence_batches(
+        primary, mark_trainingym_power_bi_batch(supplemental)
     )
 
 
@@ -460,6 +491,8 @@ def _reused_success_result(
     trainingym_provider_run: Any,
     gasca_path: Path,
     trainingym_path: Path,
+    trainingym_supplemental_path: Path | None,
+    trainingym_primary_is_power_bi: bool,
     observed_at_utc: datetime,
     session: Any,
     gasca_resolver: Callable[[str], int | None],
@@ -472,8 +505,10 @@ def _reused_success_result(
         branch_resolver=gasca_resolver,
         require_resolved_branch=False,
     )
-    trainingym_batch = _load_trainingym_evidence_batch(
+    trainingym_batch = _load_trainingym_reports(
         trainingym_path,
+        supplemental_path=trainingym_supplemental_path,
+        primary_is_power_bi=trainingym_primary_is_power_bi,
         observed_at_utc=observed_at_utc,
         provider_run_id=int(trainingym_provider_run.id),
         center_resolver=center_resolver,
@@ -548,6 +583,8 @@ def run_manual_routine_control_pipeline(
     gasca_xlsx: str | Path,
     trainingym_xlsx: str | Path,
     observed_at_utc: datetime,
+    trainingym_supplemental_xlsx: str | Path | None = None,
+    trainingym_primary_is_power_bi: bool = False,
     date_from: date | None = None,
     date_to: date | None = None,
     requested_by: str | None = None,
@@ -568,6 +605,14 @@ def run_manual_routine_control_pipeline(
         trainingym_xlsx,
         field_name="trainingym_xlsx",
     )
+    trainingym_supplemental_path = (
+        _source_path(
+            trainingym_supplemental_xlsx,
+            field_name="trainingym_supplemental_xlsx",
+        )
+        if trainingym_supplemental_xlsx is not None
+        else None
+    )
     _sanitize_requested_by(requested_by)
     effective_generation_mode = _normalize_generation_mode(
         generation_mode
@@ -578,6 +623,15 @@ def run_manual_routine_control_pipeline(
     pipeline_session = session or db.session
     gasca_hash = _content_hash(gasca_path)
     trainingym_hash = _content_hash(trainingym_path)
+    if trainingym_supplemental_path is not None:
+        supplemental_hash = _content_hash(trainingym_supplemental_path)
+        trainingym_hash = hashlib.sha256(
+            f"{trainingym_hash}:{supplemental_hash}".encode("ascii")
+        ).hexdigest()
+    elif trainingym_primary_is_power_bi:
+        trainingym_hash = hashlib.sha256(
+            f"power_bi:{trainingym_hash}".encode("ascii")
+        ).hexdigest()
     idempotency_key = build_manual_pipeline_idempotency_key(
         gasca_content_hash=gasca_hash,
         trainingym_content_hash=trainingym_hash,
@@ -636,6 +690,8 @@ def run_manual_routine_control_pipeline(
                     trainingym_provider_run=trainingym_provider_run,
                     gasca_path=gasca_path,
                     trainingym_path=trainingym_path,
+                    trainingym_supplemental_path=trainingym_supplemental_path,
+                    trainingym_primary_is_power_bi=trainingym_primary_is_power_bi,
                     observed_at_utc=observed_at,
                     session=pipeline_session,
                     gasca_resolver=gasca_resolver,
@@ -813,8 +869,10 @@ def run_manual_routine_control_pipeline(
             at_utc=datetime.now(timezone.utc),
         )
         pipeline_session.commit()
-        trainingym_batch = _load_trainingym_evidence_batch(
+        trainingym_batch = _load_trainingym_reports(
             trainingym_path,
+            supplemental_path=trainingym_supplemental_path,
+            primary_is_power_bi=trainingym_primary_is_power_bi,
             observed_at_utc=observed_at,
             provider_run_id=int(trainingym_provider_run.id),
             center_resolver=center_resolver,
@@ -849,7 +907,10 @@ def run_manual_routine_control_pipeline(
             records_rejected=(
                 len(trainingym_batch.rejected_rows) + trainingym_row_errors
             ),
-            records_excluded=len(trainingym_batch.rejected_rows),
+            records_excluded=(
+                trainingym_batch.total_source_rows
+                - len(trainingym_batch.commands)
+            ),
             records_created=evidences_created,
             records_updated=evidences_updated,
         )

@@ -659,6 +659,81 @@ class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
         self.assertEqual(result.evidences_created, 1)
         self.assertEqual(result.links_by_external_id, 1)
 
+    def test_combines_trainingym_reports_and_preserves_native_evidence_on_fallback(self):
+        seed = int(uuid4().hex[:8], 16) % 100000000 + 870000000
+        native_provider_id = seed + 10
+        power_bi_provider_id = seed + 11
+        native_email = "trainingym-native@example.test"
+        power_bi_email = "trainingym-power-bi@example.test"
+        gasca, trainingym_xlsx = self._files(
+            [
+                self._member(seed, str(seed + 100), native_email),
+                self._member(seed + 1, str(seed + 101), power_bi_email),
+            ],
+            [
+                self._evidence(native_provider_id, None, None),
+                self._evidence(power_bi_provider_id, seed + 1, power_bi_email),
+            ],
+        )
+        trainingym_csv = Path(self.temp.name) / "trainingym-native.csv"
+        trainingym_csv.write_text(
+            "ID;ID externo;Socio;Email;Empleados;Workouts;Pesajes;Fecha;Centro\n"
+            f"{native_provider_id};{seed};Test Member;{native_email};"
+            "Instructor;2;0;2026-07-15;Centro\n",
+            encoding="utf-8",
+        )
+        combined_args = {
+            "gasca_xlsx": gasca,
+            "trainingym_xlsx": trainingym_csv,
+            "trainingym_supplemental_xlsx": trainingym_xlsx,
+            "observed_at_utc": OBSERVED_AT,
+        }
+
+        result = run_manual_routine_control_pipeline(**combined_args)
+        self.pipeline_ids.append(result.pipeline_run_id)
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.trainingym_source_rows, 3)
+        self.assertEqual(result.trainingym_accepted, 2)
+        self.assertEqual(result.trainingym_rejected, 0)
+        self.assertEqual(result.evidences_created, 2)
+        self.assertEqual(result.links_by_external_id, 2)
+        run = db.session.get(RoutineControlProviderRunORM, result.trainingym_provider_run_id)
+        self.assertEqual(run.records_excluded, 1)
+
+        reused = run_manual_routine_control_pipeline(**combined_args)
+        self.assertTrue(reused.reused_existing_run)
+        self.assertEqual(reused.pipeline_run_id, result.pipeline_run_id)
+
+        fallback = run_manual_routine_control_pipeline(
+            gasca_xlsx=gasca,
+            trainingym_xlsx=trainingym_xlsx,
+            trainingym_primary_is_power_bi=True,
+            observed_at_utc=OBSERVED_AT,
+        )
+        self.pipeline_ids.append(fallback.pipeline_run_id)
+        self.assertTrue(fallback.succeeded)
+        self.assertEqual(fallback.evidences_created, 0)
+        self.assertEqual(fallback.links_by_external_id, 2)
+        stored = db.session.execute(
+            select(RoutineAssignmentEvidenceORM).where(
+                RoutineAssignmentEvidenceORM.provider_member_id.in_(
+                    (str(native_provider_id), str(power_bi_provider_id))
+                )
+            )
+        ).scalars().all()
+        self.assertEqual(len(stored), 2)
+        by_provider_id = {item.provider_member_id: item for item in stored}
+        native = by_provider_id[str(native_provider_id)]
+        self.assertEqual(native.external_member_id, str(seed))
+        self.assertEqual(native.email_normalized, native_email)
+        self.assertEqual(native.routine_count, 2)
+        self.assertEqual(
+            by_provider_id[str(power_bi_provider_id)].source_metadata[
+                "trainingym_report_source"
+            ],
+            "power_bi",
+        )
+
 
     def test_positive_identity_routes_use_shared_matching_coordinator(self) -> None:
         seed = int(uuid4().hex[:8], 16) % 100000000 + 820000000

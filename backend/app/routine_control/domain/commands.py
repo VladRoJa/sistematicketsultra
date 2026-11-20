@@ -5,6 +5,10 @@ from datetime import date, datetime
 from typing import Any
 
 
+TRAININGYM_REPORT_SOURCE_KEY = "trainingym_report_source"
+TRAININGYM_POWER_BI_SOURCE = "power_bi"
+
+
 @dataclass(frozen=True, slots=True)
 class UpsertRoutineMemberCommand:
     source_system: str
