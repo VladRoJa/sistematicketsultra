@@ -42,6 +42,7 @@ EMAIL_SENT = "IVENTAS_EMAIL_SENT"
 EMAIL_UNCERTAIN = "IVENTAS_EMAIL_UNCERTAIN"
 ACTIVITY_FAILED = "IVENTAS_ACTIVITY_FAILED"
 TIJUANA = ZoneInfo("America/Tijuana")
+DAILY_CC_HOUR = 8
 
 
 class IventasActivityEmailFailed(RuntimeError):
@@ -250,6 +251,7 @@ def _send_pending_email(
     operator_id: int,
     recipient: str,
     recipient_cc: str,
+    daily_cc: str,
 ) -> str:
     address = _email_address(recipient, "IVENTAS_ACTIVITY_EMAIL_TO")
     cc_addresses = recipient_cc.split(",") if recipient_cc.strip() else ()
@@ -266,7 +268,19 @@ def _send_pending_email(
     upload_id = delta_upload_id or full_upload_id
     hour = datetime.fromisoformat(completed_cut.details["cutoff_hour_utc"])
     message_id = f"<iventas-actividad.{hour:%Y%m%d%H}@suiteultragym.com>"
-    local_cut = hour.astimezone(TIJUANA).strftime("%d/%m/%Y %H:%M")
+    local_cut = hour.astimezone(TIJUANA)
+    if (
+        daily_cc.strip()
+        and local_cut.hour == DAILY_CC_HOUR
+        and local_cut.date() == datetime.now(TIJUANA).date()
+    ):
+        try:
+            daily_address = _email_address(daily_cc, "IVENTAS_ACTIVITY_DAILY_CC")
+        except RuntimeError as exc:
+            current_app.logger.warning("Copia diaria de iVentas omitida. %s", exc)
+        else:
+            if daily_address.casefold() not in {value.casefold() for value in (address, *cc)}:
+                cc.append(daily_address)
     # Preserve the delivery audit key used by earlier versions.
     details = {
         "producer": REPORT_TYPE_KEY, "export_mode": "delta", "cutoff_hour_utc": hour.isoformat(),
@@ -276,7 +290,7 @@ def _send_pending_email(
     _record(action=EMAIL_ATTEMPT, operator_id=operator_id, upload_id=upload_id, details=details)
     try:
         send_email_html(
-            [address], f"Ultra Gym | Pases, recorridos y ventas | {local_cut}", body,
+            [address], f"Ultra Gym | Pases, recorridos y ventas | {local_cut:%d/%m/%Y %H:%M}", body,
             cc_list=cc, attachments=attachments, message_id=message_id,
         )
     except EmailDeliveryUncertain as exc:
@@ -305,7 +319,9 @@ def _send_pending_email(
     return "sent"
 
 
-def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: str, recipient_cc: str = "") -> str:
+def deliver_hourly_activity(
+    *, now: datetime, email_enabled: bool, recipient: str, recipient_cc: str = "", daily_cc: str = "",
+) -> str:
     """Publish a full export and at most one delta for each hourly Track cut."""
     with _publication_lock() as acquired:
         if not acquired:
@@ -334,6 +350,7 @@ def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: st
             pending = _pending_email()
             if pending is not None:
                 return _send_pending_email(
-                    *pending, operator_id=operator_id, recipient=recipient, recipient_cc=recipient_cc,
+                    *pending, operator_id=operator_id, recipient=recipient,
+                    recipient_cc=recipient_cc, daily_cc=daily_cc,
                 )
         return status

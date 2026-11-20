@@ -1021,6 +1021,7 @@ def _run_iventas_activity_if_due(now: datetime) -> None:
             email_enabled=_env_bool("IVENTAS_ACTIVITY_EMAIL_ENABLED", False),
             recipient=os.getenv("IVENTAS_ACTIVITY_EMAIL_TO", ""),
             recipient_cc=os.getenv("IVENTAS_ACTIVITY_EMAIL_CC", ""),
+            daily_cc=os.getenv("IVENTAS_ACTIVITY_DAILY_CC", ""),
         )
     except Exception as exc:
         db.session.rollback()
