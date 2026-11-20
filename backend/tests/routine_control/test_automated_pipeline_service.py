@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from app.routine_control.pipeline.automated_pipeline_service import (
     run_automated_routine_control_pipeline,
@@ -548,9 +548,74 @@ class AutomatedPipelineServiceTestCase(unittest.TestCase):
 
         self.assertTrue(result.succeeded)
         gasca_class.assert_called_once_with()
-        trainingym_class.assert_called_once_with()
+        self.assertEqual(
+            trainingym_class.call_args_list, [call(), call(power_bi=True)]
+        )
         self.assertEqual(gasca.calls, 1)
-        self.assertEqual(trainingym.calls, 1)        
+        self.assertEqual(trainingym.calls, 2)
+
+    def test_selects_both_reports_or_the_only_available_report(self) -> None:
+        scenarios = (
+            (True, True, "SUCCESS"),
+            (False, True, "SUCCESS"),
+            (True, False, "SUCCESS"),
+            (False, False, "PARTIAL"),
+        )
+        for native_ok, power_bi_ok, expected_status in scenarios:
+            with self.subTest(native=native_ok, power_bi=power_bi_ok):
+                with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+                    "os.environ", self._environment(temp_dir), clear=True
+                ):
+                    root = Path(temp_dir)
+                    gasca = self._success("gasca", "new_members", root / "gasca.xlsx")
+                    native_path = root / "trainingym.csv"
+                    power_bi_path = root / "trainingym.xlsx"
+                    native = (
+                        self._success("trainingym", "workout", native_path)
+                        if native_ok else self._failed("NATIVE_FAILED")
+                    )
+                    power_bi = (
+                        self._success("trainingym", "workout", power_bi_path)
+                        if power_bi_ok else self._failed("POWER_BI_FAILED")
+                    )
+                    calls = []
+
+                    def manual_pipeline(**kwargs):
+                        calls.append(kwargs)
+                        return _ManualResult(succeeded=True)
+
+                    result = run_automated_routine_control_pipeline(
+                        date_from=date(2026, 7, 1),
+                        date_to=date(2026, 7, 23),
+                        observed_at_utc=OBSERVED_AT,
+                        gasca_extractor=_Extractor(gasca),
+                        trainingym_extractor=_Extractor(native),
+                        trainingym_power_bi_extractor=_Extractor(power_bi),
+                        warehouse_publisher=lambda **_: self._warehouse_success(75),
+                        warehouse_structured_ingestor=lambda **_: {},
+                        manual_pipeline=manual_pipeline,
+                    )
+
+                self.assertEqual(result.status, expected_status)
+                self.assertIs(result.trainingym_native, native)
+                self.assertIs(result.trainingym_power_bi, power_bi)
+                if native_ok or power_bi_ok:
+                    self.assertEqual(len(calls), 1)
+                    self.assertEqual(
+                        calls[0]["trainingym_xlsx"],
+                        native_path if native_ok else power_bi_path,
+                    )
+                    self.assertEqual(
+                        calls[0].get("trainingym_supplemental_xlsx"),
+                        power_bi_path if native_ok and power_bi_ok else None,
+                    )
+                    self.assertEqual(
+                        calls[0].get("trainingym_primary_is_power_bi", False),
+                        not native_ok,
+                    )
+                else:
+                    self.assertEqual(calls, [])
+                    self.assertEqual(result.error_code, "NATIVE_FAILED")
 
 
 if __name__ == "__main__":

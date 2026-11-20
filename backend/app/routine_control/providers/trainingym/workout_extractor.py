@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -22,6 +23,7 @@ from app.routine_control.providers.runtime import (
     provider_lock,
 )
 from app.routine_control.providers.trainingym_evidence_normalizer import (
+    TRAININGYM_XLSX_REQUIRED_HEADERS,
     TrainingymNormalizationError,
     load_trainingym_evidence_commands_from_csv,
     load_trainingym_evidence_commands_from_xlsx,
@@ -61,6 +63,8 @@ TRAININGYM_WORKOUT_HEADERS = frozenset(
     }
 )
 _REPORT_PATH = "/reports/bi_routines_weighings"
+_POWER_BI_REPORT_PATH = "/reports/workout"
+_POWER_BI_WORKOUT_FILENAME = "trainingym-workout.xlsx"
 _CENTER_SELECT_SELECTOR = "#drp_brp_filters_center"
 _CENTER_TOGGLE_ALL_SELECTOR = "#drp_brp_filters_center_selectAll"
 _DATE_RANGE_SELECTOR = "#drp_brp_filters_dateRange"
@@ -329,6 +333,8 @@ def _wait_for_stable_path(
 def _navigate_to_workout(
     page,
     config: TrainingymProviderConfig,
+    *,
+    report_path: str = _REPORT_PATH,
 ):
     if not config.workout_url:
         raise TrainingymWorkoutExtractionError(
@@ -364,7 +370,7 @@ def _navigate_to_workout(
 
         if _wait_for_stable_path(
             page,
-            _REPORT_PATH,
+            report_path,
             timeout_ms=_ROUTE_SETTLE_TIMEOUT_MS,
         ):
             return
@@ -1139,11 +1145,6 @@ def _download_native_csv(
     return TRAININGYM_WORKOUT_CSV_FILENAME
 
 
-def _safe_source_filename(value: object) -> str:
-    del value
-    return TRAININGYM_WORKOUT_FILENAME
-
-
 def _download_workout(
     page,
     frame,
@@ -1186,7 +1187,7 @@ def _download_workout(
             "TRAININGYM_WORKOUT_DOWNLOAD_FAILED",
             "La descarga XLSX no produjo un archivo utilizable.",
         )
-    return _safe_source_filename(download.suggested_filename)
+    return _POWER_BI_WORKOUT_FILENAME
 
 
 def _browser_export(
@@ -1217,18 +1218,50 @@ def _browser_export(
         partial_path,
     )
 
+
+def _browser_export_power_bi(
+    page,
+    tracker,
+    config: TrainingymProviderConfig,
+    date_from: date,
+    date_to: date,
+    partial_path: Path,
+) -> str:
+    _authenticate_trainingym(page, tracker, config)
+    tracker.set(BrowserPhase.NAVIGATION)
+    _navigate_to_workout(page, config, report_path=_POWER_BI_REPORT_PATH)
+
+    tracker.set(BrowserPhase.DISCOVERY)
+    frame = _find_report_frame(page)
+    tracker.set(BrowserPhase.EXPORT)
+    _configure_filters(frame, date_from, date_to)
+    tracker.set(BrowserPhase.DOWNLOAD)
+    return _download_workout(page, frame, partial_path)
+
+
 class TrainingymWorkoutExtractor:
     def __init__(
         self,
         *,
-        download_operation: DownloadOperation = _browser_export,
+        power_bi: bool = False,
+        download_operation: DownloadOperation | None = None,
         runtime_factory: Callable[[ProviderRuntimeConfig], BrowserRuntime] = BrowserRuntime,
-        normalizer: Normalizer = load_trainingym_evidence_commands_from_csv,
+        normalizer: Normalizer | None = None,
         store_factory: Callable[[Path], ArtifactStore] = ArtifactStore,
     ) -> None:
-        self._download_operation = download_operation
+        self._power_bi = power_bi
+        self._filename = (
+            _POWER_BI_WORKOUT_FILENAME if power_bi else TRAININGYM_WORKOUT_FILENAME
+        )
+        self._download_operation = download_operation or (
+            _browser_export_power_bi if power_bi else _browser_export
+        )
         self._runtime_factory = runtime_factory
-        self._normalizer = normalizer
+        self._normalizer = normalizer or (
+            load_trainingym_evidence_commands_from_xlsx
+            if power_bi
+            else load_trainingym_evidence_commands_from_csv
+        )
         self._store_factory = store_factory
 
     @staticmethod
@@ -1277,6 +1310,14 @@ class TrainingymWorkoutExtractor:
                 require_center=True,
                 require_workout=True,
             )
+            if self._power_bi:
+                workout_url = urlsplit(provider_config.workout_url or "")
+                provider_config = replace(
+                    provider_config,
+                    workout_url=workout_url._replace(
+                        path=_POWER_BI_REPORT_PATH, query="", fragment=""
+                    ).geturl(),
+                )
             runtime_config = ProviderRuntimeConfig.from_env(headless=headless)
         except ProviderConfigurationError as exc:
             return self._failed(
@@ -1293,7 +1334,7 @@ class TrainingymWorkoutExtractor:
             )
             partial_path, final_path = store.prepare_download(
                 run_directory=run_directory,
-                source_filename=TRAININGYM_WORKOUT_FILENAME,
+                source_filename=self._filename,
             )
         except (ArtifactStoreError, OSError):
             return self._failed(
@@ -1329,20 +1370,28 @@ class TrainingymWorkoutExtractor:
                 except TrainingymNormalizationError as exc:
                     raise TrainingymWorkoutExtractionError(
                         "TRAININGYM_WORKOUT_VALIDATION_FAILED",
-                        "El CSV descargado no cumple el contrato Trainingym.",
+                        "El reporte descargado no cumple el contrato Trainingym.",
                     ) from exc
                 artifact = store.finalize_download(
                     partial_path=partial_path,
                     final_path=final_path,
                     provider_key=TRAININGYM_PROVIDER_KEY,
                     dataset_key=TRAININGYM_WORKOUT_DATASET_KEY,
-                    required_headers=TRAININGYM_WORKOUT_HEADERS,
+                    required_headers=(
+                        TRAININGYM_XLSX_REQUIRED_HEADERS
+                        if self._power_bi
+                        else TRAININGYM_WORKOUT_HEADERS
+                    ),
                     extracted_at_utc=observed_at_utc.astimezone(timezone.utc),
                     business_date_from=date_from,
                     business_date_to=date_to,
-                    source_filename=_safe_source_filename(execution.value),
+                    source_filename=self._filename,
                     diagnostic_metadata={
-                        "export_contract": "tg_native_routines_weighings_csv",
+                        "export_contract": (
+                            "tg_power_bi_workout_xlsx"
+                            if self._power_bi
+                            else "tg_native_routines_weighings_csv"
+                        ),
                     },
                 )
             return ProviderExtractionResult(
@@ -1386,7 +1435,7 @@ class TrainingymWorkoutExtractor:
             return self._failed(
                 started=started,
                 error_code="TRAININGYM_WORKOUT_VALIDATION_FAILED",
-                error_message="El XLSX descargado no es válido.",
+                error_message="El archivo descargado no es válido.",
                 attempts=execution.attempts if execution else 1,
             )
         except Exception:

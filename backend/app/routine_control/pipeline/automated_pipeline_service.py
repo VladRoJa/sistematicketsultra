@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -32,6 +33,9 @@ from app.routine_control.providers.trainingym import TrainingymProviderConfig
 from app.routine_control.providers.trainingym.workout_extractor import (
     TrainingymWorkoutExtractor,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ProviderExtractor(Protocol):
@@ -94,6 +98,8 @@ class AutomatedRoutineControlPipelineResult:
     elapsed_seconds: float
     error_code: str | None = None
     error_message: str | None = None
+    trainingym_native: ProviderExtractionResult | None = None
+    trainingym_power_bi: ProviderExtractionResult | None = None
 
     def to_dict(self) -> dict[str, object]:
         manual = None
@@ -115,6 +121,8 @@ class AutomatedRoutineControlPipelineResult:
             "status": self.status,
             "succeeded": self.succeeded,
             "trainingym": _extraction_summary(self.trainingym),
+            "trainingym_native": _extraction_summary(self.trainingym_native),
+            "trainingym_power_bi": _extraction_summary(self.trainingym_power_bi),
         }
 
 
@@ -125,6 +133,8 @@ def _result(
     gasca: ProviderExtractionResult | None = None,
     warehouse_upload: RoutineControlWarehousePublishResult | None = None,
     trainingym: ProviderExtractionResult | None = None,
+    trainingym_native: ProviderExtractionResult | None = None,
+    trainingym_power_bi: ProviderExtractionResult | None = None,
     manual_pipeline: Any | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
@@ -135,6 +145,8 @@ def _result(
         gasca=gasca,
         warehouse_upload=warehouse_upload,
         trainingym=trainingym,
+        trainingym_native=trainingym_native,
+        trainingym_power_bi=trainingym_power_bi,
         manual_pipeline=manual_pipeline,
         elapsed_seconds=round(time.monotonic() - started, 3),
         error_code=error_code,
@@ -152,6 +164,7 @@ def run_automated_routine_control_pipeline(
     headless: bool | None = None,
     gasca_extractor: ProviderExtractor | None = None,
     trainingym_extractor: ProviderExtractor | None = None,
+    trainingym_power_bi_extractor: ProviderExtractor | None = None,
     warehouse_publisher: Callable[
         ..., RoutineControlWarehousePublishResult
     ] = publish_gasca_new_members_artifact_to_warehouse,
@@ -197,6 +210,9 @@ def run_automated_routine_control_pipeline(
         trainingym_extractor
         or TrainingymWorkoutExtractor()
     )
+    power_bi_provider = trainingym_power_bi_extractor
+    if power_bi_provider is None and trainingym_extractor is None:
+        power_bi_provider = TrainingymWorkoutExtractor(power_bi=True)
     try:
         with lock_factory(
             runtime_config.artifact_root,
@@ -254,40 +270,66 @@ def run_automated_routine_control_pipeline(
                     error_message=type(exc).__name__,
                 )
 
-            trainingym_result = trainingym_provider.extract(
+            native_result = trainingym_provider.extract(
                 date_from=date_from,
                 date_to=date_to,
                 observed_at_utc=observed_at_utc,
                 headless=headless,
             )
-            if (
-                not trainingym_result.succeeded
-                or trainingym_result.artifact is None
-            ):
+            native_artifact = native_result.artifact if native_result.succeeded else None
+            power_bi_result = None
+            power_bi_artifact = None
+            if power_bi_provider is not None:
+                power_bi_result = power_bi_provider.extract(
+                    date_from=date_from,
+                    date_to=date_to,
+                    observed_at_utc=observed_at_utc,
+                    headless=headless,
+                )
+                if power_bi_result.succeeded:
+                    power_bi_artifact = power_bi_result.artifact
+                LOGGER.log(
+                    logging.INFO if native_artifact and power_bi_artifact else logging.WARNING,
+                    "Trainingym report exports date_from=%s date_to=%s "
+                    "native=%s power_bi=%s",
+                    date_from,
+                    date_to,
+                    native_result.error_code or ("OK" if native_artifact else "NO_ARTIFACT"),
+                    power_bi_result.error_code or ("OK" if power_bi_artifact else "NO_ARTIFACT"),
+                )
+
+            primary_artifact = native_artifact or power_bi_artifact
+            if primary_artifact is None:
                 return _result(
                     started=started,
                     status="PARTIAL",
                     gasca=gasca_result,
                     warehouse_upload=warehouse_upload,
-                    trainingym=trainingym_result,
-                    error_code=(
-                        trainingym_result.error_code
-                        or "TRAININGYM_EXTRACTION_FAILED"
-                    ),
+                    trainingym=native_result,
+                    trainingym_native=native_result,
+                    trainingym_power_bi=power_bi_result,
+                    error_code=native_result.error_code or "TRAININGYM_EXTRACTION_FAILED",
                     error_message=(
                         "Gasca se conservó, pero Trainingym no produjo un artifact válido."
                     ),
                 )
 
+            trainingym_result = native_result if native_artifact else power_bi_result
+            supplemental = {}
+            if native_artifact is not None and power_bi_artifact is not None:
+                supplemental["trainingym_supplemental_xlsx"] = power_bi_artifact.local_path
+            elif native_artifact is None:
+                supplemental["trainingym_primary_is_power_bi"] = True
             manual_result = manual_pipeline(
                 gasca_xlsx=gasca_result.artifact.local_path,
-                trainingym_xlsx=trainingym_result.artifact.local_path,
+                trainingym_xlsx=primary_artifact.local_path,
                 observed_at_utc=observed_at_utc,
                 date_from=date_from,
                 date_to=date_to,
                 requested_by="automated_provider_cli",
                 generation_mode=generation_mode,
                 trigger_source=trigger_source,
+                **supplemental,
             )
             if not bool(getattr(manual_result, "succeeded", False)):
                 return _result(
@@ -296,6 +338,8 @@ def run_automated_routine_control_pipeline(
                     gasca=gasca_result,
                     warehouse_upload=warehouse_upload,
                     trainingym=trainingym_result,
+                    trainingym_native=native_result,
+                    trainingym_power_bi=power_bi_result,
                     manual_pipeline=manual_result,
                     error_code="MANUAL_PIPELINE_FAILED",
                     error_message="El pipeline manual reportó un fallo.",
@@ -306,6 +350,8 @@ def run_automated_routine_control_pipeline(
                 gasca=gasca_result,
                 warehouse_upload=warehouse_upload,
                 trainingym=trainingym_result,
+                trainingym_native=native_result,
+                trainingym_power_bi=power_bi_result,
                 manual_pipeline=manual_result,
             )
     except Exception as exc:

@@ -604,6 +604,36 @@ class TrainingymWorkoutExtractorTestCase(unittest.TestCase):
         )
         return TRAININGYM_WORKOUT_FILENAME
 
+    def test_power_bi_validates_and_saves_the_historical_xlsx(self) -> None:
+        urls = []
+        fixture = Path(__file__).parent / "fixtures" / "trainingym_workout.xlsx"
+
+        def download(_page, _tracker, config, _date_from, _date_to, partial):
+            urls.append(config.workout_url)
+            partial.write_bytes(fixture.read_bytes())
+            return "download.xlsx"
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
+            "os.environ", self._environment(temp_dir), clear=True
+        ):
+            result = TrainingymWorkoutExtractor(
+                power_bi=True,
+                download_operation=download,
+                runtime_factory=_LocalRuntime,
+            ).extract(
+                date_from=DATE_FROM,
+                date_to=DATE_TO,
+                observed_at_utc=OBSERVED_AT,
+            )
+            self.assertTrue(result.succeeded, result.error_code)
+            self.assertEqual(result.artifact.local_path.suffix, ".xlsx")
+            self.assertEqual(result.artifact.source_filename, "trainingym-workout.xlsx")
+            self.assertEqual(
+                result.artifact.diagnostic_metadata["export_contract"],
+                "tg_power_bi_workout_xlsx",
+            )
+        self.assertEqual(urls, ["https://app.example.invalid/reports/workout"])
+
     def _extract(self, temp_dir: str, **kwargs):
         extractor_kwargs = {
             "download_operation": kwargs.get(
