@@ -39,7 +39,13 @@ EMPTY = "IVENTAS_DELTA_EMPTY"
 EMAIL_ATTEMPT = "IVENTAS_EMAIL_ATTEMPT"
 EMAIL_FAILED = "IVENTAS_EMAIL_FAILED"
 EMAIL_SENT = "IVENTAS_EMAIL_SENT"
+EMAIL_UNCERTAIN = "IVENTAS_EMAIL_UNCERTAIN"
+ACTIVITY_FAILED = "IVENTAS_ACTIVITY_FAILED"
 TIJUANA = ZoneInfo("America/Tijuana")
+
+
+class IventasActivityEmailFailed(RuntimeError):
+    """SMTP failure already persisted in Warehouse."""
 
 
 def _hourly_venta_total(now: datetime) -> tuple[int, int] | None:
@@ -91,6 +97,12 @@ def _record(*, action: str, operator_id: int, upload_id: int | None, details: di
         action=action, performed_by_user_id=operator_id, upload_id=upload_id, details=details,
     )
     db.session.commit()
+
+
+def record_activity_failure() -> None:
+    _record(action=ACTIVITY_FAILED, operator_id=_operator_id(), upload_id=None, details={
+        "producer": REPORT_TYPE_KEY, "export_mode": "delta",
+    })
 
 
 def _delta_audits():
@@ -176,7 +188,7 @@ def _pending_email() -> Row[tuple[WarehouseAuditLogORM, int]] | None:
         .filter(
             delivery.details["producer"].as_string() == REPORT_TYPE_KEY,
             delivery.details["export_mode"].as_string() == "delta",
-            delivery.action.in_((EMAIL_ATTEMPT, EMAIL_FAILED, EMAIL_SENT)),
+            delivery.action.in_((EMAIL_ATTEMPT, EMAIL_FAILED, EMAIL_SENT, EMAIL_UNCERTAIN)),
         )
         .group_by(delivery_hour).subquery()
     )
@@ -272,11 +284,22 @@ def _send_pending_email(
             "iVentas SMTP sin confirmación completa: upload_id=%s message_id=%s motivo=%s",
             upload_id, message_id, exc,
         )
+        try:
+            _record(action=EMAIL_UNCERTAIN, operator_id=operator_id, upload_id=upload_id, details={
+                "producer": REPORT_TYPE_KEY, "export_mode": "delta", "cutoff_hour_utc": hour.isoformat(),
+            })
+        except Exception as audit_exc:
+            db.session.rollback()
+            current_app.logger.warning(
+                "No se pudo auditar la confirmación de iVentas. error_type=%s", type(audit_exc).__name__,
+            )
         return "delivery_uncertain"
     except Exception as exc:
         _record(action=EMAIL_FAILED, operator_id=operator_id, upload_id=upload_id,
                 details={**details, "error_type": type(exc).__name__})
-        raise RuntimeError("El envío del reporte iVentas falló. Se conservará el upload para reintento.") from None
+        raise IventasActivityEmailFailed(
+            "El envío del reporte iVentas falló. Se conservará el upload para reintento."
+        ) from None
 
     _record(action=EMAIL_SENT, operator_id=operator_id, upload_id=upload_id, details=details)
     return "sent"

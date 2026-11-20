@@ -59,6 +59,7 @@ export class AutomationErrorDetailDialogComponent implements OnInit, OnDestroy {
   diagnosticLabel(item: AutomationDiagnostic): string {
     switch (item.diagnostic_state) {
       case 'STRUCTURED_COUNTERS_ONLY': return 'Contadores persistidos de esta corrida';
+      case 'STRUCTURED_EVENT': return 'Evento registrado en Warehouse';
       case 'LOG_NOT_AVAILABLE': return 'Sin evidencia técnica atribuible';
       case 'NOT_APPLICABLE': return 'Sin resultado fallido';
       default: return 'No verificado';

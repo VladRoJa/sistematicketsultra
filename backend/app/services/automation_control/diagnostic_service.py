@@ -13,20 +13,24 @@ from app.services.automation_control.cobranza_multibranch_observation_service im
     JOB_KEY as MULTIBRANCH_JOB_KEY,
     multibranch_last_error, multibranch_run_diagnostic,
 )
+from app.services.automation_control.job_catalog import IVENTAS_ACTIVITY_JOB_KEY
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM, MarketingIventasBranchFailureORM
 from app.models.routine_control import RoutineControlPipelineRunORM
 from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 from app.services.automation_control.job_read_service import (
-    _RUN_SOURCES, _date_iso, _filter_reports_completion,
-    _filter_routine_scheduler, _utc_iso,
+    IVENTAS_ACTIVITY_ERRORS, _RUN_SOURCES, _date_iso, _filter_iventas_activity,
+    _filter_routine_scheduler, _serialize_iventas_activity, _utc_iso,
 )
+from app.warehouse.jobs.iventas_activity_delivery_job import ACTIVITY_FAILED, EMAIL_FAILED, EMAIL_UNCERTAIN
 
 FAILED_STATUSES = ("FAILED", "ERROR", "TIMED_OUT", "PARTIAL")
 
 
 def _attributed_query(job_key: str):
+    if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+        return WarehouseAuditLogORM, _filter_iventas_activity(WarehouseAuditLogORM.query)
     source = _RUN_SOURCES.get(job_key)
     if source is None:
         return None, None
@@ -182,6 +186,29 @@ def _iventas_failure_details(run_id: int) -> dict:
 
 
 def _diagnostic_with_structured_evidence(job_key: str, row: Any) -> dict:
+    if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+        run = _serialize_iventas_activity(row)
+        messages = {
+            ACTIVITY_FAILED: "Falló la generación del reporte o la preparación del correo. Revisa reports-scheduler.",
+            EMAIL_FAILED: "Falló el intento de envío SMTP. La automatización puede volver a intentarlo.",
+            EMAIL_UNCERTAIN: "El servidor SMTP no confirmó el envío completo. Revisa la entrega antes de reenviar.",
+        }
+        failed = row.action in IVENTAS_ACTIVITY_ERRORS
+        return {
+            "job_key": job_key,
+            "run_id": run["run_id"],
+            "business_date": run["business_date"],
+            "started_at_utc": run["started_at_utc"],
+            "finished_at_utc": run["finished_at_utc"],
+            "status": run["status_raw"],
+            "diagnostic_state": "STRUCTURED_EVENT" if failed else "NOT_APPLICABLE",
+            "error_code": row.action if failed else None,
+            "sanitized_message": messages.get(row.action, "El evento registra una finalización."),
+            "log_state": "LOG_NOT_AVAILABLE",
+            "log_lines": [],
+            "truncated": False,
+            "source": "WAREHOUSE_ACTIVITY_AUDIT",
+        }
     result = _safe_response(job_key, row)
     if job_key == "marketing.iventas_sync" and isinstance(
         row, MarketingIventasSyncRunORM,
@@ -222,19 +249,18 @@ def last_error_diagnostic(job_key: str, *, business_date: date | None = None) ->
             "log_lines": [], "truncated": False,
         }
     if business_date is not None:
-        if model is GascaSmsRequestORM:
-            # Solicitudes no tienen business_date. Limitar por día local de
-            # creación, sin atribuirles falsamente un corte de negocio.
+        if model in (GascaSmsRequestORM, WarehouseAuditLogORM):
+            # Limitar por día local de observación de solicitudes y eventos.
             tz = ZoneInfo("America/Tijuana")
             begin = datetime.combine(business_date, time.min, tz).astimezone(timezone.utc)
             end = datetime.combine(business_date + timedelta(days=1), time.min, tz).astimezone(timezone.utc)
             query = query.filter(model.created_at >= begin, model.created_at < end)
         else:
             query = query.filter(_date_field(model) == business_date)
-    status_upper = model.status
-    query = query.filter(status_upper.in_(
-        ("FAILED", "ERROR", "TIMED_OUT", "PARTIAL", "failed", "error", "timed_out", "partial")
-    ))
+    if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+        query = query.filter(model.action.in_(IVENTAS_ACTIVITY_ERRORS))
+    else:
+        query = query.filter(model.status.in_(FAILED_STATUSES + tuple(s.lower() for s in FAILED_STATUSES)))
     row = query.order_by(_time_field(model).desc(), model.id.desc()).first()
     if row is None:
         return {
