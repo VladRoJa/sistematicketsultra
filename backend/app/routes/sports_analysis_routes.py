@@ -66,6 +66,7 @@ SERVER_TIMING_ORDER = (
     "hist_q6",
     "hist_q7",
     "hist_q8",
+    "visitas_mes",
     "cohorte",
     "serializacion",
     "metricas",

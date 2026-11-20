@@ -86,6 +86,12 @@ BASE_HEALTH_ACTIVATION_STATUSES = {
     BASE_HEALTH_STATUS_ACTIVATION_RECENT_NO_VISIT,
 }
 
+MONTHLY_VISIT_BUCKETS = {
+    "MONTHLY_VISITS_0_2": "0 a 2 visitas",
+    "MONTHLY_VISITS_3_9": "3 a 9 visitas",
+    "MONTHLY_VISITS_10_PLUS": "10 o más visitas",
+}
+
 BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_WITH_VISIT,
     BASE_HEALTH_STATUS_WITHOUT_VISIT,
@@ -103,9 +109,14 @@ BASE_HEALTH_MEMBER_STATUSES = {
     BASE_HEALTH_STATUS_FREQUENCY_GTE_3,
     BASE_HEALTH_STATUS_OTHER_ACTIVE_ACCESS,
     *BASE_HEALTH_ACTIVATION_STATUSES,
+    *MONTHLY_VISIT_BUCKETS,
 }
 
 BASE_HEALTH_MEMBER_TITLES = {
+    **{
+        status: f"Socios con {label} en el mes"
+        for status, label in MONTHLY_VISIT_BUCKETS.items()
+    },
     BASE_HEALTH_STATUS_WITH_VISIT: (
         "Socios con visita"
     ),
@@ -227,6 +238,20 @@ def attendance_base_health(
         timings=timings,
     )
 
+    month_start = date_to.replace(day=1)
+    monthly_state = state
+    if date_from != month_start:
+        monthly_started = perf_counter()
+        monthly_state, _ = _build_state(
+            scope,
+            date_from=month_start,
+            date_to=date_to,
+            branch_id=branch_id,
+            region_key=region_key,
+            include_historical_visits=False,
+        )
+        _record_timing(timings, "visitas_mes", monthly_started)
+
     metrics_started = perf_counter()
     eligible_ids = set(state.eligible_members)
     with_visit_ids = (
@@ -290,6 +315,13 @@ def attendance_base_health(
     other_active_accesses = (
         _other_active_accesses_metrics(state)
     )
+    monthly_visits = None
+    if monthly_state.snapshot_dates:
+        monthly_visits = {
+            "date_from": month_start.isoformat(),
+            "date_to": date_to.isoformat(),
+            "distribution": _monthly_visit_distribution(monthly_state, date_to),
+        }
     _record_timing(
         timings,
         "metricas",
@@ -349,6 +381,7 @@ def attendance_base_health(
         "frequency_distribution": (
             frequency["distribution"]
         ),
+        "monthly_visits": monthly_visits,
         "recency_distribution": (
             recency["distribution"]
         ),
@@ -436,6 +469,10 @@ def attendance_base_health_members(
         ),
         MAX_MEMBER_PAGE_SIZE,
     )
+
+    if normalized_status in MONTHLY_VISIT_BUCKETS:
+        _validate_date_range(date_from, date_to)
+        date_from = date_to.replace(day=1)
 
     state, _ = _build_state(
         scope,
@@ -549,6 +586,10 @@ def attendance_base_health_members_export(
         raise SportsAnalysisValidationError(
             "tariff sólo aplica a otros accesos activos."
         )
+
+    if normalized_status in MONTHLY_VISIT_BUCKETS:
+        _validate_date_range(date_from, date_to)
+        date_from = date_to.replace(day=1)
 
     state, _ = _build_state(
         scope,
@@ -680,6 +721,12 @@ def _member_matches_detail_status(
     date_from: date,
     date_to: date,
 ) -> bool:
+    if status in MONTHLY_VISIT_BUCKETS:
+        return (
+            _member_is_active_on(member, date_to)
+            and _monthly_visit_status(state.member_visit_stats.get(member.id_socio)) == status
+        )
+
     has_visit = (
         member.id_socio
         in state.visited_member_ids
@@ -843,6 +890,7 @@ def _build_state(
     branch_id: int | None,
     region_key: str | None,
     timings: dict[str, float] | None = None,
+    include_historical_visits: bool = True,
 ) -> tuple[_BaseHealthState, tuple[int, ...]]:
     scope_started = perf_counter()
     _validate_date_range(
@@ -932,23 +980,20 @@ def _build_state(
         timings["historico_visitas"] = 0.0
 
     historical_started = perf_counter()
-    historical_last_visits = (
-        _load_historical_last_visits(
-            eligible_members,
-            member_visit_stats,
-            date_before=date_from,
-            timings=timings,
+    if include_historical_visits:
+        last_known_visit_by_member.update(
+            _load_historical_last_visits(
+                eligible_members,
+                member_visit_stats,
+                date_before=date_from,
+                timings=timings,
+            )
         )
-    )
     _record_timing(
         timings,
         "historico",
         historical_started,
     )
-    last_known_visit_by_member.update(
-        historical_last_visits
-    )
-
     return (
         _BaseHealthState(
             eligible_members=eligible_members,
@@ -1982,6 +2027,37 @@ def _serialize_member_export(
         **row,
         "phone": member.phone,
     }
+
+
+def _monthly_visit_status(visit_stats: _MemberVisitStats | None) -> str:
+    visit_count = visit_stats.visit_count if visit_stats is not None else 0
+    if visit_count <= 2:
+        return "MONTHLY_VISITS_0_2"
+    if visit_count <= 9:
+        return "MONTHLY_VISITS_3_9"
+    return "MONTHLY_VISITS_10_PLUS"
+
+
+def _monthly_visit_distribution(
+    state: _BaseHealthState,
+    date_to: date,
+) -> list[dict[str, Any]]:
+    counts = dict.fromkeys(MONTHLY_VISIT_BUCKETS, 0)
+    for member in state.eligible_members.values():
+        if _member_is_active_on(member, date_to):
+            status = _monthly_visit_status(state.member_visit_stats.get(member.id_socio))
+            counts[status] += 1
+
+    total = sum(counts.values())
+    return [
+        {
+            "key": status,
+            "label": label,
+            "count": counts[status],
+            "pct": round(counts[status] * 100 / total, 1) if total else 0.0,
+        }
+        for status, label in MONTHLY_VISIT_BUCKETS.items()
+    ]
 
 
 def _frequency_metrics(
