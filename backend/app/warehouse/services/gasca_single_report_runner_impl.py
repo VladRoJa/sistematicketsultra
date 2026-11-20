@@ -660,6 +660,7 @@ def _run_socios_activos_report(
     page: Any,
     runtime: GascaRuntimeConfig,
     target_business_date: date | None = None,
+    output_path: Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     cutoff_date = _resolve_socios_activos_cutoff_date(
         runtime=runtime,
@@ -688,7 +689,7 @@ def _run_socios_activos_report(
             timeout_seconds=120,
         )
 
-        artifact_path = _resolve_contractual_output_path(
+        artifact_path = output_path or _resolve_contractual_output_path(
             report_type_key=SOCIOS_ACTIVOS_REPORT_TYPE_KEY
         )
         _descargar_excel_desde_tabla(
@@ -726,6 +727,18 @@ def _run_socios_activos_report(
         "raw_file_preserved": True,
     }
     return artifact_path, metadata
+
+
+def capture_socios_activos_xlsx(*, output_path: Path, business_date: date) -> None:
+    """Capture the current roster in a caller-owned workspace."""
+    runtime = _resolve_runtime_config()
+    with _authenticated_page(runtime) as page:
+        _run_socios_activos_report(
+            page=page,
+            runtime=runtime,
+            target_business_date=business_date,
+            output_path=output_path,
+        )
 
 
 def _resolve_contractual_output_path(*, report_type_key: str) -> Path:

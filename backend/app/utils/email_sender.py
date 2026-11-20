@@ -2,7 +2,19 @@
 
 import os
 import smtplib
+from dataclasses import dataclass
 from email.message import EmailMessage
+
+
+@dataclass(frozen=True, slots=True)
+class EmailAttachment:
+    filename: str
+    content: bytes
+    content_type: str
+
+
+class EmailDeliveryUncertain(RuntimeError):
+    """The connection failed during submission, without a definitive SMTP reply."""
 
 
 def _is_debug_enabled() -> bool:
@@ -52,7 +64,7 @@ def _validar_config(host, user, pw, from_email, security):
         )
 
 
-def send_email_html(to_list, subject, html):
+def send_email_html(to_list, subject, html, *, attachments=(), message_id=None):
     host, port, user, pw, from_email, display_from, reply_to, security = _get_env()
     _validar_config(host, user, pw, from_email, security)
 
@@ -64,11 +76,19 @@ def send_email_html(to_list, subject, html):
     msg["From"] = f"{display_from} <{from_email}>"
     msg["To"] = ", ".join(to_list)
     msg["Reply-To"] = reply_to
+    if message_id:
+        msg["Message-ID"] = message_id
 
     msg.set_content("Este correo requiere un cliente compatible con HTML.")
     msg.add_alternative(html, subtype="html")
+    for attachment in attachments:
+        maintype, subtype = attachment.content_type.split("/", 1)
+        msg.add_attachment(
+            attachment.content, maintype=maintype, subtype=subtype,
+            filename=attachment.filename,
+        )
 
-    smtp_debug = _is_debug_enabled()
+    smtp_debug = _is_debug_enabled() and not attachments
 
     if smtp_debug:
         print(
@@ -77,29 +97,31 @@ def send_email_html(to_list, subject, html):
             f"from={from_email} security={security} to={to_list}"
         )
 
-    # Puerto 465 / SSL directo
-    if security == "ssl":
-        with smtplib.SMTP_SSL(host, port, timeout=20) as s:
+    transport = smtplib.SMTP_SSL if security == "ssl" else smtplib.SMTP
+    accepted = False
+    submission_uncertain = False
+    try:
+        with transport(host, port, timeout=20) as s:
             if smtp_debug:
                 s.set_debuglevel(1)
-
             s.ehlo()
+            if security == "starttls":
+                s.starttls()
+                s.ehlo()
             s.login(user, pw)
-            s.send_message(msg)
-
-        return
-
-    # Puerto 587 / STARTTLS o sin cifrado
-    with smtplib.SMTP(host, port, timeout=20) as s:
-        if smtp_debug:
-            s.set_debuglevel(1)
-
-        s.ehlo()
-
-        if security == "starttls":
-            s.starttls()
-            s.ehlo()
-
-        s.login(user, pw)
-        s.send_message(msg)
-        
+            try:
+                s.send_message(msg)
+            except (smtplib.SMTPRecipientsRefused, smtplib.SMTPResponseException):
+                raise
+            except OSError as exc:
+                if not attachments:
+                    raise
+                submission_uncertain = True
+                raise EmailDeliveryUncertain("El servidor SMTP no confirmó la entrega.") from exc
+            accepted = True
+    except OSError as exc:
+        if submission_uncertain:
+            raise EmailDeliveryUncertain("El servidor SMTP no confirmó la entrega.") from exc
+        # A failed QUIT after the server accepted DATA cannot revoke that acceptance.
+        if not accepted or not attachments:
+            raise
