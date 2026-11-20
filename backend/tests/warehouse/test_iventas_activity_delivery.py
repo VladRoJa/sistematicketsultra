@@ -108,10 +108,10 @@ def warehouse(tmp_path, monkeypatch):
         yield tmp_path, calls, movements
 
 
-def _run(*, now=NOW, email=True):
+def _run(*, now=NOW, email=True, daily_cc=""):
     return job.deliver_hourly_activity(
         now=now, email_enabled=email, recipient="import@example.test",
-        recipient_cc="contact@example.test, support@example.test",
+        recipient_cc="contact@example.test, support@example.test", daily_cc=daily_cc,
     )
 
 
@@ -238,6 +238,44 @@ def test_invalid_cc_keeps_the_cut_pending_for_a_corrected_config(warehouse, monk
     assert _run() == "sent"
 
 
+@pytest.mark.parametrize("delivery_delay, expected_daily_copy", [
+    (timedelta(hours=1), True),
+    (timedelta(days=1), False),
+])
+def test_daily_copy_uses_the_8_am_cut_and_its_local_date(
+    warehouse, monkeypatch, delivery_delay, expected_daily_copy,
+):
+    morning_cut = NOW - timedelta(hours=2)
+    later = morning_cut + delivery_delay
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return later.astimezone(tz)
+
+    messages = []
+    monkeypatch.setattr(job, "datetime", Clock)
+    monkeypatch.setattr(job, "send_email_html", lambda to, subject, html, **info: messages.append(
+        (subject, info["cc_list"]),
+    ))
+    _next_cut(morning_cut)
+    assert _run(now=morning_cut, email=False) == "baselined"
+
+    if expected_daily_copy:
+        _next_cut(later)
+    assert _run(now=later, daily_cc="monitor@example.test") == "sent"
+
+    regular_cc = ["contact@example.test", "support@example.test"]
+    morning_cc = [*regular_cc, "monitor@example.test"] if expected_daily_copy else regular_cc
+    assert messages == [("Ultra Gym | Pases, recorridos y ventas | 19/11/2026 08:00", morning_cc)]
+
+    if expected_daily_copy:
+        assert _run(now=later, daily_cc="monitor@example.test") == "sent"
+        assert messages[1] == ("Ultra Gym | Pases, recorridos y ventas | 19/11/2026 09:00", regular_cc)
+        assert _run(now=later, daily_cc="monitor@example.test") == "already_processed"
+        assert len(messages) == 2
+
+
 def test_each_hour_rebuilds_full_and_delta_only_adds_new_movements(warehouse, monkeypatch):
     tmp_path, generations, movements = warehouse
     monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: pytest.fail("email is disabled"))
@@ -348,6 +386,7 @@ def test_reports_scheduler_calls_the_delivery_job_only_when_enabled(monkeypatch)
     monkeypatch.delenv("IVENTAS_ACTIVITY_EMAIL_ENABLED", raising=False)
     monkeypatch.setenv("IVENTAS_ACTIVITY_EMAIL_TO", "import@example.test")
     monkeypatch.setenv("IVENTAS_ACTIVITY_EMAIL_CC", "contact@example.test,support@example.test")
+    monkeypatch.setenv("IVENTAS_ACTIVITY_DAILY_CC", "monitor@example.test")
     scheduler._run_iventas_activity_if_due(NOW)
     assert calls == []
     monkeypatch.setenv("IVENTAS_ACTIVITY_EXPORT_ENABLED", "true")
@@ -355,6 +394,7 @@ def test_reports_scheduler_calls_the_delivery_job_only_when_enabled(monkeypatch)
     assert calls == [{
         "now": NOW, "email_enabled": False, "recipient": "import@example.test",
         "recipient_cc": "contact@example.test,support@example.test",
+        "daily_cc": "monitor@example.test",
     }]
     key = IVENTAS_ACTIVITY_JOB_KEY
     reported = validate_schedule_snapshot("reports-scheduler", scheduler._resolved_schedule_snapshot())
