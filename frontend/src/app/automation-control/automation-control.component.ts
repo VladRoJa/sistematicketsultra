@@ -377,6 +377,9 @@ export class AutomationControlComponent implements OnInit,OnDestroy {
       if(this.latestRunState(job)==='running')return 'En proceso · '+accepted+'/'+total;
       return 'Revisar · '+accepted+'/'+total;
     }
+    if (job.key === 'reports.iventas_activity' && run.status_raw === 'COMPLETED') {
+      return run.evidence_type === 'IVENTAS_EMAIL_SENT' ? 'Aceptado por SMTP' : 'Reporte generado';
+    }
     const labels:Record<ObservationState,string>={
       completed:'OK',replaced:'Sustituida',running:'Ejecutando',
       partial:'Parcial',error:'FALLÓ',unknown:'No verificable',

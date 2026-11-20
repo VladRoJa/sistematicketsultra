@@ -35,6 +35,7 @@ def _actor(*, username="ADMICORP", role="ADMINISTRADOR"):
     "/api/automation-control/jobs/marketing.iventas_sync",
     "/api/automation-control/jobs/marketing.iventas_sync/runs",
     "/api/automation-control/jobs/reports.cobranza_iventas_multibranch/runs",
+    "/api/automation-control/jobs/reports.iventas_activity/last-error",
 ])
 def test_all_endpoints_require_jwt(api, path):
     client, _ = api
@@ -70,7 +71,7 @@ def test_explicit_whitelist_can_read(api, username, role):
         response = client.get("/api/automation-control/summary", headers=headers)
     assert response.status_code == 200
     payload = response.get_json()
-    assert payload["job_count"] == 20
+    assert payload["job_count"] == 21
     assert payload["dataset_count"] == 2
     assert payload["worker_health"] == "UNKNOWN"
     assert payload["manual_actions_enabled"] is False
@@ -109,6 +110,17 @@ def test_jobs_include_provenance_without_inventing_health(api):
     assert all(item["worker_health"] == "UNKNOWN" for item in jobs)
     assert all(item["data_freshness"] == "UNKNOWN" for item in jobs)
     assert all(not item["manual_run_supported"] for item in jobs)
+
+
+def test_reports_catalog_exposes_hourly_iventas_as_instrumented(api):
+    client, headers = api
+    with patch("app.routes.automation_control_routes.UserORM.get_by_id", return_value=_actor()):
+        res = client.get("/api/automation-control/jobs?domain=reports", headers=headers)
+    assert res.status_code == 200
+    job = next(item for item in res.get_json()["jobs"] if item["key"] == "reports.iventas_activity")
+    assert job["worker_key"] == "reports-scheduler"
+    assert job["run_history_coverage"] == "DOMAIN_RUNS"
+    assert job["manual_run_supported"] is False
 
 
 def test_dataset_api_is_explicit_about_missing_sla_and_cutoffs(api):

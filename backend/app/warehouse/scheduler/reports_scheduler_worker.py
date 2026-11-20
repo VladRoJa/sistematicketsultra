@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from app import create_app
 from app.extensions import db
 from app.services.automation_control.effective_schedule_service import schedule_spec
+from app.services.automation_control.job_catalog import IVENTAS_ACTIVITY_JOB_KEY
 from app.services.automation_control.worker_health_service import emit_worker_heartbeat
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.warehouse import (
@@ -38,7 +39,9 @@ from app.warehouse.jobs.reactivation_outcomes_daily_job import (
 from app.warehouse.jobs.commercial_daily_reports_job import (
     run_job as run_commercial_daily_reports_job,
 )
-from app.warehouse.jobs.iventas_activity_delivery_job import deliver_hourly_activity
+from app.warehouse.jobs.iventas_activity_delivery_job import (
+    IventasActivityEmailFailed, deliver_hourly_activity, record_activity_failure,
+)
 from app.warehouse.services.scheduler_priority_service import (
     get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
@@ -1019,10 +1022,16 @@ def _run_iventas_activity_if_due(now: datetime) -> None:
             recipient=os.getenv("IVENTAS_ACTIVITY_EMAIL_TO", ""),
             recipient_cc=os.getenv("IVENTAS_ACTIVITY_EMAIL_CC", ""),
         )
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
         _IVENTAS_NEXT_RETRY_AT = now + timedelta(minutes=5)
         logger.exception("Falló la actividad horaria de iVentas. Reintento en cinco minutos.")
+        if not isinstance(exc, IventasActivityEmailFailed):
+            try:
+                record_activity_failure()
+            except Exception as audit_exc:
+                db.session.rollback()
+                logger.warning("No se pudo auditar el fallo de iVentas. error_type=%s", type(audit_exc).__name__)
         return
 
     _IVENTAS_NEXT_RETRY_AT = None
@@ -1048,6 +1057,13 @@ def _resolved_schedule_snapshot() -> dict:
             ), conditional=True,
         )
     return {
+        IVENTAS_ACTIVITY_JOB_KEY: schedule_spec(
+            enabled=(
+                _env_bool("IVENTAS_ACTIVITY_EXPORT_ENABLED", False)
+                and _env_bool("IVENTAS_ACTIVITY_EMAIL_ENABLED", False)
+            ),
+            timezone_name=tz, kind="CONDITIONAL", conditional=True,
+        ),
         "reports.attendance_daily_capture": daily(
             "ATTENDANCE_DAILY_CAPTURE", "", 6, 20, "ATTENDANCE_DAILY_CAPTURE_ENABLED",
         ),

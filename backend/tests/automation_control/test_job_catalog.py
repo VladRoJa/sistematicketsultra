@@ -10,7 +10,7 @@ def test_catalog_is_consistent_and_unique():
     catalog.validate_catalog()
     jobs = catalog.get_job_catalog()
     datasets = catalog.get_dataset_catalog()
-    assert len(jobs) == 20
+    assert len(jobs) == 21
     assert len(datasets) == 2
     assert len({job.key for job in jobs}) == len(jobs)
 
@@ -98,6 +98,8 @@ def test_track_cutoff_is_explicitly_unverified():
 
 def test_conditional_jobs_are_not_presented_as_fixed_daily_runs():
     by_key = {job.key: job for job in catalog.get_job_catalog()}
+    assert by_key[catalog.IVENTAS_ACTIVITY_JOB_KEY].worker_key == "reports-scheduler"
+    assert by_key[catalog.IVENTAS_ACTIVITY_JOB_KEY].schedule_kind == "CONDITIONAL"
     assert by_key["track.base_nocturna_retry"].schedule_kind == "CONDITIONAL_DAILY_TIME"
     assert by_key["track.request_cierre_canonico"].schedule_kind == "CONDITIONAL"
     assert by_key["track.pending_manual_canonical_close"].schedule_kind == "PENDING_REQUEST"

@@ -12,9 +12,10 @@ from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
 from app.services.automation_control.cobranza_multibranch_observation_service import (
     JOB_KEY as MULTIBRANCH_JOB_KEY, _read_day,
 )
-from app.services.automation_control.job_catalog import get_job_catalog
+from app.services.automation_control.job_catalog import IVENTAS_ACTIVITY_JOB_KEY, get_job_catalog
 from app.services.automation_control.job_read_service import (
     _filter_reports_completion, _serialize_reports_completion,
+    _filter_iventas_activity, _serialize_iventas_activity, has_completion_marker_source,
     _filter_routine_scheduler, _serialize_routine_pipeline_run,
     _serialize_attendance_run, _serialize_sync_run, _serialize_track_run,
     _serialize_gasca_sms_request,
@@ -50,6 +51,7 @@ _MODELS = {
     "reports.reactivation_outcomes_daily": WarehouseAuditLogORM,
     "reports.cobranza_recurrente_rechazados": WarehouseAuditLogORM,
     "reports.commercial_daily_reports": WarehouseAuditLogORM,
+    IVENTAS_ACTIVITY_JOB_KEY: WarehouseAuditLogORM,
     "routine_control.scheduled_pipeline": RoutineControlPipelineRunORM,
 }
 
@@ -85,7 +87,9 @@ def _observations(job_key: str, day: date) -> list[dict]:
         else model.started_at_utc
     )
     query = model.query.filter(stamp >= begin, stamp < end)
-    if model is WarehouseAuditLogORM:
+    if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+        query = _filter_iventas_activity(query)
+    elif model is WarehouseAuditLogORM:
         query = _filter_reports_completion(
             query, job_key=job_key.removeprefix("reports."),
         )
@@ -108,7 +112,9 @@ def _observations(job_key: str, day: date) -> list[dict]:
         )
         if local is None or local.date() != day:
             continue
-        if model is WarehouseAuditLogORM:
+        if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+            entry = _serialize_iventas_activity(row)
+        elif model is WarehouseAuditLogORM:
             entry = _serialize_reports_completion(row)
         elif model is RoutineControlPipelineRunORM:
             entry = _serialize_routine_pipeline_run(row)
@@ -145,7 +151,7 @@ def daily_timeline(day: date) -> dict:
             "observed": by_hour,
             "coverage": (
                 "OBSERVED_RUNS" if job.key == MULTIBRANCH_JOB_KEY
-                else "COMPLETION_MARKERS_ONLY" if _MODELS.get(job.key) is WarehouseAuditLogORM
+                else "COMPLETION_MARKERS_ONLY" if has_completion_marker_source(job.key)
                 else "OBSERVED_RUNS" if job.key in _MODELS
                 else "NOT_INSTRUMENTED"
             ),

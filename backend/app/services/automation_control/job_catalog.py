@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 
 TIMEZONE = "America/Tijuana"
+IVENTAS_ACTIVITY_JOB_KEY = "reports.iventas_activity"
 
 
 @dataclass(frozen=True)
@@ -241,6 +242,18 @@ _JOBS = (
             "marketing_campaign_v2_provider_campaigns",
         ),
         priority_policy="SECONDARY_TRACK_WINDOW",
+        enabled_default=False,
+    ),
+    JobSpec(
+        key=IVENTAS_ACTIVITY_JOB_KEY,
+        worker_key="reports-scheduler",
+        domain="reports",
+        label="Reportes horarios a iVentas",
+        schedule_kind="CONDITIONAL",
+        schedule_reference="Después de cada corte horario exitoso de Track",
+        schedule_env_keys=("IVENTAS_ACTIVITY_EXPORT_ENABLED", "IVENTAS_ACTIVITY_EMAIL_ENABLED"),
+        evidence_tables=("warehouse_audit_logs",),
+        priority_policy="DEFER_WHEN_TRACK_ACTIVE",
         enabled_default=False,
     ),
     JobSpec(

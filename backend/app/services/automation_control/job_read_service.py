@@ -11,12 +11,17 @@ from typing import Any
 from app.services.automation_control.cobranza_multibranch_observation_service import (
     JOB_KEY as MULTIBRANCH_JOB_KEY, list_multibranch_runs,
 )
+from app.services.automation_control.job_catalog import IVENTAS_ACTIVITY_JOB_KEY
 from app.models.attendance import WarehouseAttendanceRunORM
 from app.models.marketing import MarketingIventasSyncRunORM, MarketingMetaSyncRunORM
 from app.models.routine_control import RoutineControlPipelineRunORM
 from app.models.rpa import GascaSmsRequestORM, GascaSmsRequestStatus
 from sqlalchemy import func
 from app.models.warehouse import TrackDailyVersionORM, WarehouseAuditLogORM
+from app.warehouse.jobs.iventas_activity_delivery_job import (
+    ACTIVITY_FAILED, BASELINE, EMAIL_FAILED, EMAIL_SENT, EMAIL_UNCERTAIN, EMPTY,
+    PUBLICATION_ACTIONS, REPORT_TYPE_KEY as IVENTAS_REPORT_TYPE_KEY, TIJUANA,
+)
 
 
 # Los demás jobs del catálogo son visibles, pero aún NO cuentan con
@@ -38,6 +43,7 @@ _RUN_SOURCES: dict[str, tuple[type, str | None]] = {
         WarehouseAuditLogORM, "cobranza_recurrente_rechazados",
     ),
     MULTIBRANCH_JOB_KEY: (WarehouseAuditLogORM, "cobranza_iventas_multibranch"),
+    IVENTAS_ACTIVITY_JOB_KEY: (WarehouseAuditLogORM, None),
     "reports.commercial_daily_reports": (
         WarehouseAuditLogORM, "commercial_daily_reports",
     ),
@@ -66,7 +72,7 @@ def has_run_source(job_key: str) -> bool:
 def has_completion_marker_source(job_key: str) -> bool:
     source = _RUN_SOURCES.get(job_key)
     return (source is not None and source[0] is WarehouseAuditLogORM
-            and job_key != MULTIBRANCH_JOB_KEY)
+            and job_key not in {MULTIBRANCH_JOB_KEY, IVENTAS_ACTIVITY_JOB_KEY})
 
 
 def _utc_iso(value: datetime | None) -> str | None:
@@ -209,6 +215,47 @@ def _serialize_reports_completion(row: Any) -> dict[str, Any]:
     }
 
 
+_IVENTAS_ACTIVITY_STATES = {
+    **dict.fromkeys((*PUBLICATION_ACTIONS, BASELINE, EMPTY, EMAIL_SENT), "COMPLETED"),
+    EMAIL_FAILED: "FAILED",
+    EMAIL_UNCERTAIN: "PARTIAL",
+    ACTIVITY_FAILED: "FAILED",
+}
+IVENTAS_ACTIVITY_ERRORS = (EMAIL_FAILED, EMAIL_UNCERTAIN, ACTIVITY_FAILED)
+
+
+def _filter_iventas_activity(query: Any) -> Any:
+    return query.filter(
+        WarehouseAuditLogORM.action.in_(tuple(_IVENTAS_ACTIVITY_STATES)),
+        WarehouseAuditLogORM.details["producer"].as_string() == IVENTAS_REPORT_TYPE_KEY,
+        WarehouseAuditLogORM.details["export_mode"].as_string() == "delta",
+    )
+
+
+def _serialize_iventas_activity(row: Any) -> dict[str, Any]:
+    details = row.details or {}
+    try:
+        cut = datetime.fromisoformat(details.get("cutoff_hour_utc"))
+    except (TypeError, ValueError):
+        cut = None
+    day = cut.astimezone(TIJUANA).date() if _utc_iso(cut) else None
+    observed = _utc_iso(row.created_at)
+    return {
+        "run_id": int(row.id),
+        "business_date": _date_iso(day),
+        "started_at_utc": None,
+        "finished_at_utc": observed,
+        "observed_at_utc": observed,
+        "status_raw": _IVENTAS_ACTIVITY_STATES[row.action],
+        "evidence_type": row.action,
+        "is_canonical": None,
+        "is_current": None,
+        "trigger_source": "reports_scheduler",
+        "error_available": row.action in IVENTAS_ACTIVITY_ERRORS,
+        "counts": {},
+    }
+
+
 def _filter_routine_scheduler(query: Any) -> Any:
     """Solo runs SCHEDULED con prefijo exacto; nunca MANUAL/BACKFILL/RETRY."""
     prefix = "ROUTINE_CONTROL_SCHEDULER_"
@@ -264,7 +311,9 @@ def list_job_runs(
 
     model, trigger_source = source
     query = model.query
-    if model is WarehouseAuditLogORM:
+    if job_key == IVENTAS_ACTIVITY_JOB_KEY:
+        query = _filter_iventas_activity(query)
+    elif model is WarehouseAuditLogORM:
         query = _filter_reports_completion(query, job_key=trigger_source)
     elif model is RoutineControlPipelineRunORM:
         query = _filter_routine_scheduler(query)
@@ -272,7 +321,7 @@ def list_job_runs(
         query = query.filter(model.trigger_source == trigger_source)
     if model is WarehouseAuditLogORM:
         query = query.order_by(model.created_at.desc(), model.id.desc())
-        serializer = _serialize_reports_completion
+        serializer = _serialize_iventas_activity if job_key == IVENTAS_ACTIVITY_JOB_KEY else _serialize_reports_completion
     elif model is RoutineControlPipelineRunORM:
         query = query.order_by(model.created_at.desc(), model.id.desc())
         serializer = _serialize_routine_pipeline_run
@@ -297,7 +346,7 @@ def list_job_runs(
     return {
         "coverage": (
             AUDIT_COMPLETION_COVERAGE
-            if model is WarehouseAuditLogORM else "DOMAIN_RUNS"
+            if has_completion_marker_source(job_key) else "DOMAIN_RUNS"
         ),
         "rows": rows,
         "has_more": len(raw_rows) > limit,

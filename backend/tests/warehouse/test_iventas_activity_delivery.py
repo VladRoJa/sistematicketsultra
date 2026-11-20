@@ -18,6 +18,10 @@ from app.models.warehouse import (
     WarehouseUploadORM,
 )
 from app.utils.email_sender import EmailDeliveryUncertain
+from app.services.automation_control.diagnostic_service import last_error_diagnostic, run_diagnostic
+from app.services.automation_control.effective_schedule_service import validate_schedule_snapshot
+from app.services.automation_control.job_catalog import IVENTAS_ACTIVITY_JOB_KEY
+from app.services.automation_control.job_read_service import list_job_runs
 from app.warehouse.jobs import iventas_activity_delivery_job as job
 from app.warehouse.scheduler import reports_scheduler_worker as scheduler
 from app.warehouse.services.iventas_activity_export_service import HEADERS
@@ -168,6 +172,10 @@ def test_publish_then_retry_smtp_using_identical_warehouse_file(warehouse, monke
             .order_by(WarehouseAuditLogORM.id).all()] == [
         "UPLOAD", job.EMAIL_ATTEMPT, job.EMAIL_FAILED, job.EMAIL_ATTEMPT, job.EMAIL_SENT,
     ]
+    latest = list_job_runs(IVENTAS_ACTIVITY_JOB_KEY, limit=2)["rows"]
+    assert [row["evidence_type"] for row in latest] == [job.EMAIL_SENT, job.EMAIL_FAILED]
+    assert latest[0]["status_raw"] == "COMPLETED"
+    assert latest[0]["business_date"] == DAY.isoformat()
 
 
 def test_uncertain_smtp_attempt_is_not_resent(warehouse, monkeypatch):
@@ -186,6 +194,17 @@ def test_uncertain_smtp_attempt_is_not_resent(warehouse, monkeypatch):
     assert _run(now=NEXT_HOUR) == "delivery_uncertain"
     assert _run(now=NEXT_HOUR) == "already_processed"
     assert attempts == [True] and generations == [(50, True), (50, False)]
+    history = list_job_runs(IVENTAS_ACTIVITY_JOB_KEY, limit=1)
+    assert history["rows"][0]["status_raw"] == "PARTIAL"
+    assert history["rows"][0]["evidence_type"] == job.EMAIL_UNCERTAIN
+    detail = last_error_diagnostic(IVENTAS_ACTIVITY_JOB_KEY)
+    assert detail["run_id"] == history["rows"][0]["run_id"]
+    assert detail["error_code"] == job.EMAIL_UNCERTAIN
+    assert "import@example.test" not in str(detail)
+    assert detail == {
+        **run_diagnostic(IVENTAS_ACTIVITY_JOB_KEY, detail["run_id"]),
+        "failure_recency": "HISTORICAL_OR_ACTIVE_UNVERIFIED",
+    }
 
 
 def test_baseline_and_identical_next_cut_send_only_their_full_exports(warehouse, monkeypatch):
@@ -337,6 +356,36 @@ def test_reports_scheduler_calls_the_delivery_job_only_when_enabled(monkeypatch)
         "now": NOW, "email_enabled": False, "recipient": "import@example.test",
         "recipient_cc": "contact@example.test,support@example.test",
     }]
+    key = IVENTAS_ACTIVITY_JOB_KEY
+    reported = validate_schedule_snapshot("reports-scheduler", scheduler._resolved_schedule_snapshot())
+    assert not reported[key]["enabled"]
+    monkeypatch.setenv("IVENTAS_ACTIVITY_EMAIL_ENABLED", "true")
+    reported = validate_schedule_snapshot("reports-scheduler", scheduler._resolved_schedule_snapshot())
+    assert reported[key]["enabled"]
+    assert reported[key]["kind"] == "CONDITIONAL"
+    assert not reported[key]["slots"]
+
+
+def test_reports_scheduler_records_iventas_pipeline_failure_for_panel(warehouse, monkeypatch):
+    def fail(**kwargs):
+        raise RuntimeError("token-do-not-expose")
+
+    monkeypatch.setattr(scheduler, "_IVENTAS_NEXT_RETRY_AT", None)
+    monkeypatch.setattr(scheduler, "has_active_track_work", lambda: False)
+    monkeypatch.setattr(scheduler, "deliver_hourly_activity", fail)
+    monkeypatch.setenv("IVENTAS_ACTIVITY_EXPORT_ENABLED", "true")
+    scheduler._run_iventas_activity_if_due(NOW)
+    scheduler._run_iventas_activity_if_due(NOW + timedelta(minutes=1))
+
+    history = list_job_runs(IVENTAS_ACTIVITY_JOB_KEY)
+    assert history["coverage"] == "DOMAIN_RUNS"
+    failed, = history["rows"]
+    assert failed["status_raw"] == "FAILED"
+    assert failed["error_available"]
+    diagnostic = last_error_diagnostic(IVENTAS_ACTIVITY_JOB_KEY)
+    assert diagnostic["run_id"] == failed["run_id"]
+    assert diagnostic["error_code"] == job.ACTIVITY_FAILED
+    assert "token-do-not-expose" not in str(diagnostic)
 
 
 @pytest.mark.parametrize("outcome", ["accepted", "disconnected", "partial"])
