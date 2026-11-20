@@ -233,7 +233,10 @@ def _authenticated_page(runtime: GascaRuntimeConfig) -> Iterator[Any]:
     try:
         pw = sync_playwright().start()
         browser = pw.chromium.launch(headless=not runtime.show_browser)
-        context = browser.new_context(accept_downloads=True)
+        context = browser.new_context(
+            accept_downloads=True,
+            timezone_id=runtime.timezone_name,
+        )
         page = context.new_page()
 
         page.set_default_timeout(120_000)
