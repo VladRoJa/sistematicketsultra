@@ -41,6 +41,11 @@ CHECKINS_DETAIL_REQUIRED_COLUMN_ALIASES = {
     "Pago": "pago_total_mtd",
 }
 
+CHECKINS_DETAIL_CENTER_HEADER_ALIASES = {
+    "id del centro": "ID de ubicación",
+    "centro": "Localización",
+}
+
 
 class IngresosWellhubParseError(RuntimeError):
     """Error base del parser de ingresos_wellhub."""
@@ -182,7 +187,12 @@ def _detect_layout_from_headers(normalized_headers: set[str]) -> str | None:
     if summary_headers.issubset(normalized_headers):
         return WELLHUB_LAYOUT_SUMMARY
 
-    if detail_headers.issubset(normalized_headers):
+    resolved_detail_headers = normalized_headers | {
+        _normalize_text(canonical)
+        for alias, canonical in CHECKINS_DETAIL_CENTER_HEADER_ALIASES.items()
+        if alias in normalized_headers
+    }
+    if detail_headers.issubset(resolved_detail_headers):
         return WELLHUB_LAYOUT_CHECKINS_DETAIL
 
     return None
@@ -218,6 +228,16 @@ def _extract_wellhub_dataframe(dataframe_raw: pd.DataFrame) -> tuple[pd.DataFram
 
     detail_values.columns = [str(value).strip() for value in header_values]
     detail_values = detail_values.reset_index(drop=True)
+
+    if detected_layout == WELLHUB_LAYOUT_CHECKINS_DETAIL:
+        aliases = {
+            alias: canonical
+            for alias, canonical in CHECKINS_DETAIL_CENTER_HEADER_ALIASES.items()
+            if canonical not in detail_values.columns
+        }
+        detail_values.columns = [
+            aliases.get(_normalize_text(column), column) for column in detail_values.columns
+        ]
 
     required_columns = (
         SUMMARY_REQUIRED_COLUMN_ALIASES.keys()
