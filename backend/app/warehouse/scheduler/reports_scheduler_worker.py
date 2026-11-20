@@ -38,9 +38,11 @@ from app.warehouse.jobs.reactivation_outcomes_daily_job import (
 from app.warehouse.jobs.commercial_daily_reports_job import (
     run_job as run_commercial_daily_reports_job,
 )
+from app.warehouse.jobs.iventas_activity_delivery_job import deliver_hourly_activity
 from app.warehouse.services.scheduler_priority_service import (
     get_nightly_report_capture_block_reason,
     get_secondary_job_block_reason,
+    has_active_track_work,
     is_nightly_report_capture_window,
 )
 
@@ -55,6 +57,7 @@ _SHOULD_STOP = False
 
 _COMPLETED_BY_JOB_AND_DATE: set[tuple[str, date]] = set()
 _NEXT_RETRY_BY_JOB_AND_DATE: dict[tuple[str, date], datetime] = {}
+_IVENTAS_NEXT_RETRY_AT: datetime | None = None
 
 
 def _handle_stop(signum, frame):  # noqa: ARG001
@@ -1000,6 +1003,32 @@ def _run_commercial_daily_reports_if_due(now: datetime) -> None:
 
 
 
+def _run_iventas_activity_if_due(now: datetime) -> None:
+    global _IVENTAS_NEXT_RETRY_AT
+    if not _env_bool("IVENTAS_ACTIVITY_EXPORT_ENABLED", False):
+        return
+    if _IVENTAS_NEXT_RETRY_AT is not None and now < _IVENTAS_NEXT_RETRY_AT:
+        return
+    if has_active_track_work() or is_nightly_report_capture_window(now):
+        return
+
+    try:
+        status = deliver_hourly_activity(
+            now=now,
+            email_enabled=_env_bool("IVENTAS_ACTIVITY_EMAIL_ENABLED", False),
+            recipient=os.getenv("IVENTAS_ACTIVITY_EMAIL_TO", ""),
+        )
+    except Exception:
+        db.session.rollback()
+        _IVENTAS_NEXT_RETRY_AT = now + timedelta(minutes=5)
+        logger.exception("Falló la actividad horaria de iVentas. Reintento en cinco minutos.")
+        return
+
+    _IVENTAS_NEXT_RETRY_AT = None
+    if status in {"baselined", "no_new_movements", "published", "sent"}:
+        logger.info("Actividad horaria de iVentas: %s", status)
+
+
 def _resolved_schedule_snapshot() -> dict:
     """Use the same flag/time resolvers used for real reports decisions."""
     now = _now_local()
@@ -1089,6 +1118,7 @@ def run_scheduler_loop() -> None:
             _run_reactivation_outcomes_if_due(now)
             _run_cobranza_recurrente_if_due(now)
             _run_commercial_daily_reports_if_due(now)
+            _run_iventas_activity_if_due(now)
 
         except Exception:  # noqa: BLE001
             logger.exception("Error no controlado en ciclo de reports-scheduler.")
