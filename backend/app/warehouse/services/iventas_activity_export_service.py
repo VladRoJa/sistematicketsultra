@@ -21,7 +21,8 @@ from app.warehouse.services.socios_activos_parser import SociosActivosParseResul
 from app.warehouse.services.venta_total_parser import VentaTotalParsedRow, VentaTotalParseResult
 
 
-HEADERS = ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio")
+EXPORT_LAYOUT_VERSION = 2
+HEADERS = ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio", "Fecha Vencimiento")
 MEMBERSHIP_TYPES = frozenset({
     "CONTRATO",
     "MENSUAL SIN CONTRATO",
@@ -43,10 +44,10 @@ class Activity:
     phone: str
     member_id: int
 
-    def values(self) -> tuple[str, str, str, str, int]:
+    def values(self, expiry: date | None) -> tuple[str, str, str, str, int, str | None]:
         return (
             self.day.strftime("%d-%m-%y"), self.branch, self.description,
-            self.phone, self.member_id,
+            self.phone, self.member_id, expiry.strftime("%d-%m-%y") if expiry is not None else None,
         )
 
 
@@ -81,12 +82,17 @@ def write_iventas_activity_xlsx(
     if not {"Telefono", "Teléfono"}.intersection(sales.header_columns):
         raise IventasActivityExportError("Venta Total no incluye la columna Telefono.")
 
-    active_memberships = {
-        _member_id(row.id_socio) for row in active_members.rows
-        if row.fecha_vencimiento_date >= active_cutoff
-        and (tariff := _normalize_text(row.tarifa))
-        and not tariff.startswith("PASE ")
-    }
+    expiry_by_member: dict[int, date] = {}
+    active_memberships: set[int] = set()
+    for row in active_members.rows:
+        member_id = _member_id(row.id_socio)
+        if member_id is None:
+            continue
+        expiry = row.fecha_vencimiento_date
+        expiry_by_member[member_id] = max(expiry_by_member.get(member_id, expiry), expiry)
+        tariff = _normalize_text(row.tarifa)
+        if expiry >= active_cutoff and tariff and not tariff.startswith("PASE "):
+            active_memberships.add(member_id)
     month_start = sales_cutoff.replace(day=1)
     activities: dict[Activity, bool] = {}
     movement_keys: dict[Activity, set[str]] = {}
@@ -145,7 +151,7 @@ def write_iventas_activity_xlsx(
         else:
             purchases += 1
 
-        export_rows.append(activity.values())
+        export_rows.append(activity.values(expiry_by_member.get(activity.member_id)))
         exported_movements.update(movement_keys.get(activity, ()))
 
     if not baseline_only and (known_movements is None or export_rows):
@@ -153,11 +159,11 @@ def write_iventas_activity_xlsx(
         workbook.properties.identifier = workbook_identifier
         sheet = workbook.create_sheet("Hoja1")
         sheet.append(HEADERS)
-        for *texts, member_id in export_rows:
+        for *texts, member_id, expiry in export_rows:
             cells = [WriteOnlyCell(sheet, value=value) for value in texts]
             for cell in cells:
                 cell.data_type = "s"
-            sheet.append([*cells, member_id])
+            sheet.append([*cells, member_id, expiry])
         workbook.save(output_path)
 
     result = {

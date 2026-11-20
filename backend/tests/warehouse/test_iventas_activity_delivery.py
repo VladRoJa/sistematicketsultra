@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 import smtplib
 
 from flask import Flask
@@ -19,6 +20,7 @@ from app.models.warehouse import (
 from app.utils.email_sender import EmailDeliveryUncertain
 from app.warehouse.jobs import iventas_activity_delivery_job as job
 from app.warehouse.scheduler import reports_scheduler_worker as scheduler
+from app.warehouse.services.iventas_activity_export_service import HEADERS
 from app.warehouse.services.warehouse_upload_loader_sql import load_warehouse_upload_from_db
 
 
@@ -79,9 +81,9 @@ def warehouse(tmp_path, monkeypatch):
         def write_workbook(path, included):
             book = Workbook()
             book.properties.identifier = path.name
-            book.active.append(["Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio"])
+            book.active.append(HEADERS)
             for movement in included:
-                book.active.append(["19-11-26", "TEC", movement, "6860000000", 20])
+                book.active.append(["19-11-26", "TEC", movement, "6860000000", 20, "19-12-26"])
             book.save(path)
 
         def generate(*, venta_total_upload_id, output_path, known_movements, baseline_only, full_output_path):
@@ -157,8 +159,8 @@ def test_publish_then_retry_smtp_using_identical_warehouse_file(warehouse, monke
     book = load_workbook(saved, read_only=True)
     try:
         assert list(book.active.values) == [
-            ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio"),
-            ("19-11-26", "TEC", "folio-nuevo", "6860000000", 20),
+            HEADERS,
+            ("19-11-26", "TEC", "folio-nuevo", "6860000000", 20, "19-12-26"),
         ]
     finally:
         book.close()
@@ -245,7 +247,7 @@ def test_each_hour_rebuilds_full_and_delta_only_adds_new_movements(warehouse, mo
         workbook = load_workbook(saved, read_only=True)
         try:
             rows = list(workbook.active.values)
-            assert rows[0] == ("Fecha", "Sucursal", "Descripcion", "Telefono", "IDSocio")
+            assert rows[0] == HEADERS
             assert [row[2] for row in rows[1:]] == expected
         finally:
             workbook.close()
@@ -253,6 +255,34 @@ def test_each_hour_rebuilds_full_and_delta_only_adds_new_movements(warehouse, mo
     queued, full_upload_id = job._pending_email()
     assert queued.action == job.BASELINE and full_upload_id == uploads[0].id
     assert WarehouseAuditLogORM.query.filter_by(action=job.EMAIL_ATTEMPT).count() == 0
+
+
+def test_exports_without_the_current_layout_stay_out_of_email(warehouse, monkeypatch):
+    _, generations, movements = warehouse
+    current_version = job.EXPORT_LAYOUT_VERSION
+    monkeypatch.setattr(job, "EXPORT_LAYOUT_VERSION", None)
+    assert _run(email=False) == "baselined"
+    _next_cut(NEXT_HOUR)
+    movements.add("folio-anterior")
+    assert _run(now=NEXT_HOUR, email=False) == "published"
+
+    monkeypatch.setattr(job, "EXPORT_LAYOUT_VERSION", current_version)
+    assert job._pending_email() is None
+    later = NEXT_HOUR + timedelta(hours=1)
+    _next_cut(later)
+    movements.add("folio-nuevo")
+    messages = []
+    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: messages.append(kw["attachments"]))
+    assert _run(now=later) == "sent"
+    assert generations == [(50, True), (50, False), (50, False)]
+    full, delta = messages[0]
+    assert full.filename.removeprefix("Acumulado_") == delta.filename.removeprefix("Delta_")
+    assert "2026-11-19_1200-0800" in delta.filename
+    workbook = load_workbook(BytesIO(delta.content), read_only=True)
+    try:
+        assert [row[2] for row in list(workbook.active.values)[1:]] == ["folio-nuevo"]
+    finally:
+        workbook.close()
 
 
 def test_retry_after_delta_upload_failure_reuses_the_full_warehouse_file(warehouse, monkeypatch):

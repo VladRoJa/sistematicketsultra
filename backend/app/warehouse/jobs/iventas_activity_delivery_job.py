@@ -24,6 +24,7 @@ from app.models.warehouse import (
 from app.utils.email_sender import EmailAttachment, EmailDeliveryUncertain, send_email_html
 from app.utils.warehouse_audit import log_warehouse_audit
 from app.warehouse.jobs.iventas_activity_hourly_job import run_job as generate_xlsx
+from app.warehouse.services.iventas_activity_export_service import EXPORT_LAYOUT_VERSION
 from app.warehouse.services.warehouse_document_upload_service import create_warehouse_document_upload
 from app.warehouse.services.warehouse_upload_loader import load_warehouse_upload
 
@@ -133,6 +134,7 @@ def _publish(*, source_id: int, operator_id: int, details: dict, now: datetime) 
         WarehouseAuditLogORM.action.in_(PUBLICATION_ACTIONS),
         WarehouseAuditLogORM.details["producer"].as_string() == FULL_REPORT_TYPE_KEY,
         WarehouseAuditLogORM.details["cutoff_hour_utc"].as_string() == details["cutoff_hour_utc"],
+        WarehouseAuditLogORM.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
     ).first() is not None
 
     with TemporaryDirectory(prefix="iventas-activity-") as workspace:
@@ -186,6 +188,7 @@ def _pending_email() -> Row[tuple[WarehouseAuditLogORM, int]] | None:
         and_(
             full_export.details["cutoff_hour_utc"].as_string() == current_hour,
             full_export.details["producer"].as_string() == FULL_REPORT_TYPE_KEY,
+            full_export.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
             full_export.action.in_(PUBLICATION_ACTIONS),
         ),
     ).join(full_upload, full_upload.id == full_export.upload_id).outerjoin(
@@ -193,6 +196,7 @@ def _pending_email() -> Row[tuple[WarehouseAuditLogORM, int]] | None:
     ).outerjoin(last_attempts, last_attempts.c.cutoff_hour == current_hour).outerjoin(
         delivery, delivery.id == last_attempts.c.audit_id,
     ).filter(
+        WarehouseAuditLogORM.details["export_layout_version"].as_integer() == EXPORT_LAYOUT_VERSION,
         full_upload.status == "ACTIVE",
         full_upload.source_file_deleted_at.is_(None),
         or_(
@@ -298,6 +302,7 @@ def deliver_hourly_activity(*, now: datetime, email_enabled: bool, recipient: st
                 source_id=source_id, operator_id=operator_id, now=now,
                 details={
                     "producer": REPORT_TYPE_KEY, "export_mode": "delta",
+                    "export_layout_version": EXPORT_LAYOUT_VERSION,
                     "cutoff_hour_utc": hour.isoformat(), "business_month": now.astimezone(TIJUANA).strftime("%Y-%m"),
                     "track_preview_id": version_id, "venta_total_upload_id": source_id,
                 },
