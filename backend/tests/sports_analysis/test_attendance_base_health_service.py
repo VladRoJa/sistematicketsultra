@@ -1165,6 +1165,78 @@ def test_base_health_export_includes_phone_without_exposing_it_in_json(
     }
 
 
+def test_monthly_visit_groups_match_summary_detail_and_excel(monkeypatch):
+    month_start = date(2026, 9, 1)
+    cutoff = date(2026, 9, 25)
+    selected_start = date(2026, 8, 15)
+    visits = (0, 2, 3, 9, 10, 11)
+    members = {
+        str(count): _member(str(count), phone=f"68655501{count:02d}")
+        for count in visits
+    }
+    members["expired"] = _member("expired", expiration_date=date(2026, 9, 24))
+    state = replace(
+        _state(),
+        eligible_members=members,
+        visited_member_ids=frozenset(str(count) for count in visits if count),
+        member_visit_stats={
+            str(count): health._MemberVisitStats(count, month_start, cutoff)
+            for count in visits if count
+        },
+        other_active_members={"other": _member("other", applies_kpi=False)},
+    )
+    requested_starts = []
+
+    def build_state(_scope, *, date_from, date_to, branch_id, region_key, **kwargs):
+        assert (date_to, branch_id, region_key) == (cutoff, 1, "region-uno")
+        requested_starts.append(date_from)
+        if date_from != month_start:
+            return _state(), (1,)
+        return state, (1,)
+
+    monkeypatch.setattr(health, "_build_state", build_state)
+    filters = {
+        "date_from": selected_start,
+        "date_to": cutoff,
+        "branch_id": 1,
+        "region_key": "region-uno",
+    }
+    result = health.attendance_base_health(_scope(), **filters)
+    monthly = result["monthly_visits"]
+
+    assert requested_starts == [selected_start, month_start]
+    assert monthly["date_from"] == "2026-09-01"
+    assert monthly["date_to"] == "2026-09-25"
+    groups = {
+        "MONTHLY_VISITS_0_2": {0, 2},
+        "MONTHLY_VISITS_3_9": {3, 9},
+        "MONTHLY_VISITS_10_PLUS": {10, 11},
+    }
+    assert [bucket["key"] for bucket in monthly["distribution"]] == list(groups)
+    for bucket in monthly["distribution"]:
+        status = bucket["key"]
+        expected = groups[status]
+        detail = health.attendance_base_health_members(_scope(), status=status, **filters)
+        assert detail["count"] == bucket["count"] == 2
+        assert bucket["pct"] == 33.3
+        assert {row["visit_count"] for row in detail["rows"]} == expected
+
+        output, filename = health.attendance_base_health_members_export(
+            _scope(), status=status, **filters,
+        )
+        with output:
+            workbook = load_workbook(output)
+            header, *rows = workbook.active.values
+            workbook.close()
+        assert filename.endswith("2026-09-01_2026-09-25.xlsx")
+        assert {row[header.index("Visitas")] for row in rows} == expected
+        assert {row[header.index("Teléfono")] for row in rows} == {
+            f"68655501{count:02d}" for count in expected
+        }
+
+    assert requested_starts == [selected_start, month_start] + [month_start] * 6
+
+
 def test_other_active_access_export_includes_tariff_and_phone(
     monkeypatch,
 ):

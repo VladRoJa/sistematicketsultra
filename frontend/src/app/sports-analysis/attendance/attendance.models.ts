@@ -160,6 +160,19 @@ export interface AttendanceBaseHealthDistributionBucket {
   pct: number;
 }
 
+export type AttendanceMonthlyVisitStatus =
+  | 'MONTHLY_VISITS_0_2'
+  | 'MONTHLY_VISITS_3_9'
+  | 'MONTHLY_VISITS_10_PLUS';
+
+export interface AttendanceMonthlyVisits {
+  date_from: string;
+  date_to: string;
+  distribution: (AttendanceBaseHealthDistributionBucket & {
+    key: AttendanceMonthlyVisitStatus;
+  })[];
+}
+
 export interface AttendanceBaseHealthActivation {
   new_members: number;
   distribution: AttendanceBaseHealthDistributionBucket[];
@@ -191,6 +204,7 @@ export interface AttendanceBaseHealth {
   filters: AttendanceBaseHealthFilters;
   summary: AttendanceBaseHealthSummary;
   frequency_distribution: AttendanceBaseHealthDistributionBucket[];
+  monthly_visits?: AttendanceMonthlyVisits | null;
   recency_distribution: AttendanceBaseHealthDistributionBucket[];
   activation: AttendanceBaseHealthActivation;
   other_active_accesses: AttendanceBaseHealthOtherAccesses;
@@ -198,6 +212,7 @@ export interface AttendanceBaseHealth {
 }
 
 export type AttendanceBaseHealthMemberStatus =
+  | AttendanceMonthlyVisitStatus
   | 'WITH_VISIT'
   | 'WITHOUT_VISIT'
   | 'FOLLOW_UP'

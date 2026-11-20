@@ -27,6 +27,7 @@ import {
   AttendanceHour,
   AttendanceDetailRequest,
   AttendanceInterval,
+  AttendanceMonthlyVisitStatus,
   AttendanceTypeDistribution,
 } from './attendance.models';
 import { AttendanceBaseHealthDetailDialogComponent } from './attendance-base-health-detail-dialog.component';
@@ -139,6 +140,12 @@ export class AttendanceDashboardComponent implements OnInit {
   attendanceTypeBars: AttendanceTypeBarModel[] = [];
   distributionMetric: DistributionMetric = 'visits';
   showAllOtherActiveAccessTariffs = false;
+
+  readonly monthlyVisitActions: Record<AttendanceMonthlyVisitStatus, string> = {
+    MONTHLY_VISITS_0_2: 'Prevenir deserción',
+    MONTHLY_VISITS_3_9: 'Dar seguimiento',
+    MONTHLY_VISITS_10_PLUS: 'Felicitar por su constancia',
+  };
 
   private readonly numberFormatter = new Intl.NumberFormat('es-MX');
   private activeViewRequestId = 0;
@@ -524,6 +531,13 @@ export class AttendanceDashboardComponent implements OnInit {
       !this.showAllOtherActiveAccessTariffs;
   }
 
+  openMonthlyVisitsDetail(status: AttendanceMonthlyVisitStatus): void {
+    const monthlyVisits = this.baseHealth?.monthly_visits;
+    if (monthlyVisits) {
+      this.openBaseHealthDetail(status, undefined, monthlyVisits.date_from);
+    }
+  }
+
   formatDecimal(value: number): string {
     return new Intl.NumberFormat('es-MX', {
       minimumFractionDigits: 2,
@@ -534,6 +548,7 @@ export class AttendanceDashboardComponent implements OnInit {
   openBaseHealthDetail(
     status: AttendanceBaseHealthMemberStatus,
     tariff?: string,
+    dateFrom?: string,
   ): void {
     const filters = this.baseHealth?.filters;
     if (
@@ -550,7 +565,7 @@ export class AttendanceDashboardComponent implements OnInit {
         maxWidth: '1200px',
         height: '82vh',
         data: {
-          dateFrom: filters.date_from,
+          dateFrom: dateFrom ?? filters.date_from,
           dateTo: filters.date_to,
           branchId: filters.branch_id,
           regionKey: filters.region_key,

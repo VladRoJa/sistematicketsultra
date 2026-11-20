@@ -532,6 +532,30 @@
         </button>
       </section>
 
+      <mat-card class="panel monthly-visits-panel" *ngIf="baseHealth.monthly_visits as monthlyVisits">
+        <div class="panel-heading">
+          <div>
+            <h2>Visitas en el mes</h2>
+            <small>
+              {{ formatDate(monthlyVisits.date_from) }} al {{ formatDate(monthlyVisits.date_to) }}
+              · Socios vigentes al corte
+            </small>
+          </div>
+        </div>
+
+        <div class="activation-grid">
+          <button
+            type="button"
+            class="activation-item"
+            *ngFor="let bucket of monthlyVisits.distribution"
+            (click)="openMonthlyVisitsDetail(bucket.key)">
+            <span>{{ bucket.label }} · {{ monthlyVisitActions[bucket.key] }}</span>
+            <strong>{{ formatNumber(bucket.count) }}</strong>
+            <small>{{ formatPercent(bucket.pct) }} · Ver socios</small>
+          </button>
+        </div>
+      </mat-card>
+
       <section class="base-health-grid">
         <mat-card class="panel health-distribution-card">
           <div class="panel-heading">
