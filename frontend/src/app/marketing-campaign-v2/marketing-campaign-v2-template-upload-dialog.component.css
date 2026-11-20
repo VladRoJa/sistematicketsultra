@@ -1,0 +1,36 @@
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wide { grid-column: 1 / -1; }
+.message { width: 100%; }
+.error { color: #b42318; }
+
+.selection,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.actions { justify-content: space-between; }
+
+label,
+summary {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.history {
+  border-top: 1px solid #e4e7ec;
+  margin-top: 20px;
+  padding-top: 12px;
+}
+
+summary { cursor: pointer; }
+
+@media (max-width: 520px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}

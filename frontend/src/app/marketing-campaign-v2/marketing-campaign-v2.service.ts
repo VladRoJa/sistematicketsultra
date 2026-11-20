@@ -6,6 +6,8 @@ import { environment } from 'src/environments/environment';
 
 import {
   CampaignV2TemplateProbeMatrix,
+  IventasTemplateUpload,
+  IventasTemplateUploadsResponse,
   CampaignV2ExcelPreview,
   CampaignV2ExcelFrozen,
   CampaignV2AudienceDefinitionRequest,
@@ -249,6 +251,14 @@ export class MarketingCampaignV2Service {
     return this.http.get<CampaignV2CatalogBranchesResponse>(
       `${this.apiUrl}/dispatch/catalog-branches`,
     );
+  }
+
+  listIventasTemplateUploads(): Observable<IventasTemplateUploadsResponse> {
+    return this.http.get<IventasTemplateUploadsResponse>(`${this.apiUrl}/dispatch/template-uploads`);
+  }
+
+  createIventasTemplateUpload(request: FormData): Observable<IventasTemplateUpload> {
+    return this.http.post<IventasTemplateUpload>(`${this.apiUrl}/dispatch/template-uploads`, request);
   }
 
   createDispatchTemplate(request: CampaignV2TemplateConfigRequest): Observable<CampaignV2DispatchTemplate> {

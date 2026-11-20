@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from io import BytesIO
+import json
 from typing import Any
 
 from flask import Blueprint, current_app, jsonify, request, send_file
@@ -162,6 +163,15 @@ from app.services.marketing_campaign_v2_preflight_service import (
 )
 from app.services.marketing_campaign_v2_template_evidence_service import (
     TemplateEvidenceValidation, register_template_evidence,
+)
+from app.services.marketing_campaign_v2_template_upload_service import (
+    MAX_IMAGE_BYTES,
+    TemplateUploadError,
+    create_upload,
+    serialize_upload,
+    template_upload_enabled,
+    upload_history,
+    upload_targets,
 )
 from app.services.marketing_campaign_v2_provider import (
     CampaignProviderConfigurationError,
@@ -1447,6 +1457,35 @@ def list_campaign_v2_dispatch_templates_admin_endpoint():
         return _error(str(exc), 403)
     except Exception:
         return _error("Falló el catálogo administrativo de templates.", 500)
+
+
+@marketing_campaign_v2_bp.route("/campaigns-v2/dispatch/template-uploads", methods=["GET", "POST"])
+@jwt_required()
+def manage_campaign_v2_template_uploads():
+    try:
+        user, _ = _resolve_campaign_v2_dispatch_config_request()
+        enabled = template_upload_enabled()
+        if request.method == "GET":
+            return jsonify({"enabled": enabled, "targets": upload_targets(), "rows": upload_history()}), 200
+        if not enabled:
+            return _error("La carga de plantillas iVentas está deshabilitada.", 409)
+        if request.content_length is not None and request.content_length > MAX_IMAGE_BYTES + 32 * 1024:
+            return _error("La solicitud de carga excede el tamaño permitido.", 413)
+
+        payload = request.form.get("template", "")
+        if len(payload) > 16 * 1024:
+            return _error("La configuración de la plantilla excede el tamaño permitido.", 413)
+        data = json.loads(payload)
+        if not isinstance(data, dict):
+            raise TemplateUploadError("La configuración de la plantilla debe ser un objeto.")
+        row = create_upload(data, request.files.get("image"), actor_id=int(user.id))
+        return jsonify(serialize_upload(row)), 201
+    except MarketingAuthorizationError as exc:
+        return _error(str(exc), 403)
+    except json.JSONDecodeError:
+        return _error("La configuración de la plantilla no es válida.", 400)
+    except TemplateUploadError as exc:
+        return _error(str(exc), 400)
 
 
 @marketing_campaign_v2_bp.get("/campaigns-v2/dispatch/catalog-branches")

@@ -3209,6 +3209,8 @@ class TestMarketingCampaignV2Routes:
         urls = (
             ("get", "/api/marketing/campaigns-v2/dispatch/catalog-branches"),
             ("get", "/api/marketing/campaigns-v2/dispatch/templates/admin"),
+            ("get", "/api/marketing/campaigns-v2/dispatch/template-uploads"),
+            ("post", "/api/marketing/campaigns-v2/dispatch/template-uploads"),
             ("post", "/api/marketing/campaigns-v2/dispatch/templates"),
             ("put", "/api/marketing/campaigns-v2/dispatch/templates/5"),
             ("post", "/api/marketing/campaigns-v2/dispatch/channel-bindings"),
