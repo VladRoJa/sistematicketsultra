@@ -735,6 +735,40 @@ class ManualPipelineFocusedPostgresTestCase(unittest.TestCase):
         )
 
 
+    def test_power_bi_abbreviated_name_persists_matching_audit(self) -> None:
+        seed = int(uuid4().hex[:8], 16) % 100000000 + 820000000
+        provider_id = seed + 10
+        email = f"omitted-name-{seed}@example.test"
+        member = self._member(seed, str(seed + 100), email)
+        member[3:6] = ["Ines Beatriz", "Soto", "Navarro"]
+        gasca, trainingym = self._files(
+            [member],
+            [self._evidence(provider_id, None, email, name="Ines Soto")],
+        )
+
+        result = run_manual_routine_control_pipeline(
+            gasca_xlsx=gasca,
+            trainingym_xlsx=trainingym,
+            trainingym_primary_is_power_bi=True,
+            observed_at_utc=OBSERVED_AT,
+        )
+        self.pipeline_ids.append(result.pipeline_run_id)
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.links_by_email, 1)
+        link = db.session.execute(
+            select(RoutineControlMemberEvidenceORM)
+            .join(
+                RoutineAssignmentEvidenceORM,
+                RoutineAssignmentEvidenceORM.id
+                == RoutineControlMemberEvidenceORM.evidence_id,
+            )
+            .where(RoutineAssignmentEvidenceORM.provider_member_id == str(provider_id))
+        ).scalar_one()
+        self.assertTrue(link.is_active)
+        self.assertEqual(link.identity_corroborator, "EMAIL_GIVEN_NAMES_OMITTED")
+        self.assertEqual(link.matching_contract_version, "IDENTITY_TEMPORAL_V3")
+
     def test_positive_identity_routes_use_shared_matching_coordinator(self) -> None:
         seed = int(uuid4().hex[:8], 16) % 100000000 + 820000000
         with patch(
