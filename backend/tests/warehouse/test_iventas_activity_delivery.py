@@ -103,7 +103,10 @@ def warehouse(tmp_path, monkeypatch):
 
 
 def _run(*, now=NOW, email=True):
-    return job.deliver_hourly_activity(now=now, email_enabled=email, recipient="import@example.test")
+    return job.deliver_hourly_activity(
+        now=now, email_enabled=email, recipient="import@example.test",
+        recipient_cc="contact@example.test, support@example.test",
+    )
 
 
 def _next_cut(started_at):
@@ -116,14 +119,16 @@ def test_publish_then_retry_smtp_using_identical_warehouse_file(warehouse, monke
     tmp_path, generations, movements = warehouse
     messages = []
 
-    def send(to, subject, html, *, attachments, message_id):
-        messages.append((to, attachments[0], message_id))
+    def send(to, subject, html, *, cc_list, attachments, message_id):
+        messages.append((to, cc_list, attachments, message_id))
         if len(messages) == 1:
             raise smtplib.SMTPRecipientsRefused({})
 
-    monkeypatch.setattr(job, "send_email_html", send)
     assert _run(email=False) == "baselined"
     assert WarehouseUploadORM.query.filter_by(report_type_id=2).count() == 0
+    monkeypatch.setattr(job, "send_email_html", lambda *args, **kwargs: None)
+    assert _run() == "sent"
+    monkeypatch.setattr(job, "send_email_html", send)
     _next_cut(NEXT_HOUR)
     movements.add("folio-nuevo")
     assert _run(now=NEXT_HOUR, email=False) == "published"
@@ -137,8 +142,14 @@ def test_publish_then_retry_smtp_using_identical_warehouse_file(warehouse, monke
     assert generations == [(50, True), (50, False)]
     assert len(messages) == 2 and messages[0] == messages[1]
 
+    to, cc, (full_attachment, attachment), _ = messages[1]
+    assert to == ["import@example.test"]
+    assert cc == ["contact@example.test", "support@example.test"]
+    full_upload = WarehouseUploadORM.query.filter_by(original_filename=full_attachment.filename).one()
+    assert full_upload.report_type_id == 3
+    assert full_attachment.content == (tmp_path / full_upload.stored_path / full_upload.stored_filename).read_bytes()
     upload = WarehouseUploadORM.query.filter_by(report_type_id=2).one()
-    attachment = messages[1][1]
+    assert full_attachment.filename.removeprefix("Acumulado_") == attachment.filename.removeprefix("Delta_")
     saved = tmp_path / upload.stored_path / upload.stored_filename
     assert saved.read_bytes() == attachment.content
     assert attachment.filename == upload.original_filename
@@ -165,8 +176,9 @@ def test_uncertain_smtp_attempt_is_not_resent(warehouse, monkeypatch):
         attempts.append(True)
         raise EmailDeliveryUncertain()
 
+    monkeypatch.setattr(job, "send_email_html", lambda *args, **kwargs: None)
+    assert _run() == "sent"
     monkeypatch.setattr(job, "send_email_html", send)
-    assert _run() == "baselined"
     _next_cut(NEXT_HOUR)
     movements.add("folio-nuevo")
     assert _run(now=NEXT_HOUR) == "delivery_uncertain"
@@ -174,18 +186,35 @@ def test_uncertain_smtp_attempt_is_not_resent(warehouse, monkeypatch):
     assert attempts == [True] and generations == [(50, True), (50, False)]
 
 
-def test_identical_next_cut_keeps_an_hourly_full_but_no_delta_or_email(warehouse, monkeypatch):
+def test_baseline_and_identical_next_cut_send_only_their_full_exports(warehouse, monkeypatch):
     _, generations, _ = warehouse
-    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: pytest.fail("no new movements"))
-    assert _run() == "baselined"
+    messages = []
+    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: messages.append(kw["attachments"]))
+    assert _run() == "sent"
     _next_cut(NEXT_HOUR)
-    assert _run(now=NEXT_HOUR) == "no_new_movements"
+    assert _run(now=NEXT_HOUR) == "sent"
     assert _run(now=NEXT_HOUR) == "already_processed"
     assert WarehouseUploadORM.query.filter_by(report_type_id=2).count() == 0
-    full_uploads = WarehouseUploadORM.query.filter_by(report_type_id=3).all()
+    full_uploads = WarehouseUploadORM.query.filter_by(report_type_id=3).order_by(WarehouseUploadORM.id).all()
     assert len(full_uploads) == 2
+    assert [[attachment.filename for attachment in message] for message in messages] == [
+        [upload.original_filename] for upload in full_uploads
+    ]
     assert len({upload.file_hash_sha256 for upload in full_uploads}) == 2
     assert generations == [(50, True), (50, False)]
+
+
+def test_invalid_cc_keeps_the_cut_pending_for_a_corrected_config(warehouse, monkeypatch):
+    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: pytest.fail("invalid CC"))
+    with pytest.raises(RuntimeError, match="IVENTAS_ACTIVITY_EMAIL_CC"):
+        job.deliver_hourly_activity(
+            now=NOW, email_enabled=True, recipient="import@example.test",
+            recipient_cc="support@example.test,invalid",
+        )
+
+    assert WarehouseAuditLogORM.query.filter_by(action=job.EMAIL_ATTEMPT).count() == 0
+    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: None)
+    assert _run() == "sent"
 
 
 def test_each_hour_rebuilds_full_and_delta_only_adds_new_movements(warehouse, monkeypatch):
@@ -221,8 +250,8 @@ def test_each_hour_rebuilds_full_and_delta_only_adds_new_movements(warehouse, mo
         finally:
             workbook.close()
 
-    queued = job._pending_email()
-    assert queued.upload.report_type_id == 2
+    queued, full_upload_id = job._pending_email()
+    assert queued.action == job.BASELINE and full_upload_id == uploads[0].id
     assert WarehouseAuditLogORM.query.filter_by(action=job.EMAIL_ATTEMPT).count() == 0
 
 
@@ -239,9 +268,12 @@ def test_retry_after_delta_upload_failure_reuses_the_full_warehouse_file(warehou
         save_export(**kwargs)
 
     monkeypatch.setattr(job, "_save_export", fail_delta)
+    monkeypatch.setattr(job, "send_email_html", lambda *a, **kw: None)
+    assert _run() == "sent"
     with pytest.raises(RuntimeError, match="delta upload failed"):
-        _run(now=NEXT_HOUR, email=False)
+        _run(now=NEXT_HOUR)
     assert WarehouseUploadORM.query.filter_by(report_type_id=3).count() == 2
+    assert job._pending_email() is None
     monkeypatch.setattr(job, "_save_export", save_export)
     assert _run(now=NEXT_HOUR, email=False) == "published"
     assert WarehouseUploadORM.query.filter_by(report_type_id=3).count() == 2
@@ -266,15 +298,19 @@ def test_reports_scheduler_calls_the_delivery_job_only_when_enabled(monkeypatch)
     monkeypatch.delenv("IVENTAS_ACTIVITY_EXPORT_ENABLED", raising=False)
     monkeypatch.delenv("IVENTAS_ACTIVITY_EMAIL_ENABLED", raising=False)
     monkeypatch.setenv("IVENTAS_ACTIVITY_EMAIL_TO", "import@example.test")
+    monkeypatch.setenv("IVENTAS_ACTIVITY_EMAIL_CC", "contact@example.test,support@example.test")
     scheduler._run_iventas_activity_if_due(NOW)
     assert calls == []
     monkeypatch.setenv("IVENTAS_ACTIVITY_EXPORT_ENABLED", "true")
     scheduler._run_iventas_activity_if_due(NOW)
-    assert calls == [{"now": NOW, "email_enabled": False, "recipient": "import@example.test"}]
+    assert calls == [{
+        "now": NOW, "email_enabled": False, "recipient": "import@example.test",
+        "recipient_cc": "contact@example.test,support@example.test",
+    }]
 
 
-@pytest.mark.parametrize("disconnect", [False, True])
-def test_smtp_attachment_preserves_bytes_and_handles_failed_quit(monkeypatch, disconnect):
+@pytest.mark.parametrize("outcome", ["accepted", "disconnected", "partial"])
+def test_smtp_attachment_preserves_bytes_and_handles_failed_quit(monkeypatch, outcome):
     from app.utils import email_sender
 
     class SMTP:
@@ -295,8 +331,11 @@ def test_smtp_attachment_preserves_bytes_and_handles_failed_quit(monkeypatch, di
 
         def send_message(self, message):
             messages.append(message)
-            if disconnect:
+            if outcome == "disconnected":
                 raise smtplib.SMTPServerDisconnected("No reply to DATA")
+            if outcome == "partial":
+                return {"support@example.test": (550, b"Rejected")}
+            return {}
 
         def set_debuglevel(self, level):
             pytest.fail("El adjunto no debe aparecer en el debug SMTP")
@@ -311,14 +350,17 @@ def test_smtp_attachment_preserves_bytes_and_handles_failed_quit(monkeypatch, di
     def send():
         email_sender.send_email_html(
             ["import@example.test"], "Prueba", "<p>Prueba</p>",
+            cc_list=["contact@example.test", "support@example.test"],
             attachments=(email_sender.EmailAttachment("report.xlsx", b"xlsx", job.XLSX_CONTENT_TYPE),),
         )
 
-    if disconnect:
+    if outcome != "accepted":
         with pytest.raises(EmailDeliveryUncertain):
             send()
     else:
         send()
+    assert messages[0]["To"] == "import@example.test"
+    assert messages[0]["Cc"] == "contact@example.test, support@example.test"
     attachment, = messages[0].iter_attachments()
     assert attachment.get_filename() == "report.xlsx"
     assert attachment.get_payload(decode=True) == b"xlsx"
