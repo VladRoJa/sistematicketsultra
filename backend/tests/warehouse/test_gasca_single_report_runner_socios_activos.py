@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 from datetime import date, datetime as real_datetime
+from unittest.mock import Mock
 
 import pytest
 from flask import Flask
@@ -32,6 +33,21 @@ def _runtime():
         reportes_url="https://example.test/reportes",
         show_browser=False,
         timezone_name="America/Tijuana",
+    )
+
+
+def test_authenticated_gasca_page_uses_cutoff_timezone(monkeypatch):
+    playwright = Mock()
+    monkeypatch.setattr(runner, "sync_playwright", lambda: playwright)
+    monkeypatch.setattr(runner, "_hacer_login", lambda **kwargs: None)
+    runtime = _runtime()
+
+    with runner._authenticated_page(runtime):
+        pass
+
+    browser = playwright.start.return_value.chromium.launch.return_value
+    browser.new_context.assert_called_once_with(
+        accept_downloads=True, timezone_id=runtime.timezone_name,
     )
 
 
