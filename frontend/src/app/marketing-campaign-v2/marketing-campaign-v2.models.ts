@@ -1649,3 +1649,28 @@ export interface CampaignV2PerformanceReport {
   }>;
   caveats: string[];
 }
+
+export type IventasTemplateCategory = 'MARKETING' | 'UTILITY';
+export type IventasTemplateUploadStatus = 'QUEUED' | 'RUNNING' | 'FINISHED' | 'SUBMITTED' | 'EXISTS' | 'ERROR' | 'VERIFY';
+
+export interface IventasTemplateUploadTarget {
+  sucursal_id: number;
+  sucursal_canon: string;
+  provider_channel_id: string;
+}
+
+export interface IventasTemplateUpload {
+  id: number;
+  requested_by_user_id: number | null;
+  created_at: string;
+  status: IventasTemplateUploadStatus;
+  name: string;
+  category: IventasTemplateCategory;
+  branches: (IventasTemplateUploadTarget & { status: IventasTemplateUploadStatus; detail?: string })[];
+}
+
+export interface IventasTemplateUploadsResponse {
+  enabled: boolean;
+  targets: IventasTemplateUploadTarget[];
+  rows: IventasTemplateUpload[];
+}

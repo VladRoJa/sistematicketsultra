@@ -116,6 +116,32 @@ services:
       - campaign-dispatch
 
 
+  iventas-template-upload-worker:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    env_file:
+      - .env.docker
+    environment:
+      APP_ENV: "prod"
+      IVENTAS_TEMPLATE_CREDENTIALS_FILE: "/run/secrets/iventas/iventas_sucursales.xlsx"
+    volumes:
+      - type: bind
+        source: "${IVENTAS_TEMPLATE_CREDENTIALS_HOST_DIR:-/etc/suite-ultra/iventas}"
+        target: /run/secrets/iventas
+        read_only: true
+        bind:
+          create_host_path: false
+    command: python -m app.rpa.workers.iventas_template_upload_worker
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 120s
+    networks:
+      - backend-net
+    profiles:
+      - iventas-template-upload
+
   frontend:
     build: ./frontend
     restart: unless-stopped

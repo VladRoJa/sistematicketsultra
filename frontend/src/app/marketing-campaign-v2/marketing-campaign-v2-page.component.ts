@@ -88,6 +88,7 @@ import {
   MarketingCampaignV2TariffClassifierDialogData,
 } from './marketing-campaign-v2-tariff-classifier-dialog.component';
 import { MarketingCampaignV2DispatchAdminDialogComponent } from './marketing-campaign-v2-dispatch-admin-dialog.component';
+import { MarketingCampaignV2TemplateUploadDialogComponent } from './marketing-campaign-v2-template-upload-dialog.component';
 import { MarketingCampaignV2ExcelDialogComponent } from './marketing-campaign-v2-excel-dialog.component';
 import { MarketingCampaignV2CobranzaSendDialogComponent } from './marketing-campaign-v2-cobranza-send-dialog.component';
 import { MarketingCampaignV2QuotaAdminDialogComponent } from './marketing-campaign-v2-quota-admin-dialog.component';
@@ -593,6 +594,13 @@ export class MarketingCampaignV2PageComponent implements OnInit {
       maxWidth: '96vw',
       maxHeight: '94vh',
       autoFocus: false,
+    });
+  }
+
+  openIventasTemplateUpload(): void {
+    if (!this.canManageDispatchConfig) { return; }
+    this.dialog.open(MarketingCampaignV2TemplateUploadDialogComponent, {
+      width: 'min(820px, 96vw)', maxWidth: '96vw', autoFocus: false,
     });
   }
 
