@@ -1485,6 +1485,7 @@ def manage_campaign_v2_template_uploads():
     except json.JSONDecodeError:
         return _error("La configuración de la plantilla no es válida.", 400)
     except TemplateUploadError as exc:
+        db.session.rollback()
         return _error(str(exc), 400)
 
 

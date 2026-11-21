@@ -148,6 +148,10 @@ button:focus-visible {
   gap: 12px;
 }
 
+.catalog-purpose {
+  grid-column: 1 / -1;
+}
+
 .field {
   display: grid;
   gap: 4px;
@@ -213,8 +217,7 @@ textarea.control {
 }
 
 .field-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
   margin: 4px 0 0;
   padding: 0;
@@ -222,7 +225,8 @@ textarea.control {
 }
 
 .field-list li {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(115px, 1.7fr) 24px;
   min-width: 0;
   align-items: center;
   gap: 4px;
@@ -232,6 +236,11 @@ textarea.control {
   color: var(--ultra-blue-dark);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.field-list .control {
+  min-height: 34px;
+  padding-block: 4px;
 }
 
 .field-remove {
@@ -472,17 +481,20 @@ textarea.control {
   font-size: 12px;
 }
 
-.status[data-status="SUBMITTED"] {
+.status[data-status="SUBMITTED"],
+.status[data-status="APPROVED"] {
   background: var(--ultra-success-soft);
   color: #17512f;
 }
 
-.status[data-status="VERIFY"] {
+.status[data-status="VERIFY"],
+.status[data-status="IN_REVIEW"] {
   background: var(--ultra-warning-soft);
   color: #713f12;
 }
 
-.status[data-status="ERROR"] {
+.status[data-status="ERROR"],
+.status[data-status="REJECTED"] {
   background: var(--ultra-danger-soft);
   color: #912018;
 }

@@ -6,18 +6,21 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { EMPTY, catchError, exhaustMap, pairwise, startWith, timer } from 'rxjs';
 
 import {
+  CampaignV2Purpose,
   IventasTemplateCategory,
   IventasTemplateUpload,
   IventasTemplateUploadStatus,
   IventasTemplateUploadTarget,
   IventasTemplateUploadsResponse,
 } from './marketing-campaign-v2.models';
+import { CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES } from './marketing-campaign-v2-dispatch-admin.logic';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
 
 interface FieldSelection {
   start: number;
   end: number;
   example: string;
+  source: FormControl<string>;
 }
 
 @Component({
@@ -35,12 +38,16 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
     name: new FormControl('', { nonNullable: true, validators: Validators.pattern(/^[a-z0-9_]{1,255}$/) }),
     message: new FormControl('', { nonNullable: true, validators: Validators.required }),
     category: new FormControl<IventasTemplateCategory>('MARKETING', { nonNullable: true }),
+    purpose: new FormControl<CampaignV2Purpose>('UNCLASSIFIED', { nonNullable: true }),
+    fileUrl: new FormControl('', { nonNullable: true }),
     branchIds: new FormControl<number[]>([], { nonNullable: true, validators: Validators.required }),
   });
   readonly statusLabels: Record<IventasTemplateUploadStatus, string> = {
-    QUEUED: 'Pendiente', RUNNING: 'Procesando', FINISHED: 'Terminado',
+    QUEUED: 'Pendiente', RUNNING: 'Procesando', FINISHED: 'Carga terminada',
     SUBMITTED: 'Registrada en iVentas', EXISTS: 'Ya existía', ERROR: 'Error', VERIFY: 'Verificar en iVentas',
+    IN_REVIEW: 'En revisión', APPROVED: 'Disponible en Campañas', REJECTED: 'Rechazada por iVentas',
   };
+  readonly variableSources = CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES;
   readonly branchSearch = new FormControl('', { nonNullable: true });
   readonly uploadImageLimit = 5 * 1024 * 1024;
 
@@ -77,9 +84,10 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
   }
 
   get canSubmit(): boolean {
-    const { name, message } = this.form.getRawValue();
+    const { name, message, fileUrl } = this.form.getRawValue();
     return Boolean(this.data?.enabled && !this.saving && this.form.valid && name.trim() && message.trim()
-      && !this.imageError && this.buttons.every(button => button.value.trim()));
+      && !this.imageError && (!this.image || /^https:\/\//i.test(fileUrl.trim()))
+      && this.fields.every(field => field.source.value) && this.buttons.every(button => button.value.trim()));
   }
 
   get visibleBranches(): IventasTemplateUploadTarget[] {
@@ -120,6 +128,13 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
     return row.id;
   }
 
+  uploadLabel(row: IventasTemplateUpload): string {
+    if (row.status === 'FINISHED' && row.branches.some(branch => branch.status === 'IN_REVIEW')) {
+      return this.statusLabels.IN_REVIEW;
+    }
+    return this.statusLabels[row.status];
+  }
+
   toggleUpload(id: number): void {
     this.expandedUploadId = this.expandedUploadId === id ? null : id;
   }
@@ -136,7 +151,8 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
       this.fieldFeedback = 'La selección se cruza con un campo que ya marcaste.';
       return;
     }
-    this.fields = [...this.fields, { start, end, example }].sort((a, b) => a.start - b.start);
+    const source = new FormControl('', { nonNullable: true });
+    this.fields = [...this.fields, { start, end, example, source }].sort((a, b) => a.start - b.start);
   }
 
   removeField(index: number): void {
@@ -167,6 +183,7 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
   removeImage(input: HTMLInputElement): void {
     this.image = null;
     this.imageError = '';
+    this.form.controls.fileUrl.reset();
     input.value = '';
   }
 
@@ -189,6 +206,11 @@ export class MarketingCampaignV2TemplateUploadDialogComponent implements OnInit 
       branch_ids: request.branchIds,
       fields: this.fields.map(({ start, end }) => ({ start, end })),
       buttons: this.buttons.map(button => button.value.trim()),
+      catalog: {
+        purpose: request.purpose,
+        sources: this.fields.map(field => field.source.value),
+        file_url: this.image ? request.fileUrl.trim() : '',
+      },
     }));
     if (this.image) {
       payload.append('image', this.image);

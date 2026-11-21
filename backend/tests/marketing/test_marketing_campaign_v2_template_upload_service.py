@@ -1,14 +1,22 @@
 import json
+import os
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from flask import Flask
 from flask_jwt_extended import JWTManager, create_access_token
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.models.iventas_template_upload import IventasTemplateUploadORM
+from app.models.marketing import MarketingCampaignV2TemplateORM
 from app.routes import marketing_campaign_v2_routes as routes
 from app.services import marketing_campaign_v2_template_upload_service as service
 from app.services.marketing_access import MarketingAuthorizationError
@@ -20,6 +28,8 @@ def session(monkeypatch):
     metadata = MetaData()
     Table("users", metadata, Column("id", Integer, primary_key=True))
     IventasTemplateUploadORM.__table__.to_metadata(metadata)
+    catalog = MarketingCampaignV2TemplateORM.__table__.to_metadata(metadata)
+    catalog.c.id.type = Integer()
     metadata.create_all(engine)
     targets = [
         {"sucursal_id": number, "sucursal_canon": f"BRANCH_{number}", "provider_channel_id": f"channel-{number}",
@@ -157,3 +167,108 @@ def test_worker_processes_two_separate_account_logins(session, monkeypatch):
     assert processed == list(logins.values())
     result = service.upload_history(session=session)[0]
     assert [branch["status"] for branch in result["branches"]] == ["ERROR", "SUBMITTED"]
+
+
+def test_catalog_publishes_channels_individually_after_approval(session, monkeypatch):
+    monkeypatch.setattr(service, "resolve_dispatch_channel_binding",
+                        lambda sucursal_id, **_: SimpleNamespace(provider_channel_id=f"channel-{sucursal_id}"))
+    upload_id = service.create_upload(_request(
+        catalog={"purpose": "ACTIVE_MEMBERS", "sources": ["first_name"]},
+    ), None, actor_id=47, session=session).id
+    for branch_id in (1, 2):
+        assert service.claim_next_branch(session)[1]["sucursal_id"] == branch_id
+        service.finish_branch(session, upload_id, branch_id, service.IN_REVIEW)
+    assert session.query(MarketingCampaignV2TemplateORM).count() == 0
+
+    now = datetime.now(timezone.utc) + timedelta(seconds=1)
+    assert service.claim_due_review(session, now=now)[1]["sucursal_id"] == 1
+    service.finish_review(session, upload_id, 1, service.IN_REVIEW, "Pendiente")
+    assert service.claim_due_review(session, now=now)[1]["sucursal_id"] == 2
+    service.finish_review(session, upload_id, 2, service.APPROVED, "Aprobada por iVentas")
+
+    row = session.query(MarketingCampaignV2TemplateORM).one()
+    assert row.is_active
+    assert row.compatible_channel_ids_json == ["channel-2"]
+    assert row.variables_json == {"1": "first_name"}
+    assert row.purposes_json == ["ACTIVE_MEMBERS"]
+    assert service.claim_due_review(session, now=now) is None
+
+    assert service.claim_due_review(session, now=now + service.REVIEW_INTERVAL)[1]["sucursal_id"] == 1
+    service.finish_review(session, upload_id, 1, service.APPROVED, "Aprobada por iVentas")
+    assert row.compatible_channel_ids_json == ["channel-1", "channel-2"]
+    assert service.claim_due_review(session, now=now + 2 * service.REVIEW_INTERVAL) is None
+
+
+def test_changed_channel_cannot_publish_catalog_entry(session, monkeypatch):
+    monkeypatch.setattr(service, "resolve_dispatch_channel_binding",
+                        lambda **_: SimpleNamespace(provider_channel_id="new-channel"))
+    upload_id = service.create_upload(_request(
+        branch_ids=[1], catalog={"purpose": "ACTIVE_MEMBERS", "sources": ["first_name"]},
+    ), None, actor_id=47, session=session).id
+    service.claim_next_branch(session)
+    service.finish_branch(session, upload_id, 1, service.IN_REVIEW)
+    service.claim_due_review(session)
+    service.finish_review(session, upload_id, 1, service.APPROVED, "Aprobada por iVentas")
+    assert session.query(MarketingCampaignV2TemplateORM).count() == 0
+    assert service.upload_history(session=session)[0]["branches"][0]["status"] == "VERIFY"
+
+
+def test_catalog_requires_source_for_each_field_and_send_url_for_an_image(session):
+    with pytest.raises(service.TemplateUploadError, match="cada campo"):
+        service.create_upload(_request(
+            catalog={"purpose": "ACTIVE_MEMBERS", "sources": []},
+        ), None, actor_id=47, session=session)
+    with pytest.raises(service.TemplateUploadError, match="URL HTTPS"):
+        service.create_upload(_request(
+            catalog={"purpose": "ACTIVE_MEMBERS", "sources": ["first_name"]},
+        ), BytesIO(b"\x89PNG\r\n\x1a\nsynthetic"), actor_id=47, session=session)
+
+
+def test_same_name_cannot_queue_different_content(session):
+    catalog = {"purpose": "ACTIVE_MEMBERS", "sources": ["first_name"]}
+    service.create_upload(_request(catalog=catalog), None, actor_id=47, session=session)
+    with pytest.raises(service.TemplateUploadError, match="contenido distinto"):
+        service.create_upload(_request(
+            message="Hola, Ana. Regresa a entrenar.", catalog=catalog,
+        ), None, actor_id=47, session=session)
+
+
+def test_postgres_upgrade_preserves_catalog_and_upload_history():
+    url = os.getenv("QUOTA_TEST_POSTGRES_URL")
+    if not url:
+        pytest.skip("isolated PostgreSQL quota_ci required")
+    parts = make_url(url)
+    if (parts.get_backend_name() != "postgresql" or parts.host not in {"127.0.0.1", "localhost"}
+            or parts.database != "quota_ci" or parts.username != "quota_ci"):
+        pytest.fail("Refusing a non-synthetic database")
+    scripts = ScriptDirectory(str(Path(__file__).resolve().parents[2] / "migrations"))
+    migration = scripts.get_revision("i21c11202601").module
+    assert migration.down_revision == "i20c11202601"
+
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TEMP TABLE marketing_campaign_v2_templates (id bigint PRIMARY KEY) ON COMMIT DROP",
+            )
+            connection.exec_driver_sql(
+                "CREATE TEMP TABLE marketing_iventas_template_uploads (id integer PRIMARY KEY) ON COMMIT DROP",
+            )
+            connection.exec_driver_sql("INSERT INTO marketing_campaign_v2_templates VALUES (101)")
+            connection.exec_driver_sql("INSERT INTO marketing_iventas_template_uploads VALUES (202)")
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.upgrade()
+                assert connection.exec_driver_sql(
+                    "SELECT upload_fingerprint FROM marketing_campaign_v2_templates WHERE id = 101",
+                ).one() == (None,)
+                assert connection.exec_driver_sql(
+                    "SELECT next_review_at FROM marketing_iventas_template_uploads WHERE id = 202",
+                ).one() == (None,)
+                assert connection.exec_driver_sql(
+                    "SELECT to_regclass('ix_marketing_iventas_template_uploads_next_review_at') IS NOT NULL",
+                ).scalar_one()
+                migration.downgrade()
+            assert connection.exec_driver_sql("SELECT * FROM marketing_campaign_v2_templates").one() == (101,)
+            assert connection.exec_driver_sql("SELECT * FROM marketing_iventas_template_uploads").one() == (202,)
+    finally:
+        engine.dispose()

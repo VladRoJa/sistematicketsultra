@@ -1,7 +1,7 @@
 <header class="dialog-header">
   <div>
     <h2 mat-dialog-title>Cargar plantillas en iVentas</h2>
-    <p>Registra una plantilla para revisión en las sucursales que selecciones.</p>
+    <p>Los canales aprobados por iVentas quedan disponibles en Campañas.</p>
   </div>
   <button class="icon-button" mat-dialog-close type="button" aria-label="Cerrar carga de plantillas">
     <span aria-hidden="true">×</span>
@@ -38,6 +38,15 @@
               <option value="UTILITY">Utilidad</option>
             </select>
           </div>
+          <div class="field catalog-purpose">
+            <label for="iventas-template-purpose">Uso en Campañas</label>
+            <select id="iventas-template-purpose" class="control" formControlName="purpose">
+              <option value="UNCLASSIFIED">General</option>
+              <option value="ACTIVE_MEMBERS">Socios activos</option>
+              <option value="REACTIVATION">Reactivación</option>
+              <option value="NEW_SALE">Venta nueva</option>
+            </select>
+          </div>
         </div>
 
         <div class="field message-field">
@@ -55,7 +64,12 @@
           <p *ngIf="fieldFeedback" class="feedback feedback--error" role="status">{{ fieldFeedback }}</p>
           <ul *ngIf="fields.length" class="field-list" aria-label="Campos personalizados">
             <li *ngFor="let field of fields; index as index">
-              <span>{{ index + 1 }} · {{ field.example }}</span>
+              <label [for]="'iventas-field-source-' + index">{{ index + 1 }} · {{ field.example }}</label>
+              <select [id]="'iventas-field-source-' + index" class="control"
+                [formControl]="field.source" required>
+                <option value="">Elige el dato de la Suite</option>
+                <option *ngFor="let source of variableSources" [value]="source.value">{{ source.label }}</option>
+              </select>
               <button type="button" class="field-remove" [attr.aria-label]="'Quitar campo ' + field.example"
                 (click)="removeField(index)">
                 <span aria-hidden="true">×</span>
@@ -79,6 +93,9 @@
               </div>
               <small class="hint">PNG o JPEG, hasta 5 MB.</small>
               <p *ngIf="imageError" class="feedback feedback--error" role="alert">{{ imageError }}</p>
+              <label *ngIf="image" for="iventas-template-file-url">URL HTTPS de la imagen para el envío</label>
+              <input *ngIf="image" id="iventas-template-file-url" class="control" type="url"
+                formControlName="fileUrl" maxlength="2048" required>
             </div>
 
             <div class="field">
@@ -140,7 +157,7 @@
           <strong>{{ row.name }}</strong>
           <small>#{{ row.id }} · {{ row.created_at | date:'dd/MM/yyyy HH:mm' }}</small>
         </span>
-        <span class="status" [attr.data-status]="row.status">{{ statusLabels[row.status] }}</span>
+        <span class="status" [attr.data-status]="row.status">{{ uploadLabel(row) }}</span>
       </button>
       <ul class="history-branches" [id]="'iventas-upload-' + row.id" *ngIf="expandedUploadId === row.id">
         <li *ngFor="let branch of row.branches; trackBy: trackBranch">

@@ -9,10 +9,17 @@ export interface DispatchTemplateDraft {
   fileUrl: string;
 }
 
-const SOURCES = new Set([
-  'first_name', 'expiration_date', 'tariff', 'branch',
-  'member_id', 'member_pin', 'amount',
-]);
+export const CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES = [
+  { value: 'first_name', label: 'Nombre del socio' },
+  { value: 'expiration_date', label: 'Vencimiento' },
+  { value: 'tariff', label: 'Tarifa' },
+  { value: 'branch', label: 'Sucursal' },
+  { value: 'member_id', label: 'ID socio' },
+  { value: 'member_pin', label: 'PIN socio' },
+  { value: 'amount', label: 'Adeudo / monto' },
+];
+
+const SOURCES = new Set(CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES.map(source => source.value));
 
 export function isDispatchTemplateDraftValid(draft: DispatchTemplateDraft): boolean {
   const active = new Set(draft.activeChannelIds);

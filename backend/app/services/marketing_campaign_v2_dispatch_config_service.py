@@ -249,16 +249,18 @@ def resolve_dispatch_channel_binding(
     sucursal_id: Any,
     provider: Any = DEFAULT_PROVIDER,
     session: Any | None = None,
+    for_update: bool = False,
 ) -> MarketingCampaignV2ChannelBindingORM | None:
     active_session = session if session is not None else db.session
     normalized_sucursal_id = _positive_int(sucursal_id, "sucursal_id")
     normalized_provider = _normalize_provider(provider)
-    return active_session.query(MarketingCampaignV2ChannelBindingORM).filter(
+    query = active_session.query(MarketingCampaignV2ChannelBindingORM).filter(
         MarketingCampaignV2ChannelBindingORM.provider == normalized_provider,
         MarketingCampaignV2ChannelBindingORM.sucursal_id == normalized_sucursal_id,
         MarketingCampaignV2ChannelBindingORM.is_active.is_(True),
         MarketingCampaignV2ChannelBindingORM.is_default.is_(True),
-    ).one_or_none()
+    )
+    return (query.with_for_update() if for_update else query).one_or_none()
 
 
 def list_templates(
@@ -355,11 +357,22 @@ def save_template(
         normalized_template_id = _positive_int(template_id, "template_id")
         row = active_session.query(MarketingCampaignV2TemplateORM).filter(
             MarketingCampaignV2TemplateORM.id == normalized_template_id
-        ).one_or_none()
+        ).with_for_update().one_or_none()
         if row is None:
             raise MarketingCampaignV2DispatchConfigNotFoundError(
                 "Template Campaign V2 no encontrado."
             )
+
+    if row is not None and row.upload_fingerprint and (
+        row.provider != normalized_provider
+        or row.template_name != normalized_name
+        or dict(row.variables_json or {}) != normalized_variables
+        or set(row.compatible_channel_ids_json or []) != set(normalized_channels)
+        or dict(row.metadata_json or {}) != normalized_metadata
+    ):
+        raise MarketingCampaignV2DispatchConfigConflictError(
+            "El nombre, los campos, la imagen y los canales de esta plantilla se administran desde su carga en iVentas."
+        )
 
     if require_explicit_channels and row is not None:
         historical = (
@@ -474,7 +487,7 @@ def template_file_url(
     normalized = raw_value.strip()
     if not normalized:
         return None
-    return _validate_template_file_url(normalized)
+    return validate_template_file_url(normalized)
 
 
 def template_allows_channel(
@@ -528,6 +541,7 @@ def _serialize_template(row: MarketingCampaignV2TemplateORM) -> dict[str, Any]:
         "purposes": list(row.purposes_json or []),
         "variables": dict(row.variables_json or {}),
         "compatible_channel_ids": list(row.compatible_channel_ids_json or []),
+        "managed_upload": bool(row.upload_fingerprint),
         "metadata": dict(row.metadata_json or {}),
         "created_at": _iso(row.created_at),
         "updated_at": _iso(row.updated_at),
@@ -627,11 +641,11 @@ def _normalize_template_metadata(value: Any) -> dict[str, Any]:
         metadata.pop("file_url", None)
         return metadata
 
-    metadata["file_url"] = _validate_template_file_url(normalized)
+    metadata["file_url"] = validate_template_file_url(normalized)
     return metadata
 
 
-def _validate_template_file_url(value: str) -> str:
+def validate_template_file_url(value: str) -> str:
     if len(value) > 2048:
         raise MarketingCampaignV2DispatchConfigValidationError(
             "metadata.file_url excede 2048 caracteres."
