@@ -193,10 +193,14 @@ def test_catalog_publishes_channels_individually_after_approval(session, monkeyp
     assert row.purposes_json == ["ACTIVE_MEMBERS"]
     assert service.claim_due_review(session, now=now) is None
 
-    assert service.claim_due_review(session, now=now + service.REVIEW_INTERVAL)[1]["sucursal_id"] == 1
+    assert service.claim_due_review(session, now=now + timedelta(minutes=4, seconds=59)) is None
+    assert service.claim_due_review(session, now=now + timedelta(minutes=5))[1]["sucursal_id"] == 1
+    service.finish_review(session, upload_id, 1, service.IN_REVIEW, "Pendiente")
+    assert service.claim_due_review(session, now=now + timedelta(minutes=9, seconds=59)) is None
+    assert service.claim_due_review(session, now=now + timedelta(minutes=10))[1]["sucursal_id"] == 1
     service.finish_review(session, upload_id, 1, service.APPROVED, "Aprobada por iVentas")
     assert row.compatible_channel_ids_json == ["channel-1", "channel-2"]
-    assert service.claim_due_review(session, now=now + 2 * service.REVIEW_INTERVAL) is None
+    assert service.claim_due_review(session, now=now + timedelta(minutes=15)) is None
 
 
 def test_changed_channel_cannot_publish_catalog_entry(session, monkeypatch):
