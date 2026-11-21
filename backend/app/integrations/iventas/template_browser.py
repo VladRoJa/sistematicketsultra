@@ -108,9 +108,11 @@ def _login(page, login) -> None:
 def _inventory_response(response):
     url = urlsplit(response.url)
     domain = url.hostname or ""
+    inventory_domain = domain in {"iventas.com", "iventas.ai", "rest.iventas.mx"} or domain.endswith(
+        (".iventas.com", ".iventas.ai")
+    )
     return (
-        response.ok and response.request.method == "GET" and url.scheme == "https"
-        and (domain in {"iventas.com", "iventas.ai"} or domain.endswith((".iventas.com", ".iventas.ai")))
+        response.ok and response.request.method == "GET" and url.scheme == "https" and inventory_domain
         and "whatsapptemplate" in url.path.casefold().split("/")
     )
 

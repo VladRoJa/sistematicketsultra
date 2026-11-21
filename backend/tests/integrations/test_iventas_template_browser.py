@@ -75,17 +75,23 @@ def test_category_step_stops_if_regresar_does_not_show_requested_category():
     page.get_by_role.assert_not_called()
 
 
+@pytest.mark.parametrize("inventory_url", [
+    "https://app.iventas.com/whatsappTemplate/list",
+    "https://rest.iventas.mx/whatsappTemplate/0123456789abcdef01234567",
+])
 @pytest.mark.parametrize(("provider_channel", "provider_state", "portal_label", "expected"), [
     ("channel-1", "accepted", "Aprobada", "APPROVED"),
     ("channel-2", "accepted", "Aprobada", "IN_REVIEW"),
     ("channel-1", "pending", "En revisión", "IN_REVIEW"),
     ("channel-1", "rejected", "Rechazada", "REJECTED"),
 ])
-def test_approval_requires_inventory_for_exact_channel(monkeypatch, provider_channel, provider_state, portal_label, expected):
+def test_approval_requires_inventory_for_exact_channel(
+    monkeypatch, inventory_url, provider_channel, provider_state, portal_label, expected,
+):
     browser = Mock()
     context = browser.new_context.return_value
     page = context.new_page.return_value
-    response = Mock(url="https://app.iventas.com/whatsappTemplate/list", ok=True)
+    response = Mock(url=inventory_url, ok=True)
     response.request.method = "GET"
     response.json.return_value = [{
         "name": "asistencia_demo", "status": provider_state,
@@ -105,3 +111,17 @@ def test_approval_requires_inventory_for_exact_channel(monkeypatch, provider_cha
 
     assert status == expected
     context.close.assert_called_once()
+
+
+@pytest.mark.parametrize(("url", "method"), [
+    ("https://graph-v2.iventas.mx/whatsappTemplate/account", "GET"),
+    ("https://rest.iventas.mx.example.test/whatsappTemplate/account", "GET"),
+    ("http://rest.iventas.mx/whatsappTemplate/account", "GET"),
+    ("https://rest.iventas.mx/whatsappTemplate/account", "POST"),
+    ("https://rest.iventas.mx/v2/broadcast", "GET"),
+])
+def test_inventory_ignores_unrelated_responses(url, method):
+    response = Mock(url=url, ok=True)
+    response.request.method = method
+
+    assert not adapter._inventory_response(response)
