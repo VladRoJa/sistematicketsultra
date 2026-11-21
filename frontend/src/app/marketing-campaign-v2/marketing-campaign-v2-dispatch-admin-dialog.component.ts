@@ -25,7 +25,7 @@ import {
 import { MarketingCampaignV2TemplateProbesComponent } from './marketing-campaign-v2-template-probes.component';
 import { MarketingCampaignV2GovernedConsoleDialogComponent } from './marketing-campaign-v2-governed-console-dialog.component';
 import { MarketingCampaignV2Service } from './marketing-campaign-v2.service';
-import { isDispatchTemplateDraftValid } from './marketing-campaign-v2-dispatch-admin.logic';
+import { CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES, isDispatchTemplateDraftValid } from './marketing-campaign-v2-dispatch-admin.logic';
 import { isCampaignV2MxnUnitCostValid } from './marketing-campaign-v2-admin-validation.logic';
 
 interface VariableMappingRow {
@@ -58,15 +58,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   private readonly dialogRef = inject(MatDialogRef<MarketingCampaignV2DispatchAdminDialogComponent>);
 
   readonly purposes: CampaignV2Purpose[] = ['REACTIVATION', 'NEW_SALE', 'ACTIVE_MEMBERS', 'UNCLASSIFIED'];
-  readonly variableSources = [
-    { value: 'first_name', label: 'Nombre' },
-    { value: 'expiration_date', label: 'Vencimiento' },
-    { value: 'tariff', label: 'Tarifa' },
-    { value: 'branch', label: 'Sucursal' },
-    { value: 'member_id', label: 'ID socio' },
-    { value: 'member_pin', label: 'PIN socio' },
-    { value: 'amount', label: 'Adeudo / monto' },
-  ];
+  readonly variableSources = CAMPAIGN_V2_TEMPLATE_VARIABLE_SOURCES;
 
   templates: CampaignV2DispatchTemplate[] = [];
   bindings: CampaignV2ChannelBinding[] = [];
@@ -80,6 +72,8 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
   error = '';
   notice = '';
   editingTemplateId: number | null = null;
+  editingManagedTemplate = false;
+  editingActiveTemplate = false;
   certificationTemplateId: number | null = null;
   editingBindingId: number | null = null;
   pendingDeactivateId: number | null = null;
@@ -208,26 +202,37 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
 
   editTemplate(template: CampaignV2DispatchTemplate): void {
     this.pendingDeactivateId = null;
+    this.certificationTemplateId = null;
     this.editingTemplateId = template.id;
+    this.editingManagedTemplate = Boolean(template.managed_upload);
+    this.editingActiveTemplate = template.is_active;
     this.showTemplateEditor = true;
     this.templateName.setValue(template.template_name);
     this.templateLabel.setValue(template.label);
     this.templatePurposes.setValue([...template.purposes]);
     this.templateChannels.setValue([...template.compatible_channel_ids]);
+    if (this.editingManagedTemplate) {
+      this.templateChannels.disable();
+    } else {
+      this.templateChannels.enable();
+    }
     this.templateActive.setValue(template.is_active);
     this.templateMetadata = { ...template.metadata };
     this.templateFileUrl.setValue(String(template.metadata['file_url'] || ''));
     this.variableRows = Object.keys(template.variables).sort((a, b) => Number(a) - Number(b))
       .map((key, index) => ({
         position: index + 1,
-        source: new FormControl(template.variables[key], { nonNullable: true }),
+        source: new FormControl(
+          { value: template.variables[key], disabled: this.editingManagedTemplate },
+          { nonNullable: true },
+        ),
       }));
     this.notice = '';
     this.error = '';
   }
 
-  showCertification(template: CampaignV2DispatchTemplate): void {
-    this.certificationTemplateId = this.certificationTemplateId === template.id ? null : template.id;
+  toggleCertification(): void {
+    this.certificationTemplateId = this.certificationTemplateId === null ? this.editingTemplateId : null;
   }
 
   reviewCertificationQa(row: CampaignV2TemplateProbeRow): void {
@@ -261,11 +266,15 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
 
   resetTemplate(): void {
     this.editingTemplateId = null;
+    this.editingManagedTemplate = false;
+    this.editingActiveTemplate = false;
+    this.certificationTemplateId = null;
     this.pendingDeactivateId = null;
     this.templateName.setValue('');
     this.templateLabel.setValue('');
     this.templatePurposes.setValue([]);
     this.templateChannels.setValue([]);
+    this.templateChannels.enable();
     this.templateActive.setValue(true);
     this.templateFileUrl.setValue('');
     this.templateMetadata = {};
@@ -324,7 +333,7 @@ export class MarketingCampaignV2DispatchAdminDialogComponent implements OnInit {
     operation.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.savingTemplate = false;
-        this.notice = 'Plantilla guardada localmente. No confirma aprobación en iVentas.';
+        this.notice = 'Plantilla guardada en el catálogo de la Suite.';
         this.resetTemplate();
         this.showTemplateEditor = false;
         this.reload();

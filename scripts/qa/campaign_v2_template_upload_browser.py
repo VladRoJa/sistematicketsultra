@@ -69,6 +69,17 @@ def run(base, screenshots=None):
                 }
                 uploads.append(row)
                 return route.fulfill(status=201, json=row)
+        if request.method == "GET" and path.endswith("/dispatch/templates/admin"):
+            return route.fulfill(json={"rows": [{
+                "id": 31, "provider": "IVENTAS", "template_name": "piloto_ux",
+                "label": "Piloto UX", "is_active": True, "purposes": ["ACTIVE_MEMBERS"],
+                "variables": {"1": "first_name"}, "compatible_channel_ids": ["demo-1"],
+                "managed_upload": True, "metadata": {},
+            }]})
+        if request.method == "GET" and path.rsplit("/", 1)[-1] in {
+            "channel-bindings", "catalog-branches", "cost-rates",
+        }:
+            return route.fulfill(json={"rows": []})
         return route.fulfill(status=404, json={"error": "synthetic-not-available"})
 
     with sync_playwright() as playwright:
@@ -91,13 +102,17 @@ def run(base, screenshots=None):
         expect(name).to_be_in_viewport()
         name.fill("piloto_ux")
         dialog.get_by_label("Categoría").select_option("UTILITY")
+        dialog.get_by_label("Uso en Campañas").select_option("ACTIVE_MEMBERS")
         message = dialog.get_by_label("Mensaje", exact=True)
         message.fill("Hola Ana, recibimos tu solicitud.")
         message.evaluate("(el) => el.setSelectionRange(5, 8)")
         dialog.get_by_role("button", name="Crear campo").click()
         expect(dialog.get_by_text("1 · Ana", exact=True)).to_be_visible()
+        expect(dialog.get_by_label("1 · Ana")).to_have_value("")
+        dialog.get_by_label("1 · Ana").select_option("first_name")
         message.fill("Aviso: Hola Ana, recibimos tu solicitud.")
         expect(dialog.get_by_text("1 · Ana", exact=True)).to_be_visible()
+        expect(dialog.get_by_label("1 · Ana")).to_have_value("first_name")
 
         search = dialog.get_by_role("searchbox", name="Buscar sucursal")
         search.fill("villas")
@@ -125,6 +140,7 @@ def run(base, screenshots=None):
         expect(execute).to_be_disabled()
         file_input.set_input_files({"name": "piloto.png", "mimeType": "image/png", "buffer": PNG})
         expect(dialog.get_by_text("piloto.png", exact=True)).to_be_visible()
+        dialog.get_by_label("URL HTTPS de la imagen para el envío").fill("https://example.test/piloto.png")
         dialog.get_by_role("button", name="Agregar botón").click()
         expect(execute).to_be_disabled()
         dialog.get_by_label("Texto del botón 1").fill("Ver más")
@@ -139,8 +155,24 @@ def run(base, screenshots=None):
             "name": "piloto_ux", "category": "UTILITY", "branch_ids": [1, 2],
             "message": "Aviso: Hola Ana, recibimos tu solicitud.",
             "fields": [{"start": 12, "end": 15}], "buttons": ["Ver más"],
+            "catalog": {"purpose": "ACTIVE_MEMBERS", "sources": ["first_name"],
+                        "file_url": "https://example.test/piloto.png"},
         }], requests
-        print("TEMPLATE_UPLOAD_BROWSER_PASS: labels, fields, branches, image, button, mobile footer and history")
+        uploads[0]["status"] = "FINISHED"
+        uploads[0]["branches"][0]["status"] = "APPROVED"
+        uploads[0]["branches"][1]["status"] = "IN_REVIEW"
+        expect(dialog.get_by_text("Disponible en Campañas", exact=True)).to_be_visible(timeout=9000)
+        expect(dialog.get_by_text("En revisión", exact=True)).to_have_count(2)
+        dialog.get_by_role("button", name="Cerrar", exact=True).click()
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.get_by_role("button", name="Abrir herramientas de campañas").click()
+        page.get_by_role("menuitem", name="Plantillas, canales y tarifas").click()
+        expect(dialog.get_by_role("button", name="Vincular plantilla existente")).to_be_visible()
+        expect(dialog.get_by_role("button", name="Prueba de envío", exact=True)).to_have_count(0)
+        dialog.get_by_role("button", name="Ver detalle").click()
+        expect(dialog.get_by_role("button", name="Prueba de envío", exact=True)).to_be_visible()
+        expect(dialog.get_by_label("Nombre exacto iVentas")).not_to_be_editable()
+        print("TEMPLATE_UPLOAD_BROWSER_PASS: variable source, media URL, approval history and catalog detail")
         context.close()
         browser.close()
 

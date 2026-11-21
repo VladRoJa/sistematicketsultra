@@ -381,6 +381,7 @@ class MarketingCampaignV2TemplateORM(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     provider = db.Column(db.String(50), nullable=False)
     template_name = db.Column(db.String(255), nullable=False)
+    upload_fingerprint = db.Column(db.String(64))
     label = db.Column(db.String(255), nullable=False)
     is_active = db.Column(
         db.Boolean,

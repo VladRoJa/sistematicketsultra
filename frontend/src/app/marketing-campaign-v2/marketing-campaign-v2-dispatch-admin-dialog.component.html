@@ -2,8 +2,7 @@
 
 <mat-dialog-content class="dispatch-admin">
   <p class="disclaimer">
-    <strong>Estas opciones preparan el envío; no envían mensajes.</strong> Catálogo local de Suite Ultra. Registrar una plantilla no confirma que exista o esté
-    aprobada en cada canal de iVentas. Esta pantalla nunca envía WhatsApps.
+    Las plantillas nuevas que cargas desde la Suite se incorporan al catálogo conforme iVentas aprueba cada canal.
   </p>
 
   <div *ngIf="loading" class="feedback" role="status">
@@ -18,11 +17,10 @@
       <div class="section-heading">
         <div>
           <h3>Plantillas</h3>
-          <p>Usa el nombre exacto que está aprobado en iVentas.</p>
+          <p>Consulta las plantillas disponibles para Campañas o vincula una que ya existe en iVentas.</p>
         </div>
-        <button mat-stroked-button type="button" (click)="startNewTemplate()">Nueva plantilla</button>
+        <button mat-stroked-button type="button" (click)="startNewTemplate()">Vincular plantilla existente</button>
       </div>
-      <p class="section-guidance" *ngIf="!showTemplateEditor">Selecciona «Editar» en una plantilla o crea una nueva para abrir el formulario.</p>
 
       <div class="catalog-table">
         <table>
@@ -36,8 +34,7 @@
               <td>{{ template.compatible_channel_ids.length || 'Sin restricción histórica' }}</td>
               <td><span class="status-pill" [class.is-inactive]="!template.is_active">{{ template.is_active ? 'Activa' : 'Inactiva' }}</span></td>
               <td class="actions">
-                <button *ngIf="template.is_active" mat-stroked-button type="button" (click)="showCertification(template)">Certificar canales</button>
-                <button mat-button type="button" (click)="editTemplate(template)">Editar</button>
+                <button mat-button type="button" (click)="editTemplate(template)">Ver detalle</button>
                 <button *ngIf="template.is_active" mat-button type="button" (click)="requestDeactivate(template)"
                   [disabled]="savingTemplate">Desactivar</button>
               </td>
@@ -46,15 +43,6 @@
           </tbody>
         </table>
       </div>
-      <section *ngIf="certificationTemplateId !== null" aria-label="Certificación de plantilla">
-        <h4>Certificación por plantilla y canal emisor</h4>
-        <p>Las certificaciones se reutilizan entre campañas. Preparar no envía WhatsApps;
-          cada QA exige revisión y autorización de envío por separado.</p>
-        <app-campaign-template-probes [catalogMode]="true"
-          [templateId]="certificationTemplateId" [campaignId]="0"
-          (reviewQa)="reviewCertificationQa($event)">
-        </app-campaign-template-probes>
-      </section>
       <div *ngIf="pendingDeactivateId !== null" class="confirm">
         <span>¿Quieres desactivar esta plantilla para futuras preparaciones de envío?</span>
         <button mat-flat-button color="warn" type="button" (click)="confirmDeactivate()"
@@ -63,11 +51,13 @@
       </div>
 
       <div class="editor editor-card" *ngIf="showTemplateEditor" id="campaign-v2-template-editor">
-        <h4>{{ editingTemplateId === null ? 'Agregar plantilla' : 'Editar plantilla #' + editingTemplateId }}</h4>
+        <h4>{{ editingTemplateId === null ? 'Vincular plantilla existente' : 'Detalle de plantilla #' + editingTemplateId }}</h4>
+        <p *ngIf="editingManagedTemplate" class="muted">Los canales y campos se toman de la carga y la aprobación de iVentas.</p>
+        <p *ngIf="editingTemplateId === null" class="muted">Usa el nombre exacto aprobado en iVentas y selecciona sus canales.</p>
         <div class="form-grid">
           <mat-form-field appearance="fill">
             <mat-label>Nombre exacto iVentas</mat-label>
-            <input matInput [formControl]="templateName" maxlength="255" placeholder="winback_general_octubre">
+            <input matInput [formControl]="templateName" [readonly]="editingManagedTemplate" maxlength="255" placeholder="winback_general_octubre">
           </mat-form-field>
           <mat-form-field appearance="fill">
             <mat-label>Etiqueta interna</mat-label>
@@ -81,14 +71,14 @@
           </mat-form-field>
           <mat-form-field appearance="fill">
             <mat-label>URL HTTPS de imagen (opcional)</mat-label>
-            <input matInput [formControl]="templateFileUrl" placeholder="https://...">
+            <input matInput [formControl]="templateFileUrl" [readonly]="editingManagedTemplate" placeholder="https://...">
           </mat-form-field>
         </div>
         <mat-checkbox [formControl]="templateActive">Plantilla activa</mat-checkbox>
 
         <div class="subheading">
           <strong>Variables posicionales</strong>
-          <button mat-button type="button" (click)="addVariable()">Añadir variable</button>
+          <button *ngIf="!editingManagedTemplate" mat-button type="button" (click)="addVariable()">Añadir variable</button>
         </div>
         <div class="variable-row" *ngFor="let row of variableRows; let i = index">
           <span>Variable {{ row.position }}</span>
@@ -98,13 +88,13 @@
               <mat-option *ngFor="let source of variableSources" [value]="source.value">{{ source.label }}</mat-option>
             </mat-select>
           </mat-form-field>
-          <button mat-button type="button" (click)="removeVariable(i)">Quitar</button>
+          <button *ngIf="!editingManagedTemplate" mat-button type="button" (click)="removeVariable(i)">Quitar</button>
         </div>
         <p class="muted">El orden debe coincidir con las posiciones 1, 2, 3… aprobadas en iVentas.</p>
 
         <div class="subheading">
           <strong>Canales compatibles ({{ templateChannels.value.length }})</strong>
-          <div>
+          <div *ngIf="!editingManagedTemplate">
             <button mat-button type="button" (click)="selectAllActiveChannels()">Todos los activos</button>
             <button mat-button type="button" (click)="clearChannels()">Limpiar</button>
           </div>
@@ -125,6 +115,15 @@
           </button>
           <button mat-button type="button" (click)="closeTemplateEditor()">Cancelar</button>
         </div>
+        <button *ngIf="editingActiveTemplate" mat-stroked-button type="button" (click)="toggleCertification()">
+          {{ certificationTemplateId === null ? 'Prueba de envío' : 'Ocultar prueba de envío' }}
+        </button>
+        <section *ngIf="certificationTemplateId !== null" aria-label="Prueba de envío por canal">
+          <app-campaign-template-probes [catalogMode]="true"
+            [templateId]="certificationTemplateId" [campaignId]="0"
+            (reviewQa)="reviewCertificationQa($event)">
+          </app-campaign-template-probes>
+        </section>
       </div>
     </section>
 

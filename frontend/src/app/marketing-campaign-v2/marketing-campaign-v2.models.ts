@@ -467,6 +467,7 @@ export interface CampaignV2DispatchTemplate {
   purposes: CampaignV2Purpose[];
   variables: Record<string, string>;
   compatible_channel_ids: string[];
+  managed_upload?: boolean;
   metadata: Record<string, unknown>;
   created_at: string | null;
   updated_at: string | null;
@@ -1651,7 +1652,8 @@ export interface CampaignV2PerformanceReport {
 }
 
 export type IventasTemplateCategory = 'MARKETING' | 'UTILITY';
-export type IventasTemplateUploadStatus = 'QUEUED' | 'RUNNING' | 'FINISHED' | 'SUBMITTED' | 'EXISTS' | 'ERROR' | 'VERIFY';
+export type IventasTemplateUploadStatus = 'QUEUED' | 'RUNNING' | 'FINISHED' | 'SUBMITTED' | 'EXISTS' | 'ERROR'
+  | 'VERIFY' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
 
 export interface IventasTemplateUploadTarget {
   sucursal_id: number;

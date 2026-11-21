@@ -13,3 +13,4 @@ class IventasTemplateUploadORM(db.Model):
     branches = db.Column(db.JSON, nullable=False)
     image = db.Column(db.LargeBinary)
     image_type = db.Column(db.String(20))
+    next_review_at = db.Column(db.DateTime(timezone=True), index=True)

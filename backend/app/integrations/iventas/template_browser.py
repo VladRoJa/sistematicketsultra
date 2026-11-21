@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from app.integrations.iventas.template_inventory import evaluate_template_coverage, parse_template_inventory
+
 
 ORIGIN = "https://app.iventas.com"
 _CATEGORY_TEXT = {
@@ -88,28 +90,89 @@ def _open_inventory(page) -> None:
     ).first.wait_for()
 
 
+def _login(page, login) -> None:
+    page.set_default_timeout(12_000)
+    page.goto(f"{ORIGIN}/login", wait_until="domcontentloaded")
+    _require_iventas_url(page)
+    page.locator('input[type="email"]:visible').or_(
+        page.get_by_label(re.compile(r"correo electrónico", re.I))
+    ).fill(login.email)
+    page.locator('input[type="password"]:visible').fill(login.password)
+    page.get_by_role("button", name="Iniciar Sesión", exact=True).click()
+    try:
+        page.get_by_text("Configuración", exact=True).first.wait_for()
+    except PlaywrightError:
+        raise TemplateBrowserError("iVentas no confirmó el inicio de sesión de esta sucursal.") from None
+
+
+def _inventory_response(response):
+    url = urlsplit(response.url)
+    domain = url.hostname or ""
+    return (
+        response.ok and response.request.method == "GET" and url.scheme == "https"
+        and (domain in {"iventas.com", "iventas.ai"} or domain.endswith((".iventas.com", ".iventas.ai")))
+        and "whatsapptemplate" in url.path.casefold().split("/")
+    )
+
+
+def read_template_approval(browser, login, template: dict, channel_id: str) -> tuple[str, str]:
+    """Read the authenticated portal inventory without creating or sending anything."""
+    context = browser.new_context()
+    try:
+        page = context.new_page()
+        _login(page, login)
+        responses = []
+
+        def collect(response):
+            if _inventory_response(response):
+                responses.append(response)
+
+        page.on("response", collect)
+        _open_inventory(page)
+        page.get_by_placeholder(_SEARCH_PLACEHOLDER).fill(template["name"])
+        row = page.get_by_role("row").filter(
+            has=page.get_by_text(template["name"], exact=True),
+        ).filter(has=page.get_by_text(_CATEGORY_LABEL[template["category"]], exact=True))
+        row.first.wait_for()
+
+        states = set()
+        for response in responses:
+            try:
+                inventory = parse_template_inventory(response.json())
+                coverage = evaluate_template_coverage(
+                    inventory=inventory, expected_channel_ids=[channel_id], template_names=[template["name"]],
+                )
+            except (ValueError, PlaywrightError):
+                continue
+            state = coverage[template["name"]][channel_id]
+            if state != "not_observed":
+                states.add(state)
+        if states == {"accepted"} and row.get_by_text("Aprobada", exact=True).first.is_visible():
+            return "APPROVED", "Aprobada por iVentas para este canal."
+        if states == {"rejected"} and row.get_by_text("Rechazada", exact=True).first.is_visible():
+            return "REJECTED", "iVentas rechazó la plantilla en este canal."
+        if row.get_by_text("En revisión", exact=True).first.is_visible():
+            return "IN_REVIEW", "Pendiente de aprobación en iVentas."
+        return "IN_REVIEW", "A la espera de confirmar el estado en el canal emisor."
+    except (PlaywrightError, TemplateBrowserError):
+        return "IN_REVIEW", "No se pudo verificar el estado. La Suite volverá a consultar iVentas."
+    finally:
+        try:
+            context.close()
+        except PlaywrightError:
+            pass
+
+
 def upload_template(browser, login, template: dict, image: bytes | None, image_type: str | None) -> tuple[str, str]:
     """Use a fresh browser context for a single account and a single submission."""
     context = browser.new_context()
     save_attempted = False
     try:
         page = context.new_page()
-        page.set_default_timeout(12_000)
-        page.goto(f"{ORIGIN}/login", wait_until="domcontentloaded")
-        _require_iventas_url(page)
-        page.locator('input[type="email"]:visible').or_(
-            page.get_by_label(re.compile(r"correo electrónico", re.I))
-        ).fill(login.email)
-        page.locator('input[type="password"]:visible').fill(login.password)
-        page.get_by_role("button", name="Iniciar Sesión", exact=True).click()
-        try:
-            page.get_by_text("Configuración", exact=True).first.wait_for()
-        except PlaywrightError:
-            return "ERROR", "iVentas no confirmó el inicio de sesión de esta sucursal."
-
+        _login(page, login)
         _open_inventory(page)
         if page.get_by_text(template["name"], exact=True).first.is_visible():
-            return "EXISTS", "La plantilla ya existe en esta cuenta."
+            return "EXISTS", "La plantilla ya existe en esta cuenta. Consulta el catálogo para vincularla."
         # Inventory search also resolves templates outside the first visible page.
         search = page.get_by_placeholder(_SEARCH_PLACEHOLDER)
         search.fill(template["name"])
@@ -117,7 +180,7 @@ def upload_template(browser, login, template: dict, image: bytes | None, image_t
         empty_result = page.get_by_text(_EMPTY_INVENTORY)
         empty_result.or_(match).first.wait_for()
         if match.first.is_visible():
-            return "EXISTS", "La plantilla ya existe en esta cuenta."
+            return "EXISTS", "La plantilla ya existe en esta cuenta. Consulta el catálogo para vincularla."
 
         page.get_by_text(re.compile(r"^\+?\s*Crear Plantilla$", re.I)).click()
         fields = template["fields"]
@@ -172,7 +235,8 @@ def upload_template(browser, login, template: dict, image: bytes | None, image_t
         if row.get_by_text(_CATEGORY_LABEL[template["category"]], exact=True).is_visible():
             for state in ("En revisión", "Aprobada"):
                 if row.get_by_text(state, exact=True).is_visible():
-                    return "SUBMITTED", f"Estado en iVentas: {state}."
+                    result = "IN_REVIEW" if template.get("catalog") else "SUBMITTED"
+                    return result, f"Estado en iVentas: {state}."
         return "VERIFY", "La plantilla aparece en iVentas. Verifica su categoría y estado."
     except TemplateBrowserError as error:
         return "VERIFY" if save_attempted else "ERROR", str(error)
