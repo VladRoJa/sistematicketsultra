@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/qa/campaign_v2_visual_audit.py'
       - 'scripts/qa/campaign_v2_background_gate_a_browser.py'
+      - 'scripts/qa/campaign_v2_template_upload_browser.py'
       - '.github/workflows/campaign-v2-playwright-visual-audit.yml'
       - 'frontend/src/app/marketing-campaign-v2/**'
       - 'frontend/src/styles.compact*.scss'
@@ -67,6 +68,9 @@ jobs:
         run: |
           python scripts/qa/campaign_v2_background_gate_a_browser.py \
             --base-url http://127.0.0.1:4173
+
+      - name: Template uploads - synthetic desktop and mobile modal journey
+        run: python scripts/qa/campaign_v2_template_upload_browser.py --base-url http://127.0.0.1:4173
 
       - name: Upload synthetic-safe anonymous evidence
         if: always()
