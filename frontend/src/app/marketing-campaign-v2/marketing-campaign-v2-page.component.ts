@@ -600,7 +600,7 @@ export class MarketingCampaignV2PageComponent implements OnInit {
   openIventasTemplateUpload(): void {
     if (!this.canManageDispatchConfig) { return; }
     this.dialog.open(MarketingCampaignV2TemplateUploadDialogComponent, {
-      width: 'min(820px, 96vw)', maxWidth: '96vw', autoFocus: false,
+      width: 'min(900px, 96vw)', maxWidth: '96vw', maxHeight: '94vh', autoFocus: false,
     });
   }
 

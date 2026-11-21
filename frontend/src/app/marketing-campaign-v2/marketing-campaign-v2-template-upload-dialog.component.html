@@ -1,89 +1,168 @@
-<h2 mat-dialog-title>Cargar plantillas en iVentas</h2>
+<header class="dialog-header">
+  <div>
+    <h2 mat-dialog-title>Cargar plantillas en iVentas</h2>
+    <p>Registra una plantilla para revisión en las sucursales que selecciones.</p>
+  </div>
+  <button class="icon-button" mat-dialog-close type="button" aria-label="Cerrar carga de plantillas">
+    <span aria-hidden="true">×</span>
+  </button>
+</header>
 
-<mat-dialog-content>
-  <p *ngIf="loadingError" role="alert" class="error">{{ loadingError }}</p>
-  <p *ngIf="data && !data.enabled">La carga de plantillas está deshabilitada.</p>
+<nav class="view-switch" aria-label="Vistas de carga de plantillas">
+  <button type="button" [attr.aria-pressed]="view === 'form'" (click)="view = 'form'">Nueva carga</button>
+  <button type="button" [attr.aria-pressed]="view === 'history'" (click)="view = 'history'">Historial</button>
+</nav>
 
-  <form class="fields" [formGroup]="form" (ngSubmit)="submit()">
-    <mat-form-field appearance="fill">
-      <mat-label>Nombre de la plantilla</mat-label>
-      <input matInput formControlName="name" maxlength="255">
-      <mat-hint>Minúsculas, números y guiones bajos.</mat-hint>
-    </mat-form-field>
+<mat-dialog-content class="dialog-content">
+  <p *ngIf="loadingError" role="alert" class="feedback feedback--error">{{ loadingError }}</p>
 
-    <mat-form-field appearance="fill">
-      <mat-label>Categoría</mat-label>
-      <mat-select formControlName="category">
-        <mat-option value="MARKETING">Marketing</mat-option>
-        <mat-option value="UTILITY">Utilidad</mat-option>
-      </mat-select>
-    </mat-form-field>
+  <ng-container *ngIf="view === 'form'">
+    <p *ngIf="data && !data.enabled" class="feedback">La carga de plantillas está deshabilitada.</p>
 
-    <div class="wide">
-      <mat-form-field appearance="fill" class="message">
-        <mat-label>Mensaje</mat-label>
-        <textarea matInput #message formControlName="message" rows="5" maxlength="1024"></textarea>
-        <mat-hint>Selecciona una palabra en el texto para convertirla en campo.</mat-hint>
-      </mat-form-field>
-      <button mat-button type="button" (mousedown)="$event.preventDefault()" (click)="markField(message)">Crear campo</button>
-      <div class="selection" *ngFor="let field of fields; index as index">
-        <span>Campo {{ index + 1 }} · {{ field.example }}</span>
-        <button mat-button type="button" (click)="removeField(index)">Quitar</button>
-      </div>
-    </div>
+    <form id="iventas-template-upload-form" class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <section aria-labelledby="iventas-template-section" class="template-section">
+        <h3 id="iventas-template-section">Plantilla</h3>
 
-    <div class="wide">
-      <label for="iventas-template-image">Imagen opcional (PNG o JPEG, hasta 5 MB)</label>
-      <input #imageInput id="iventas-template-image" type="file" accept="image/png,image/jpeg" (change)="setImage(imageInput)">
-    </div>
+        <div class="template-settings">
+          <div class="field">
+            <label for="iventas-template-name">Nombre de la plantilla</label>
+            <input id="iventas-template-name" class="control" formControlName="name" maxlength="255"
+              aria-describedby="iventas-name-hint" required>
+            <small id="iventas-name-hint" class="hint">Minúsculas, números y guiones bajos.</small>
+          </div>
 
-    <div class="wide">
-      <button mat-button type="button" [disabled]="buttons.length >= 3" (click)="addButton()">Agregar botón</button>
-      <div class="selection" *ngFor="let button of buttons; index as index">
-        <mat-form-field appearance="fill">
-          <mat-label>Texto del botón {{ index + 1 }}</mat-label>
-          <input matInput [formControl]="button" maxlength="25">
-        </mat-form-field>
-        <button mat-button type="button" (click)="removeButton(index)">Quitar</button>
-      </div>
-    </div>
+          <div class="field">
+            <label for="iventas-template-category">Categoría</label>
+            <select id="iventas-template-category" class="control" formControlName="category">
+              <option value="MARKETING">Marketing</option>
+              <option value="UTILITY">Utilidad</option>
+            </select>
+          </div>
+        </div>
 
-    <mat-checkbox class="wide" [checked]="allBranchesSelected" [disabled]="!data?.targets?.length"
-      (change)="toggleAllBranches($event.checked)">Seleccionar todas las sucursales disponibles</mat-checkbox>
-    <mat-form-field class="wide" appearance="fill">
-      <mat-label>Sucursales</mat-label>
-      <mat-select formControlName="branchIds" multiple>
-        <mat-option *ngFor="let branch of data?.targets" [value]="branch.sucursal_id">
-          {{ branch.sucursal_canon }} · {{ branch.provider_channel_id }}
-        </mat-option>
-      </mat-select>
-    </mat-form-field>
+        <div class="field message-field">
+          <div class="section-row">
+            <label for="iventas-template-message">Mensaje</label>
+            <span class="hint char-count">{{ form.controls.message.value.length }} / 1,024</span>
+          </div>
+          <textarea id="iventas-template-message" class="control" #message formControlName="message"
+            rows="5" maxlength="1024" aria-describedby="iventas-message-hint" required></textarea>
+          <div class="field-toolbar">
+            <small class="hint" id="iventas-message-hint">Selecciona una palabra del mensaje para personalizarla.</small>
+            <button type="button" class="action-button add-field" [disabled]="!form.controls.message.value"
+              (mousedown)="$event.preventDefault()" (click)="markField(message)">Crear campo</button>
+          </div>
+          <p *ngIf="fieldFeedback" class="feedback feedback--error" role="status">{{ fieldFeedback }}</p>
+          <ul *ngIf="fields.length" class="field-list" aria-label="Campos personalizados">
+            <li *ngFor="let field of fields; index as index">
+              <span>{{ index + 1 }} · {{ field.example }}</span>
+              <button type="button" class="field-remove" [attr.aria-label]="'Quitar campo ' + field.example"
+                (click)="removeField(index)">
+                <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          </ul>
+        </div>
 
-    <p class="wide error" *ngIf="error" role="alert">{{ error }}</p>
-    <p class="wide" *ngIf="notice" role="status">{{ notice }}</p>
-    <div class="wide actions">
-      <span>{{ form.controls.branchIds.value.length }} sucursales seleccionadas</span>
-      <button mat-flat-button color="primary" type="submit" [disabled]="!canSubmit">
-        {{ saving ? 'Guardando…' : 'Ejecutar carga' }}
+        <details class="optional-settings" [open]="image || buttons.length ? true : undefined">
+          <summary>Imagen y botones <span class="hint">Opcional</span></summary>
+          <div class="optional-body">
+            <div class="field">
+              <span class="field-label">Imagen</span>
+              <input hidden #imageInput type="file" accept="image/png,image/jpeg" (change)="setImage(imageInput)">
+              <div class="section-row media-actions">
+                <button class="action-button" type="button" (click)="imageInput.click()">
+                  {{ image ? 'Cambiar imagen' : 'Elegir imagen' }}
+                </button>
+                <span *ngIf="image" class="file-name">{{ image.name }}</span>
+                <button class="action-button quiet" *ngIf="image || imageError" type="button" (click)="removeImage(imageInput)">Quitar</button>
+              </div>
+              <small class="hint">PNG o JPEG, hasta 5 MB.</small>
+              <p *ngIf="imageError" class="feedback feedback--error" role="alert">{{ imageError }}</p>
+            </div>
+
+            <div class="field">
+              <div class="section-row">
+                <span class="field-label">Botones</span>
+                <button class="action-button" type="button" [disabled]="buttons.length >= 3" (click)="addButton()">Agregar botón</button>
+              </div>
+              <div class="button-row" *ngFor="let button of buttons; index as index">
+                <input class="control" [formControl]="button" maxlength="25"
+                  [attr.aria-label]="'Texto del botón ' + (index + 1)">
+                <button class="icon-button" type="button" [attr.aria-label]="'Quitar botón ' + (index + 1)"
+                  (click)="removeButton(index)">
+                  <span aria-hidden="true">×</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section aria-labelledby="iventas-branch-section" class="branch-section">
+        <h3 id="iventas-branch-section">Sucursales</h3>
+        <div class="branch-picker">
+          <div class="branch-search">
+            <input id="iventas-branch-search" type="search" [formControl]="branchSearch"
+              placeholder="Buscar sucursal" aria-label="Buscar sucursal">
+          </div>
+          <label class="branch-item select-visible">
+            <input type="checkbox" #selectAll [checked]="allVisibleBranchesSelected"
+              [indeterminate]="someVisibleBranchesSelected" [disabled]="!visibleBranches.length"
+              (change)="toggleVisibleBranches(selectAll.checked)">
+            {{ branchSearch.value.trim() ? 'Seleccionar resultados' : 'Seleccionar todas' }}
+          </label>
+          <div class="branch-list">
+            <label *ngFor="let branch of visibleBranches; trackBy: trackBranch" class="branch-item"
+              [class.selected]="isBranchSelected(branch.sucursal_id)">
+              <input type="checkbox" #branchCheckbox [checked]="isBranchSelected(branch.sucursal_id)"
+                (change)="toggleBranch(branch.sucursal_id, branchCheckbox.checked)">
+              <span>{{ branchLabel(branch.sucursal_canon) }}</span>
+            </label>
+            <p *ngIf="!data && !loadingError" class="empty-state" role="status">Cargando sucursales…</p>
+            <p *ngIf="data && !data.targets.length" class="empty-state">No hay sucursales con un canal activo.</p>
+            <p *ngIf="data?.targets?.length && !visibleBranches.length" class="empty-state">Sin resultados.</p>
+          </div>
+        </div>
+      </section>
+
+      <p *ngIf="error" class="submit-error feedback feedback--error" role="alert">{{ error }}</p>
+    </form>
+  </ng-container>
+
+  <section class="history" *ngIf="view === 'history'" aria-label="Historial de cargas">
+    <p *ngIf="notice" class="feedback feedback--success" role="status">{{ notice }}</p>
+    <p *ngIf="data && !data.rows.length" class="empty-state">Aún no hay cargas registradas.</p>
+    <article *ngFor="let row of data?.rows; trackBy: trackUpload" class="history-row">
+      <button type="button" class="history-toggle" [attr.aria-expanded]="expandedUploadId === row.id"
+        [attr.aria-controls]="'iventas-upload-' + row.id" (click)="toggleUpload(row.id)">
+        <span class="history-heading">
+          <strong>{{ row.name }}</strong>
+          <small>#{{ row.id }} · {{ row.created_at | date:'dd/MM/yyyy HH:mm' }}</small>
+        </span>
+        <span class="status" [attr.data-status]="row.status">{{ statusLabels[row.status] }}</span>
       </button>
-    </div>
-  </form>
-
-  <section class="history" *ngIf="data?.rows?.length">
-    <h3>Historial de cargas</h3>
-    <details *ngFor="let row of data?.rows">
-      <summary>#{{ row.id }} · {{ row.name }} · {{ statusLabels[row.status] }}</summary>
-      <p>{{ row.created_at | date:'dd/MM/yyyy HH:mm' }} · Usuario {{ row.requested_by_user_id }}</p>
-      <ul>
-        <li *ngFor="let branch of row.branches">
-          <strong>{{ branch.sucursal_canon }}</strong> · {{ statusLabels[branch.status] }}
-          <span *ngIf="branch.detail"> · {{ branch.detail }}</span>
+      <ul class="history-branches" [id]="'iventas-upload-' + row.id" *ngIf="expandedUploadId === row.id">
+        <li *ngFor="let branch of row.branches; trackBy: trackBranch">
+          <strong>{{ branchLabel(branch.sucursal_canon) }}</strong>
+          <span class="status" [attr.data-status]="branch.status">{{ statusLabels[branch.status] }}</span>
+          <small *ngIf="branch.detail">{{ branch.detail }}</small>
         </li>
       </ul>
-    </details>
+    </article>
   </section>
 </mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Cerrar</button>
+<mat-dialog-actions class="dialog-footer">
+  <div *ngIf="view === 'form'" class="footer-count">
+    <strong>{{ form.controls.branchIds.value.length }}</strong>
+    <span> de {{ data?.targets?.length ?? 0 }} sucursales seleccionadas</span>
+  </div>
+  <div class="footer-actions">
+    <button class="action-button quiet" mat-dialog-close type="button">Cerrar</button>
+    <button *ngIf="view === 'form'" class="action-button execute"
+      type="submit" form="iventas-template-upload-form" [disabled]="!canSubmit">
+      {{ saving ? 'Registrando…' : 'Ejecutar carga' }}
+    </button>
+  </div>
 </mat-dialog-actions>
