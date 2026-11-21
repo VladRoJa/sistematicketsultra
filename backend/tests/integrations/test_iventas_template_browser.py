@@ -1,4 +1,6 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, call
+
+import pytest
 
 from app.integrations.iventas import template_browser as adapter
 from app.services.marketing_campaign_v2_template_credentials_service import IventasTemplateCredentials
@@ -39,3 +41,35 @@ def test_unexpected_login_origin_never_fills_the_form():
     assert status == "ERROR"
     page.locator.assert_not_called()
     context.close.assert_called_once()
+
+
+@pytest.mark.parametrize("skipped", [False, True])
+def test_category_step_goes_back_only_if_multimedia_opens_first(skipped):
+    page, category, multimedia = Mock(), Mock(), Mock()
+    multimedia.is_visible.return_value = skipped
+    category.is_visible.return_value = not skipped
+    actions = Mock()
+    page.get_by_text.return_value.click = actions.go_back
+    category.click = actions.choose_category
+    page.get_by_role.return_value.click = actions.continue_wizard
+
+    adapter._select_category(page, category, multimedia)
+
+    expected = [call.choose_category(), call.continue_wizard()]
+    if skipped:
+        page.get_by_text.assert_called_once_with("Regresar", exact=True)
+        expected.insert(0, call.go_back())
+    assert actions.mock_calls == expected
+
+
+def test_category_step_stops_if_regresar_does_not_show_requested_category():
+    page, category, multimedia = Mock(), Mock(), Mock()
+    multimedia.is_visible.return_value = True
+    category.is_visible.return_value = False
+    category.click.side_effect = adapter.PlaywrightTimeoutError("category unavailable")
+
+    with pytest.raises(adapter.TemplateBrowserError, match="no mostró la categoría solicitada"):
+        adapter._select_category(page, category, multimedia)
+
+    page.get_by_text.return_value.click.assert_called_once_with()
+    page.get_by_role.assert_not_called()

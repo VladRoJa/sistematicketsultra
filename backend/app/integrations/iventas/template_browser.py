@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlsplit
 
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
 ORIGIN = "https://app.iventas.com"
@@ -30,6 +31,18 @@ def _require_iventas_url(page) -> None:
 
 def _continue(page) -> None:
     page.get_by_role("button", name="Continuar", exact=True).click()
+
+
+def _select_category(page, category, multimedia) -> None:
+    try:
+        category.or_(multimedia).filter(visible=True).first.wait_for()
+        if multimedia.is_visible() and not category.is_visible():
+            # iVentas can open multimedia first and expose the category only when going back.
+            page.get_by_text("Regresar", exact=True).click()
+        category.click()
+    except PlaywrightTimeoutError:
+        raise TemplateBrowserError("iVentas no mostró la categoría solicitada para esta plantilla.") from None
+    _continue(page)
 
 
 def _select_editor_text(editor, field: dict) -> None:
@@ -124,12 +137,7 @@ def upload_template(browser, login, template: dict, image: bytes | None, image_t
         multimedia = page.get_by_text(_MULTIMEDIA, exact=True)
         if fields and editor.is_visible() and not category.is_visible() and not multimedia.is_visible():
             _continue(page)
-        category.or_(multimedia).first.wait_for()
-        if category.is_visible():
-            category.click()
-            _continue(page)
-        elif not fields or template["category"] != "UTILITY":
-            raise TemplateBrowserError("iVentas no mostró la categoría solicitada para esta plantilla.")
+        _select_category(page, category, multimedia)
 
         multimedia.wait_for()
         if image is None:

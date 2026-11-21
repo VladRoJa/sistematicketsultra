@@ -2,10 +2,13 @@ name: Campaign V2 Controlled Template Probes
 on:
   pull_request:
     paths:
+      - "backend/app/integrations/iventas/template_browser.py"
       - "backend/app/services/marketing_campaign_v2*"
       - "backend/app/routes/marketing_campaign_v2_routes.py"
+      - "backend/tests/integrations/test_iventas_template_browser.py"
       - "backend/tests/marketing/test_campaign_v2_template_probes*"
       - "backend/tests/marketing/test_campaign_v2_commercial_template_certification.py"
+      - "backend/tests/marketing/test_marketing_campaign_v2_template_upload_service.py"
       - "frontend/src/app/marketing-campaign-v2/**"
       - ".github/workflows/campaign-v2-template-probes-ci.yml"
 permissions:
@@ -57,7 +60,9 @@ jobs:
             tests/marketing/test_issue_856_stage_e_gates.py \
             tests/marketing/test_marketing_permissions_p26_9_integral_inventory.py \
             tests/marketing/test_marketing_campaign_v2_quota_dispatch_real_pg.py \
-            tests/integrations/test_iventas_broadcast_provider.py
+            tests/integrations/test_iventas_broadcast_provider.py \
+            tests/integrations/test_iventas_template_browser.py \
+            tests/marketing/test_marketing_campaign_v2_template_upload_service.py
   controlled-qa-angular:
     runs-on: ubuntu-latest
     timeout-minutes: 15
