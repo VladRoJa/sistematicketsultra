@@ -251,7 +251,7 @@ def test_isolated_campaign_freeze_never_reuses_general_name(monkeypatch, tmp_pat
     monkeypatch.setattr(preparation.db, "session", session)
     monkeypatch.setenv("COBRANZA_IVENTAS_TEMPLATE_ID", "14")
     monkeypatch.setenv("WAREHOUSE_AUTOMATION_USER_ID", "47")
-    monkeypatch.setattr(preparation, "resolve_dispatch_template", lambda **kw: NS())
+    monkeypatch.setattr(preparation, "resolve_dispatch_template", lambda **kw: NS(variables_json={}))
     monkeypatch.setattr(preparation, "resolve_dispatch_branch_key",
                         lambda raw, session: NS(sucursal_canon=raw, sucursal_id=1))
     monkeypatch.setattr(preparation, "resolve_dispatch_channel_binding",

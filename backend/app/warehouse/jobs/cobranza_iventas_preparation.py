@@ -36,6 +36,7 @@ PHONE_HEADERS = {
     "numero telefonico", "numero de telefono", "numero de celular",
     "telefono socio", "tel",
 }
+MEMBER_ID_HEADERS = {"idsocio", "id socio", "id del socio"}
 
 
 class CobranzaCampaignPreparationError(ValueError):
@@ -49,7 +50,7 @@ def _header(value: object) -> str:
     return re.sub(r"\\s+", " ", value)
 
 
-def _phone(value: object) -> str:
+def _cell_text(value: object) -> str:
     if value is None:
         return ""
     if isinstance(value, float):
@@ -63,9 +64,10 @@ def _phone(value: object) -> str:
 
 def build_import_bytes(
     artifacts: list[dict[str, Any]], *, allowed_phones: frozenset[str] | None = None,
+    include_member_id: bool = False,
 ) -> tuple[bytes, int]:
     """Translate generated XLSX to the exact Excel importer contract."""
-    recipients: dict[str, str] = {}
+    recipients: dict[str, tuple[str, str]] = {}
     ambiguous: set[str] = set()
     for artifact in artifacts:
         branch = str(artifact.get("sucursal_raw") or "").strip()
@@ -82,17 +84,31 @@ def build_import_bytes(
                     f"La sucursal {branch} no tiene una columna de telefono unica."
                 )
             column = matches[0]
+            member_columns = [
+                index for index, heading in enumerate(headings) if heading in MEMBER_ID_HEADERS
+            ]
+            member_column = member_columns[0] if include_member_id and len(member_columns) == 1 else None
             for cells in values:
-                phone = normalize_phone(_phone(cells[column] if len(cells) > column else None))
+                phone = normalize_phone(_cell_text(cells[column] if len(cells) > column else None))
                 if (not phone or phone in ambiguous or
                         (allowed_phones is not None and phone not in allowed_phones)):
                     continue
                 previous = recipients.get(phone)
-                if previous is not None and previous != branch:
+                if previous is not None and previous[0] != branch:
                     ambiguous.add(phone)
                     recipients.pop(phone, None)
-                else:
-                    recipients[phone] = branch
+                    continue
+
+                member_id = ""
+                if member_column is not None and member_column < len(cells):
+                    candidate = _cell_text(cells[member_column])
+                    if re.fullmatch(r"[0-9]{1,64}", candidate):
+                        member_id = candidate
+                # A shared or incomplete identity must fail the required variable
+                # check in preflight. Keep it empty even if the phone repeats again.
+                if previous is not None and previous[1] != member_id:
+                    member_id = ""
+                recipients[phone] = (branch, member_id)
         finally:
             source.close()
     count = len(recipients)
@@ -102,9 +118,15 @@ def build_import_bytes(
     # must not strand an open XML streaming writer inside the long-lived scheduler.
     book = Workbook(write_only=True)
     sheet = book.create_sheet("Destinatarios")
-    sheet.append(["sucursal", "telefono"])
-    for phone, branch in sorted(recipients.items()):
-        sheet.append([branch, phone])
+    columns = ["sucursal", "telefono"]
+    if include_member_id:
+        columns.append("id_socio")
+    sheet.append(columns)
+    for phone, (branch, member_id) in sorted(recipients.items()):
+        row = [branch, phone]
+        if include_member_id:
+            row.append(member_id)
+        sheet.append(row)
     output = io.BytesIO()
     book.save(output)
     return output.getvalue(), count
@@ -172,6 +194,7 @@ def prepare_cobranza_iventas_campaign(
     template = resolve_dispatch_template(
         template_id=template_id, purpose="ACTIVE_MEMBERS", session=db.session,
     )
+    include_member_id = "member_id" in (template.variables_json or {}).values()
     eligible: list[dict[str, Any]] = []
     skipped_branches: list[dict[str, str]] = []
     pilot_found = False
@@ -204,7 +227,9 @@ def prepare_cobranza_iventas_campaign(
         raise CobranzaCampaignPreparationError("La sucursal piloto no aparece en el corte diario.")
     if not eligible:
         raise CobranzaCampaignPreparationError("Ninguna sucursal tiene cobranza enviable.")
-    payload, rows = build_import_bytes(eligible, allowed_phones=allowed_phones)
+    payload, rows = build_import_bytes(
+        eligible, allowed_phones=allowed_phones, include_member_id=include_member_id,
+    )
     filename = f"cobranza_recurrente_{day.isoformat()}.xlsx"
     args = dict(
         file_bytes=payload, filename=filename, name=name,
