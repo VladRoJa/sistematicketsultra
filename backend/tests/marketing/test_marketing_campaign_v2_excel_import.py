@@ -15,6 +15,7 @@ from app.models.marketing import (
     MarketingCampaignV2BlacklistORM,
     MarketingCampaignV2ChannelBindingORM,
     MarketingCampaignV2ORM,
+    MarketingCampaignV2RecipientDispatchExclusionORM,
     MarketingCampaignV2RecipientORM,
     MarketingCampaignV2RecipientEvidenceORM,
     MarketingCampaignV2TemplateORM,
@@ -52,6 +53,7 @@ def session():
         MarketingCampaignV2BlacklistORM, MarketingCampaignV2ChannelBindingORM,
         MarketingCampaignV2TemplateORM, MarketingCampaignV2ORM,
         MarketingCampaignV2RecipientORM, MarketingCampaignV2RecipientEvidenceORM,
+        MarketingCampaignV2RecipientDispatchExclusionORM,
     ):
         orm.__table__.to_metadata(metadata)
     metadata.create_all(engine)
@@ -222,6 +224,66 @@ def test_cobranza_without_template_never_prepares_or_sends(session, monkeypatch)
     )
     assert result == {"status": "TEMPLATE_NOT_CONFIGURED"}
     assert session.query(MarketingCampaignV2ORM).count() == 0
+
+
+@pytest.mark.parametrize(("id_header", "member_ids", "expected"), [
+    ("IDSocio", ["000482", "000482"], "000482"),
+    ("ID Socio", [482731], "482731"),
+    ("IDSocio", ["000482", "927401", "000482"], None),
+    ("IDSocio", ["000482", None], None),
+    ("IDSocio", ["482731&sid=927401"], None),
+    ("Socio", ["000482"], None),
+])
+def test_cobranza_payment_template_uses_the_frozen_member_id(
+    session, tmp_path, monkeypatch, id_header, member_ids, expected,
+):
+    from types import SimpleNamespace
+
+    from app.services.marketing_campaign_v2_preflight_service import build_campaign_v2_preflight
+    from app.services.marketing_campaign_v2_submit_service import build_campaign_v2_provider_dispatch_batch
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_TEMPLATE_ID", "1")
+    monkeypatch.setenv("WAREHOUSE_AUTOMATION_USER_ID", "47")
+    monkeypatch.setattr(preparation, "db", SimpleNamespace(session=session))
+    template = session.get(MarketingCampaignV2TemplateORM, 1)
+    template.variables_json = {"1": "member_id"}
+    session.commit()
+
+    workbook = Workbook()
+    workbook.active.append([id_header, "Teléfono", "Estatus"])
+    for member_id in member_ids:
+        workbook.active.append([member_id, "6861000001", "Rechazado"])
+    workbook.active.append(["712305", "6861000002", "Rechazado"])
+    path = tmp_path / "azahares.xlsx"
+    workbook.save(path)
+
+    result = preparation.prepare_cobranza_iventas_campaign(
+        business_date="2026-11-10",
+        artifacts=[{"path": path, "sucursal_raw": "AZAHARES CUL"}],
+        isolated_branch_key="AZAHARES_CUL",
+        allowed_phones=frozenset({"6861000001", "6861000002"}),
+    )
+    campaign = session.get(MarketingCampaignV2ORM, result["campaign_id"])
+    frozen = {row.phone_mx10: row.member_id for row in campaign.recipients}
+    other_member_id = "712305" if id_header != "Socio" else None
+    assert frozen == {"6861000001": expected, "6861000002": other_member_id}
+
+    plan = build_campaign_v2_preflight(
+        campaign_id=campaign.id, template_id=template.id,
+        allowed_sucursal_keys=None, session=session,
+    )
+    variables = {row.phone_mx10: dict(row.variables) for row in plan.batches[0].recipients}
+    assert variables["6861000001"] == ({"1": expected} if expected else {})
+    assert variables["6861000002"] == ({"1": other_member_id} if other_member_id else {})
+    assert plan.ready is (expected is not None)
+    assert bool(plan.blocked_missing_required_variable) is (expected is None)
+    if plan.ready:
+        batch = build_campaign_v2_provider_dispatch_batch(plan=plan, batch=plan.batches[0])
+        assert {lead.phone: lead.variables for lead in batch.leads} == {
+            "5216861000001": (expected,),
+            "5216861000002": ("712305",),
+        }
 
 
 def test_cobranza_pilot_only_freezes_villas_and_cannot_expand_on_same_day(
