@@ -378,3 +378,60 @@ def test_cobranza_pilot_never_falls_back_to_other_branch(
             pilot_branch_key="VILLAS_DEL_REY",
         )
     assert session.query(MarketingCampaignV2ORM).count() == 0
+
+
+
+def test_independencia_uses_approved_tec_template_without_losing_origin(session):
+    """The source channel lacks approval; a valid frozen TEC route permits it."""
+    for branch_id, key in ((3, "INDEPENDENCIA"), (4, "TEC_MXL")):
+        session.add(Sucursal(
+            sucursal_id=branch_id, serie=key, sucursal=key,
+            estado="BC", operational_status="ACTIVA", is_demo=False,
+            municipio="Mexicali", direccion="Prueba sintética",
+        ))
+        session.add(TrackBranchCatalogORM(
+            sucursal_canon=key, sucursal_id=branch_id,
+            track_label=key, display_order=branch_id, is_track_active=True,
+        ))
+    source = MarketingCampaignV2ChannelBindingORM(
+        provider="IVENTAS", sucursal_id=3, sucursal_canon="INDEPENDENCIA",
+        provider_channel_id="channel-independencia", is_active=True, is_default=True,
+        created_by_user_id=47, updated_by_user_id=47,
+    )
+    sender = MarketingCampaignV2ChannelBindingORM(
+        provider="IVENTAS", sucursal_id=4, sucursal_canon="TEC_MXL",
+        provider_channel_id="channel-tec", is_active=True, is_default=True,
+        created_by_user_id=47, updated_by_user_id=47,
+    )
+    session.add_all((source, sender))
+    session.flush()
+    source.metadata_json = {"dispatch_via_binding_id": int(sender.id)}
+    session.add(MarketingCampaignV2TemplateORM(
+        id=18, provider="IVENTAS", template_name="ug_cobranza_cargo_fallido_pago",
+        label="Pago en línea", is_active=True, purposes_json=["ACTIVE_MEMBERS"],
+        variables_json={"1": "member_id"},
+        compatible_channel_ids_json=["channel-tec"],
+        created_by_user_id=47, updated_by_user_id=47,
+    ))
+    session.commit()
+    audience = (
+        b"sucursal,telefono,id_socio\n"
+        b"INDEPENDENCIA,6861000001,247396\n"
+    )
+    args = dict(
+        file_bytes=audience, filename="independencia.csv",
+        name="Cobranza TEC", purpose="ACTIVE_MEMBERS",
+        template_id=18, allowed_sucursal_keys=None, session=session,
+    )
+    preview = svc.preview_excel_campaign(**args)
+    assert preview["unique_recipient_count"] == 1
+    frozen = svc.freeze_excel_campaign(
+        **args, expected_preview_fingerprint=preview["preview_fingerprint"],
+        created_by_user_id=47,
+    )
+    campaign = session.get(MarketingCampaignV2ORM, frozen["campaign_id"])
+    assert campaign.recipients[0].member_id == "247396"
+    assert campaign.audience_definition_json["source_metadata"]["branch_counts"] == {"INDEPENDENCIA": 1}
+    route = campaign.audience_definition_json["dispatch_channel_routing"]["routes"]["INDEPENDENCIA"]
+    assert route["outbound_channel_id"] == "channel-tec"
+    assert route["outbound_sucursal_canon"] == "TEC_MXL"
