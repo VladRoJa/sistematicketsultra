@@ -18,6 +18,9 @@ from openpyxl import Workbook, load_workbook
 from app.extensions import db
 from app.models.marketing import MarketingCampaignV2ORM
 from app.services.marketing_phone import normalize_phone
+from app.services.marketing_campaign_v2_channel_routing_service import (
+    CampaignV2SenderRoutingConflict, resolve_configured_outbound_binding,
+)
 from app.services.marketing_campaign_v2_excel_import_service import (
     freeze_excel_campaign,
     preview_excel_campaign,
@@ -176,6 +179,31 @@ def prepare_cobranza_iventas_campaign(
             **({"isolated_branch_key": isolated_branch_key} if isolated_branch_key else {}),
         }
 
+def _template_id_for_branch(default_id: int, isolated_branch_key: str | None) -> int:
+    """An explicit per-branch exception preserves legacy delivery while channels approve.
+
+    Format: COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES=INSURGENTES:14
+    Only isolated multicursal campaigns may use this configuration.
+    """
+    raw = os.getenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", "").strip()
+    if not raw:
+        return default_id
+    if isolated_branch_key is None:
+        raise CobranzaCampaignPreparationError(
+            "Las excepciones de plantilla requieren una campaña aislada por sucursal."
+        )
+    overrides: dict[str, int] = {}
+    for item in raw.split(","):
+        branch, separator, value = item.strip().partition(":")
+        if (separator != ":" or not re.fullmatch(r"[A-Z0-9_]{2,100}", branch)
+                or branch in overrides or not re.fullmatch(r"[1-9][0-9]*", value)):
+            raise CobranzaCampaignPreparationError(
+                "Excepciones de plantilla por sucursal inválidas."
+            )
+        overrides[branch] = int(value)
+    return overrides.get(isolated_branch_key, default_id)
+
+
     # A fixed template binding is configuration, not a send switch. Missing
     # config never blocks the Gasca/Warehouse publishing job.
     template_raw = os.getenv("COBRANZA_IVENTAS_TEMPLATE_ID", "").strip()
@@ -190,6 +218,7 @@ def prepare_cobranza_iventas_campaign(
         ) from exc
     if template_id <= 0 or actor_id <= 0:
         raise CobranzaCampaignPreparationError("Plantilla o usuario tecnico invalido.")
+    template_id = _template_id_for_branch(template_id, isolated_branch_key)
 
     template = resolve_dispatch_template(
         template_id=template_id, purpose="ACTIVE_MEMBERS", session=db.session,
@@ -212,6 +241,15 @@ def prepare_cobranza_iventas_campaign(
         binding = resolve_dispatch_channel_binding(
             sucursal_id=branch.sucursal_id, session=db.session,
         )
+        if binding is not None:
+            try:
+                binding, _ = resolve_configured_outbound_binding(
+                    branch=branch, source_binding=binding, session=db.session,
+                )
+            except CampaignV2SenderRoutingConflict as exc:
+                raise CobranzaCampaignPreparationError(
+                    "La ruta de envío configurada no es válida."
+                ) from exc
         if binding is None or not template_allows_channel(
             template, str(binding.provider_channel_id),
         ):
