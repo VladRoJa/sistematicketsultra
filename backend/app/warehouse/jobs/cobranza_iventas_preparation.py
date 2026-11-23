@@ -135,6 +135,31 @@ def build_import_bytes(
     return output.getvalue(), count
 
 
+def _template_id_for_branch(default_id: int, isolated_branch_key: str | None) -> int:
+    """An explicit per-branch exception preserves legacy delivery while channels approve.
+
+    Format: COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES=INSURGENTES:14
+    Only isolated multicursal campaigns may use this configuration.
+    """
+    raw = os.getenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", "").strip()
+    if not raw:
+        return default_id
+    if isolated_branch_key is None:
+        raise CobranzaCampaignPreparationError(
+            "Las excepciones de plantilla requieren una campaña aislada por sucursal."
+        )
+    overrides: dict[str, int] = {}
+    for item in raw.split(","):
+        branch, separator, value = item.strip().partition(":")
+        if (separator != ":" or not re.fullmatch(r"[A-Z0-9_]{2,100}", branch)
+                or branch in overrides or not re.fullmatch(r"[1-9][0-9]*", value)):
+            raise CobranzaCampaignPreparationError(
+                "Excepciones de plantilla por sucursal inválidas."
+            )
+        overrides[branch] = int(value)
+    return overrides.get(isolated_branch_key, default_id)
+
+
 def prepare_cobranza_iventas_campaign(
     *, business_date: date | str, artifacts: list[dict[str, Any]],
     pilot_branch_key: str | None = None,
@@ -178,31 +203,6 @@ def prepare_cobranza_iventas_campaign(
             **({"pilot_branch_key": pilot_branch_key} if pilot_branch_key else {}),
             **({"isolated_branch_key": isolated_branch_key} if isolated_branch_key else {}),
         }
-
-def _template_id_for_branch(default_id: int, isolated_branch_key: str | None) -> int:
-    """An explicit per-branch exception preserves legacy delivery while channels approve.
-
-    Format: COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES=INSURGENTES:14
-    Only isolated multicursal campaigns may use this configuration.
-    """
-    raw = os.getenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", "").strip()
-    if not raw:
-        return default_id
-    if isolated_branch_key is None:
-        raise CobranzaCampaignPreparationError(
-            "Las excepciones de plantilla requieren una campaña aislada por sucursal."
-        )
-    overrides: dict[str, int] = {}
-    for item in raw.split(","):
-        branch, separator, value = item.strip().partition(":")
-        if (separator != ":" or not re.fullmatch(r"[A-Z0-9_]{2,100}", branch)
-                or branch in overrides or not re.fullmatch(r"[1-9][0-9]*", value)):
-            raise CobranzaCampaignPreparationError(
-                "Excepciones de plantilla por sucursal inválidas."
-            )
-        overrides[branch] = int(value)
-    return overrides.get(isolated_branch_key, default_id)
-
 
     # A fixed template binding is configuration, not a send switch. Missing
     # config never blocks the Gasca/Warehouse publishing job.
