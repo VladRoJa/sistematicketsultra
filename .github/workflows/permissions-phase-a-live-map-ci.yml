@@ -139,6 +139,7 @@ jobs:
             tests/test_track_alert_routes_p29_auth.py \
             tests/test_track_alert_routes.py \
             tests/contact_center/test_contact_center_access.py \
+            tests/contact_center/test_contact_center_member_payments.py \
             tests/contact_center/test_contact_center_manager_scope_contract.py \
             tests/purchase_requisitions/test_permissions_phase_a_finance_approval_p23.py \
             tests/purchase_requisitions/test_permissions_phase_a_finance_rejection_p24.py \
