@@ -1,0 +1,71 @@
+<section class="member-payment">
+  <div class="member-payment__heading">
+    <div>
+      <h2>Buscar liga de pago</h2>
+      <p>Localiza al socio por nombre o PIN. Verifica su identidad antes de compartir la liga.</p>
+    </div>
+  </div>
+
+  <form class="member-payment__search" (ngSubmit)="search()">
+    <label for="member-payment-query">Nombre o PIN del socio</label>
+    <div class="member-payment__search-row">
+      <input
+        id="member-payment-query"
+        name="memberPaymentQuery"
+        type="text"
+        [(ngModel)]="query"
+        placeholder="Ej. María López o 123456"
+        autocomplete="off"
+        maxlength="80"
+        [disabled]="loading"
+      />
+      <button type="submit" [disabled]="loading">
+        <mat-icon>search</mat-icon>
+        {{ loading ? 'Buscando…' : 'Buscar' }}
+      </button>
+    </div>
+    <small>Se muestran hasta 20 coincidencias. Si hay varios socios, confirma el PIN y la sucursal.</small>
+  </form>
+
+  <p class="member-payment__feedback" role="status" *ngIf="feedbackMessage">
+    <mat-icon>check_circle</mat-icon> {{ feedbackMessage }}
+  </p>
+  <p class="member-payment__error" role="alert" *ngIf="errorMessage">
+    <mat-icon>error_outline</mat-icon> {{ errorMessage }}
+  </p>
+
+  <div class="member-payment__loading" *ngIf="loading">Consultando socios…</div>
+  <p class="member-payment__empty" *ngIf="searched && !rows.length">
+    No se encontraron socios con ID de pago en los registros disponibles.
+  </p>
+
+  <div class="member-payment__results" *ngIf="rows.length && !loading">
+    <p class="member-payment__count">{{ rows.length }} resultado(s)</p>
+
+    <article class="member-payment__result" *ngFor="let member of rows">
+      <div class="member-payment__identity">
+        <strong>{{ member.name }}</strong>
+        <span>PIN: {{ member.pin || '—' }} · {{ member.branch || 'Sin sucursal' }}</span>
+        <small>{{ member.source === 'ACTIVO' ? 'Padrón activo' : 'Histórico de altas' }}</small>
+      </div>
+      <div class="member-payment__fields">
+        <div class="member-payment__field">
+          <span>ID del socio</span>
+          <code>{{ member.member_id }}</code>
+          <button type="button" (click)="copyText(member.member_id, 'ID del socio')"
+            [attr.aria-label]="'Copiar ID del socio ' + member.member_id">
+            <mat-icon>content_copy</mat-icon> Copiar
+          </button>
+        </div>
+        <div class="member-payment__field">
+          <span>Liga de pago</span>
+          <code>{{ member.payment_url }}</code>
+          <button type="button" (click)="copyText(member.payment_url, 'Liga de pago')"
+            [attr.aria-label]="'Copiar liga de pago del socio ' + member.member_id">
+            <mat-icon>content_copy</mat-icon> Copiar
+          </button>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
