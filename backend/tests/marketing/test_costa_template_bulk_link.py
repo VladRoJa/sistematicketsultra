@@ -125,3 +125,29 @@ def test_duplicate_costa_name_is_a_local_conflict_without_blocking_other_templat
     assert duplicate.status == "CONFLICT"
     assert "duplicados" in duplicate.reasons[0]
     assert next(row for row in plan if row.name == "2regresa_399_n2").status == "READY"
+
+
+def test_login_failure_identifies_branch_and_stops_without_catalog_writes(monkeypatch, capsys):
+    from unittest.mock import MagicMock, Mock
+
+    bindings, _ = _fixtures()
+    by_branch = bulk._active_bindings(bindings)
+    session = MagicMock()
+    monkeypatch.setattr(bulk, "db", NS(session=session))
+    monkeypatch.setattr(
+        bulk, "load_iventas_template_credentials",
+        lambda *, session: {
+            row["sucursal_id"]: object() for row in by_branch.values()
+        },
+    )
+    playwright = MagicMock()
+    monkeypatch.setattr(bulk, "sync_playwright", lambda: playwright)
+    read = Mock(side_effect=bulk.TemplateBrowserError("iVentas no confirmó el inicio de sesión."))
+    monkeypatch.setattr(bulk, "read_template_inventory", read)
+
+    with pytest.raises(bulk.TemplateBrowserError, match="PASEO_2000.*inicio de sesión"):
+        bulk._load_inventories(by_branch)
+
+    assert "Consultando inventario de PASEO_2000" in capsys.readouterr().out
+    read.assert_called_once()
+    playwright.__enter__.return_value.chromium.launch.return_value.close.assert_called_once()
