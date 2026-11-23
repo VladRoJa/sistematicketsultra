@@ -556,3 +556,54 @@ class ContactCenterNotificationORM(db.Model):
             "created_at",
         ),
     )
+
+
+class ContactCenterPaymentReferenceBatchORM(db.Model):
+    """Versioned, immutable identity evidence imported from an offline CSV."""
+
+    __tablename__ = "contact_center_payment_reference_batches"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    cutoff_date = db.Column(db.Date, nullable=False)
+    source_filename = db.Column(db.String(255), nullable=False)
+    source_sha256 = db.Column(db.String(64), nullable=False)
+    row_count = db.Column(db.Integer, nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
+    imported_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    __table_args__ = (
+        db.UniqueConstraint("source_sha256", name="uq_cc_payment_reference_source_sha256"),
+        db.Index(
+            "uq_cc_payment_reference_single_active",
+            "is_active",
+            unique=True,
+            postgresql_where=db.text("is_active = true"),
+        ),
+    )
+
+
+class ContactCenterPaymentReferenceRowORM(db.Model):
+    """Only identity fields; no commercial or contact history."""
+
+    __tablename__ = "contact_center_payment_reference_rows"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    batch_id = db.Column(
+        db.BigInteger,
+        db.ForeignKey("contact_center_payment_reference_batches.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    member_id = db.Column(db.String(64), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    name_key = db.Column(db.String(255), nullable=False)
+    pin = db.Column(db.String(64), nullable=False)
+    pin_key = db.Column(db.String(64), nullable=False)
+    branch = db.Column(db.String(255), nullable=False)
+    status_at_cutoff = db.Column(db.String(20), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("batch_id", "member_id", name="uq_cc_payment_reference_member"),
+        db.UniqueConstraint("batch_id", "name_key", "pin_key", name="uq_cc_payment_reference_identity"),
+        db.Index("ix_cc_payment_reference_batch_pin", "batch_id", "pin_key"),
+        db.Index("ix_cc_payment_reference_batch_name", "batch_id", "name_key"),
+    )

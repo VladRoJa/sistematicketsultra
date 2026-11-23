@@ -19,12 +19,14 @@ import {
 
 
 export interface ContactCenterPaymentMember {
-  member_id: string;
+  member_id: string | null;
   name: string;
   pin: string;
   branch: string;
-  source: 'ACTIVO' | 'HISTORICO_ALTAS';
-  payment_url: string;
+  source: 'ACTIVO' | 'HISTORICO_ALTAS' | 'VENCIDO_REFERENCIA' | 'VENCIDO_SIN_ID' | 'REFERENCIA_HISTORICA';
+  payment_url: string | null;
+  reference_cutoff_date?: string | null;
+  status_at_cutoff?: 'VENCIDO' | 'ACTIVO' | null;
 }
 
 

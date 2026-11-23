@@ -50,3 +50,6 @@ graphify-out/
 
 # WSO-01: private manifests/quarantine must never be committed
 /private/wso01/
+
+# Sensitive payment-reference roster (never in Git or public uploads)
+/private/contact-center-payment-reference/

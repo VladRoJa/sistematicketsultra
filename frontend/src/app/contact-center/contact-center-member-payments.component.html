@@ -36,7 +36,7 @@
 
   <div class="member-payment__loading" *ngIf="loading">Consultando socios…</div>
   <p class="member-payment__empty" *ngIf="searched && !rows.length">
-    No se encontraron socios con ID de pago en los registros disponibles.
+    No se encontraron socios en los padrones disponibles.
   </p>
 
   <div class="member-payment__results" *ngIf="rows.length && !loading">
@@ -46,24 +46,39 @@
       <div class="member-payment__identity">
         <strong>{{ member.name }}</strong>
         <span>PIN: {{ member.pin || '—' }} · {{ member.branch || 'Sin sucursal' }}</span>
-        <small>{{ member.source === 'ACTIVO' ? 'Padrón activo' : 'Histórico de altas' }}</small>
+        <small *ngIf="member.source === 'ACTIVO'">Padrón activo</small>
+        <small *ngIf="member.source === 'HISTORICO_ALTAS'">Histórico de altas</small>
+        <small *ngIf="member.source === 'VENCIDO_REFERENCIA'">Vencido · ID verificado con padrón histórico {{ member.reference_cutoff_date || '' }}</small>
+        <small *ngIf="member.source === 'VENCIDO_SIN_ID'">Vencido · ID pendiente de verificación</small>
+        <small *ngIf="member.source === 'REFERENCIA_HISTORICA'">
+          Padrón histórico {{ member.reference_cutoff_date || '' }} · estado en ese corte: {{ member.status_at_cutoff || 'Sin dato' }}
+        </small>
       </div>
       <div class="member-payment__fields">
         <div class="member-payment__field">
           <span>ID del socio</span>
-          <code>{{ member.member_id }}</code>
-          <button type="button" (click)="copyText(member.member_id, 'ID del socio')"
-            [attr.aria-label]="'Copiar ID del socio ' + member.member_id">
-            <mat-icon>content_copy</mat-icon> Copiar
-          </button>
+          <ng-container *ngIf="member.member_id as memberId; else missingMemberId">
+            <code>{{ memberId }}</code>
+            <button type="button" (click)="copyText(memberId, 'ID del socio')"
+              [attr.aria-label]="'Copiar ID del socio ' + memberId">
+              <mat-icon>content_copy</mat-icon> Copiar
+            </button>
+          </ng-container>
+          <ng-template #missingMemberId><code>ID no verificado</code></ng-template>
         </div>
         <div class="member-payment__field">
           <span>Liga de pago</span>
-          <code>{{ member.payment_url }}</code>
-          <button type="button" (click)="copyText(member.payment_url, 'Liga de pago')"
-            [attr.aria-label]="'Copiar liga de pago del socio ' + member.member_id">
-            <mat-icon>content_copy</mat-icon> Copiar
-          </button>
+          <ng-container *ngIf="member.payment_url as paymentUrl; else missingPaymentUrl">
+            <code>{{ paymentUrl }}</code>
+            <button type="button" (click)="copyText(paymentUrl, 'Liga de pago')"
+              [attr.aria-label]="'Copiar liga de pago del socio ' + member.member_id">
+              <mat-icon>content_copy</mat-icon> Copiar
+            </button>
+          </ng-container>
+          <ng-template #missingPaymentUrl>
+            <code>Sin liga</code>
+            <small>Verifica la identidad antes de generar una liga.</small>
+          </ng-template>
         </div>
       </div>
     </article>

@@ -52,6 +52,7 @@ services:
       - /home/adminrdp/sistematicketsultra/private/ticket-attachments:/app/runtime/ticket-attachments
       - /home/adminrdp/sistematicketsultra/private/inventario-e4:/app/runtime/inventario-e4
       - ./backend/.playwright:/app/.playwright
+      - ${CONTACT_CENTER_PAYMENT_REFERENCE_HOST_DIR:-/home/adminrdp/sistematicketsultra/private/contact-center-payment-reference}:/app/runtime/payment-reference
       - routine_control_runtime:/app/runtime/routine-control
 
 

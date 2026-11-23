@@ -1,22 +1,31 @@
 """Consulta acotada de IDs de socio para ligas de pago en Contact Center.
 
-Usa únicamente snapshots canónicos: padrón activo y altas históricas.
-Los padrones de vencidos no contienen ID socio y no se infiere por PIN.
+Consulta vencidos y resuelve ID mediante padrón histórico validado por nombre+PIN.
+También conserva snapshots canónicos de activos y altas; nunca infiere ID por PIN.
 """
 from __future__ import annotations
 
 import re
 from datetime import date
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, tuple_
 
 from app.extensions import db
+from app.models.contact_center import (
+    ContactCenterPaymentReferenceBatchORM,
+    ContactCenterPaymentReferenceRowORM,
+)
 from app.models.warehouse import (
     SociosActivosSnapshotRowORM,
+    SociosVencidosCarteraORM,
     VentasNuevosSociosDetalleSnapshotORM,
     VentasNuevosSociosDetalleSnapshotRowORM,
 )
 from app.services.contact_center_service import ContactCenterValidationError
+from app.services.contact_center_payment_reference_service import (
+    normalize_name_key,
+    normalize_pin_key,
+)
 from app.services.marketing_phone import normalize_member_phone, normalize_phone
 from app.warehouse.services.socios_activos_snapshot_resolver import (
     resolve_latest_canonical_socios_activos_snapshot,
@@ -103,14 +112,160 @@ def _add_unique(results: list[dict], seen: set[str], payload: dict | None) -> No
         seen.add(member_id)
 
 
+def _expired_member_candidates(
+    term: str, kind: str, *, session
+) -> tuple[list[dict], list[dict]]:
+    """Search expired episodes, then resolve only unique name+PIN pairs.
+
+    Name and PIN come from the expired roster. The historical CSV is identity
+    evidence, not evidence that a member is currently expired.
+    """
+    query = session.query(SociosVencidosCarteraORM)
+    if kind == "PIN":
+        query = query.filter(SociosVencidosCarteraORM.pin == term)
+    elif kind == "PHONE":
+        query = query.filter(
+            SociosVencidosCarteraORM.telefono_digits.in_(
+                (term, f"52{term}", f"521{term}")
+            )
+        )
+    else:
+        query = query.filter(
+            SociosVencidosCarteraORM.nombre.ilike(_escaped_like(term), escape="\\")
+        )
+    raw_rows = (
+        query.order_by(
+            SociosVencidosCarteraORM.fecha_vencimiento_date.desc(),
+            SociosVencidosCarteraORM.id.desc(),
+        ).limit(MAX_SOURCE_ROWS).all()
+    )
+
+    candidates: dict[tuple[str, str], object] = {}
+    for row in raw_rows:
+        if kind == "PHONE" and normalize_phone(row.telefono_raw) != term:
+            continue
+        key = (normalize_name_key(row.nombre), normalize_pin_key(row.pin))
+        if not key[0] or not key[1]:
+            continue
+        candidates.setdefault(key, row)
+    if not candidates:
+        return [], []
+
+    batch = session.query(ContactCenterPaymentReferenceBatchORM).filter(
+        ContactCenterPaymentReferenceBatchORM.is_active.is_(True)
+    ).one_or_none()
+    references: dict[tuple[str, str], str | None] = {}
+    if batch is not None:
+        reference_rows = session.query(ContactCenterPaymentReferenceRowORM).filter(
+            ContactCenterPaymentReferenceRowORM.batch_id == batch.id,
+            tuple_(
+                ContactCenterPaymentReferenceRowORM.name_key,
+                ContactCenterPaymentReferenceRowORM.pin_key,
+            ).in_(list(candidates)),
+        ).all()
+        for reference in reference_rows:
+            key = (reference.name_key, reference.pin_key)
+            member_id = _valid_member_id(reference.member_id)
+            if key in references and references[key] != member_id:
+                references[key] = None
+            else:
+                references[key] = member_id
+
+    verified: list[dict] = []
+    unverified: list[dict] = []
+    for key, row in candidates.items():
+        resolved_id = references.get(key)
+        payload = {
+            "member_id": resolved_id,
+            "name": str(row.nombre or "").strip() or "Sin nombre",
+            "pin": str(row.pin or "").strip(),
+            "branch": str(row.sucursal_raw or "").strip(),
+            "source": "VENCIDO_REFERENCIA" if resolved_id else "VENCIDO_SIN_ID",
+            "payment_url": f"{PAYMENT_URL_BASE}{resolved_id}" if resolved_id else None,
+            "reference_cutoff_date": batch.cutoff_date.isoformat() if batch else None,
+        }
+        (verified if resolved_id else unverified).append(payload)
+    return verified, unverified
+
+
+def _search_reference_direct(term: str, kind: str, *, session) -> list[dict]:
+    """Fallback for name/PIN when the operational expired roster has no rows.
+
+    The CSV carries an ID but its status is historical, never real-time.
+    """
+    if kind == "PHONE":
+        return []
+    batch = session.query(ContactCenterPaymentReferenceBatchORM).filter(
+        ContactCenterPaymentReferenceBatchORM.is_active.is_(True)
+    ).one_or_none()
+    if batch is None:
+        return []
+    query = session.query(ContactCenterPaymentReferenceRowORM).filter(
+        ContactCenterPaymentReferenceRowORM.batch_id == batch.id
+    )
+    if kind == "PIN":
+        pin_key = normalize_pin_key(term)
+        if not pin_key:
+            return []
+        query = query.filter(ContactCenterPaymentReferenceRowORM.pin_key == pin_key)
+    else:
+        name_key = normalize_name_key(term)
+        if not name_key:
+            return []
+        query = query.filter(
+            ContactCenterPaymentReferenceRowORM.name_key.ilike(
+                _escaped_like(name_key), escape="\\"
+            )
+        )
+    records: list[dict] = []
+    for reference in query.order_by(
+        ContactCenterPaymentReferenceRowORM.name_key.asc(),
+        ContactCenterPaymentReferenceRowORM.id.asc(),
+    ).limit(MAX_SOURCE_ROWS).all():
+        # Recheck identity in Python; no fuzzy matches may produce payment IDs.
+        if kind == "PIN" and normalize_pin_key(reference.pin) != pin_key:
+            continue
+        if kind == "NAME" and name_key not in reference.name_key:
+            continue
+        payload = _member_payload(
+            member_id=reference.member_id,
+            name=reference.name,
+            pin=reference.pin,
+            branch=reference.branch,
+            source="REFERENCIA_HISTORICA",
+        )
+        if payload:
+            payload["reference_cutoff_date"] = batch.cutoff_date.isoformat()
+            payload["status_at_cutoff"] = reference.status_at_cutoff
+            records.append(payload)
+    return records
+
+
 def search_contact_center_member_payments(
     query: object, *, session=None
 ) -> list[dict]:
-    """Ordena activos antes que altas históricas, sin cruzar identidades."""
+    """Prioriza vencidos con ID verificado; conserva activos y altas."""
     term, kind = _search_term(query)
     active_session = session if session is not None else db.session
     results: list[dict] = []
     seen: set[str] = set()
+
+    verified_expired, unresolved_expired = _expired_member_candidates(
+        term, kind, session=active_session
+    )
+    for candidate in verified_expired:
+        _add_unique(results, seen, candidate)
+        if len(results) >= MAX_RESULTS:
+            return results
+
+    # Only use direct historical identity when no expired operational row exists.
+    # A name mismatch against an existing expired row must not be 'repaired'
+    # through a separate member sharing its PIN.
+    if not verified_expired and not unresolved_expired:
+        for candidate in _search_reference_direct(term, kind, session=active_session):
+            _add_unique(results, seen, candidate)
+            if len(results) >= MAX_RESULTS:
+                return results
 
     active_snapshot = resolve_latest_canonical_socios_activos_snapshot(
         minimum_cutoff_date=date.min,
@@ -231,6 +386,18 @@ def search_contact_center_member_payments(
                 source="HISTORICO_ALTAS",
             ),
         )
+        if len(results) >= MAX_RESULTS:
+            return results
+
+    verified_keys = {
+        (normalize_name_key(item["name"]), normalize_pin_key(item["pin"]))
+        for item in results
+    }
+    for pending in unresolved_expired:
+        key = (normalize_name_key(pending["name"]), normalize_pin_key(pending["pin"]))
+        if key not in verified_keys:
+            results.append(pending)
+            verified_keys.add(key)
         if len(results) >= MAX_RESULTS:
             break
     return results
