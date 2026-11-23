@@ -118,6 +118,25 @@ def _inventory_response(response):
 
 
 
+
+def _open_inventory_for_read(page) -> None:
+    """Read-only: wait for authenticated provider inventory, not a UI heading.
+
+    iVentas can render its /config page after the inventory GET has completed.
+    The existing checked response predicate and strict JSON parser remain the
+    source of approval evidence; a missing response must fail closed.
+    """
+    try:
+        with page.expect_response(_inventory_response, timeout=30_000):
+            page.goto(f"{ORIGIN}/config", wait_until="domcontentloaded")
+            _require_iventas_url(page)
+    except PlaywrightTimeoutError:
+        raise TemplateBrowserError(
+            "iVentas no devolvió el inventario de plantillas dentro de 30 segundos."
+        ) from None
+
+
+
 def read_template_inventory(browser, login):
     """Inspect existing templates in one authenticated session, without POSTs.
 
@@ -131,7 +150,7 @@ def read_template_inventory(browser, login):
         responses = []
         page.on("response", lambda response: responses.append(response)
                 if _inventory_response(response) else None)
-        _open_inventory(page)
+        _open_inventory_for_read(page)
         if not responses:
             raise TemplateBrowserError("iVentas no devolvió el inventario de plantillas.")
         found = {}
