@@ -16,7 +16,7 @@ from playwright.sync_api import sync_playwright
 
 from app import create_app
 from app.extensions import db
-from app.integrations.iventas.template_browser import read_template_inventory
+from app.integrations.iventas.template_browser import TemplateBrowserError, read_template_inventory
 from app.models.user_model import UserORM
 from app.services.marketing_access import resolve_marketing_access
 from app.services.marketing_campaign_v2_dispatch_config_service import (
@@ -136,8 +136,14 @@ def _load_inventories(bindings: dict[str, dict]) -> dict[str, tuple]:
         try:
             for branch in COSTA:
                 branch_id = bindings[branch]["sucursal_id"]
-                results[branch] = read_template_inventory(browser, credentials[branch_id])
-                print(f"Inventario autenticado: {branch} ({len(results[branch])} registros).")
+                print(f"Consultando inventario de {branch}...", flush=True)
+                try:
+                    results[branch] = read_template_inventory(browser, credentials[branch_id])
+                except TemplateBrowserError as error:
+                    raise TemplateBrowserError(
+                        f"Falló la consulta de {branch}: {error}"
+                    ) from error
+                print(f"Inventario autenticado: {branch} ({len(results[branch])} registros).", flush=True)
         finally:
             browser.close()
     return results
