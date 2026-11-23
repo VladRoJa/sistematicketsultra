@@ -125,3 +125,59 @@ def test_inventory_ignores_unrelated_responses(url, method):
     response.request.method = method
 
     assert not adapter._inventory_response(response)
+
+
+def test_read_full_inventory_uses_one_login_and_only_provider_get(monkeypatch):
+    browser = Mock()
+    context = browser.new_context.return_value
+    page = context.new_page.return_value
+    response = Mock(url="https://rest.iventas.mx/whatsappTemplate/list", ok=True)
+    response.request.method = "GET"
+    response.json.return_value = [
+        {"name": "1regresa_299_n3", "status": "accepted", "channelId": "channel-1",
+         "channel": {"id": "channel-1", "name": "Costa"}},
+        {"name": "2regresa_299_n3", "status": "pending", "channelId": "channel-1",
+         "channel": {"id": "channel-1", "name": "Costa"}},
+    ]
+    login = Mock()
+    open_inventory = Mock()
+    monkeypatch.setattr(adapter, "_login", login)
+    monkeypatch.setattr(adapter, "_open_inventory", open_inventory)
+    page.on.side_effect = lambda _event, callback: callback(response)
+
+    result = adapter.read_template_inventory(browser, None)
+
+    assert [(r.template_name, r.status) for r in result] == [
+        ("1regresa_299_n3", "accepted"), ("2regresa_299_n3", "pending"),
+    ]
+    login.assert_called_once()
+    open_inventory.assert_called_once_with(page)
+    page.get_by_role.assert_not_called()
+    context.close.assert_called_once()
+
+
+def test_read_full_inventory_fails_closed_if_not_observed_or_conflicting(monkeypatch):
+    browser = Mock()
+    context = browser.new_context.return_value
+    page = context.new_page.return_value
+    monkeypatch.setattr(adapter, "_login", Mock())
+    monkeypatch.setattr(adapter, "_open_inventory", Mock())
+
+    with pytest.raises(adapter.TemplateBrowserError, match="no devolvió"):
+        adapter.read_template_inventory(browser, None)
+
+    accepted = Mock(url="https://rest.iventas.mx/whatsappTemplate/list", ok=True)
+    accepted.request.method = "GET"
+    accepted.json.return_value = [{
+        "name": "1regresa_299_n3", "status": "accepted", "channelId": "channel-1",
+        "channel": {"id": "channel-1", "name": "Costa"},
+    }]
+    rejected = Mock(url="https://rest.iventas.mx/whatsappTemplate/list", ok=True)
+    rejected.request.method = "GET"
+    rejected.json.return_value = [{
+        "name": "1regresa_299_n3", "status": "rejected", "channelId": "channel-1",
+        "channel": {"id": "channel-1", "name": "Costa"},
+    }]
+    page.on.side_effect = lambda _event, callback: [callback(accepted), callback(rejected)]
+    with pytest.raises(adapter.TemplateBrowserError, match="contradictorios"):
+        adapter.read_template_inventory(browser, None)
