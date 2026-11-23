@@ -32,7 +32,7 @@ from app.services.marketing_campaign_v2_template_upload_service import (
 from scripts.marketing.link_costa_iventas_templates import _verify_actor, expected_names
 
 BRANCH = "PAPALOTE_TJ"
-DATA = Path(__file__).resolve().parents[2] / "data/marketing/papalote_regresa_20261123.json"
+DATA = Path(__file__).resolve().parent / "data/papalote_regresa_20261123.json"
 EXPECTED = frozenset(expected_names(BRANCH))
 NAME_TOKEN = "[Nombre]"
 FIELD_REVIEW = frozenset({"2regresa_299_n3", "7regresa_399_n2"})
