@@ -137,3 +137,20 @@ def resolve_sender_binding(
             str(target.provider_channel_id) != route.get("outbound_channel_id")):
         raise CampaignV2SenderRoutingConflict("Cambió la identidad del canal TEC_MXL.")
     return target, str(target.sucursal_canon)
+
+
+def resolve_configured_outbound_binding(
+    *, branch: Any, source_binding: Any, session: Any,
+) -> tuple[Any, str | None]:
+    """Read the existing Independencia route before checking template compatibility.
+
+    The source branch stays immutable. A configured, invalid sender must fail
+    closed; only the explicitly authorized route may change the outbound channel.
+    """
+    if _canonical(getattr(branch, "sucursal_canon", None)) != SOURCE:
+        return source_binding, None
+    snapshot = capture_sender_routes(session=session, recipient_origins=(SOURCE,))
+    return resolve_sender_binding(
+        snapshot=snapshot, source_binding=source_binding,
+        branch=branch, session=session,
+    )
