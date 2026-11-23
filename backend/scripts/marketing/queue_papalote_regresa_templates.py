@@ -1,11 +1,11 @@
 """Queue missing Papalote Costa reactivation templates using existing audited uploads.
 
 The source messages are an operator-provided editorial document captured in
-backend/data/marketing/papalote_regresa_20261123.json. This command does not
+backend/scripts/marketing/data/papalote_regresa_20261123.json. This command does not
 send WhatsApps, link Suite templates, or bypass the existing approval process.
 
-Preview is default. --apply queues only templates whose name placeholder is
-unambiguous. Two no-placeholder variants require separate confirmation.
+Preview is default. --apply queues templates with an explicit name-field
+contract: 22 personalized and two simple without positional variables.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ BRANCH = "PAPALOTE_TJ"
 DATA = Path(__file__).resolve().parent / "data/papalote_regresa_20261123.json"
 EXPECTED = frozenset(expected_names(BRANCH))
 NAME_TOKEN = "[Nombre]"
-FIELD_REVIEW = frozenset({"2regresa_299_n3", "7regresa_399_n2"})
+SIMPLE_TEMPLATES = frozenset({"2regresa_299_n3", "7regresa_399_n2"})
 
 
 @dataclass(frozen=True)
@@ -74,10 +74,10 @@ def source_templates(path: Path = DATA) -> dict[str, dict]:
         count = message.count(NAME_TOKEN)
         if count not in (0, 1) or count != record["placeholder_count"]:
             raise ValueError(f"{name}: cantidad de variables inconsistente.")
-        if bool(record["needs_field_review"]) != (name in FIELD_REVIEW):
-            raise ValueError(f"{name}: revisar el contrato de campos personalizados.")
-        if bool(count) == (name in FIELD_REVIEW):
-            raise ValueError(f"{name}: variable [Nombre] inesperada para este contrato.")
+        if bool(record["simple_template"]) != (name in SIMPLE_TEMPLATES):
+            raise ValueError(f"{name}: tipo simple/personalizado no coincide con contrato.")
+        if (count == 0) != (name in SIMPLE_TEMPLATES):
+            raise ValueError(f"{name}: contrato [Nombre] inesperado para este modelo.")
         templates[name] = validate_template({
             "name": name, "message": message, "category": "MARKETING",
             "fields": field_offsets(message), "buttons": [],
@@ -115,8 +115,6 @@ def plan_queue(*, templates: dict[str, dict], provider_inventory: tuple,
             result.append(QueuePlanRow(name, "PREVIOUS_UPLOAD", "Ya hay historial de carga para esta sucursal."))
         elif name in observed:
             result.append(QueuePlanRow(name, "PROVIDER_EXISTS", "El nombre ya existe en esta cuenta iVentas."))
-        elif name in FIELD_REVIEW:
-            result.append(QueuePlanRow(name, "VERIFY_FIELDS", "El texto no incluye [Nombre]; confirmar si es simple."))
         else:
             result.append(QueuePlanRow(name, "READY"))
     return result
@@ -157,7 +155,7 @@ def main() -> None:
         for row in plan:
             print(f"{row.name}: {row.status}" + (f" | {row.reason}" if row.reason else ""))
         counts = {status: sum(row.status == status for row in plan)
-                  for status in ("READY", "VERIFY_FIELDS", "PREVIOUS_UPLOAD", "PROVIDER_EXISTS")}
+                  for status in ("READY", "PREVIOUS_UPLOAD", "PROVIDER_EXISTS")}
         print(f"Resumen: {counts}. Canal único: {BRANCH}.")
         if not args.apply:
             print("VISTA PREVIA: no se encoló ni creó ninguna plantilla.")
