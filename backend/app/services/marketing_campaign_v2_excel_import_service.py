@@ -21,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.services.marketing_campaign_v2_channel_routing_service import (
     SNAPSHOT_KEY as ROUTING_SNAPSHOT_KEY, capture_sender_routes,
+    CampaignV2SenderRoutingConflict, resolve_configured_outbound_binding,
 )
 from app.models.marketing import (
     MarketingCampaignV2ORM,
@@ -172,9 +173,19 @@ def _compile(
                 f"Fila {line}: sucursal fuera del alcance autorizado."
             )
         if branch.sucursal_id not in channel_cache:
-            channel_cache[branch.sucursal_id] = resolve_dispatch_channel_binding(
+            channel = resolve_dispatch_channel_binding(
                 sucursal_id=branch.sucursal_id, session=session,
             )
+            if channel is not None:
+                try:
+                    channel, _ = resolve_configured_outbound_binding(
+                        branch=branch, source_binding=channel, session=session,
+                    )
+                except CampaignV2SenderRoutingConflict as exc:
+                    raise ExcelCampaignImportValidationError(
+                        f"Fila {line}: la ruta de envío configurada no es válida."
+                    ) from exc
+            channel_cache[branch.sucursal_id] = channel
         channel = channel_cache[branch.sucursal_id]
         if channel is None or not template_allows_channel(
             template, str(channel.provider_channel_id)

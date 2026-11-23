@@ -188,3 +188,24 @@ def test_child_status_keeps_source_and_sender_after_provider_submission():
     assert result["send_via_sucursal_canon"] == "TEC_MXL"
     assert result["provider_channel_id"] == TECH_CHANNEL
     assert result["provider_campaign_id"] == "synthetic-900"
+
+
+def test_compatibility_uses_only_existing_tec_sender_for_independencia():
+    source, target = fixtures()
+    session = FakeSession(source, target)
+    selected, via = routing.resolve_configured_outbound_binding(
+        branch=NS(sucursal_canon="INDEPENDENCIA", sucursal_id=3),
+        source_binding=source, session=session,
+    )
+    assert selected is target and via == "TEC_MXL"
+    selected, via = routing.resolve_configured_outbound_binding(
+        branch=NS(sucursal_canon="INSURGENTES", sucursal_id=22),
+        source_binding=source, session=session,
+    )
+    assert selected is source and via is None
+    source.metadata_json = {}
+    selected, via = routing.resolve_configured_outbound_binding(
+        branch=NS(sucursal_canon="INDEPENDENCIA", sucursal_id=3),
+        source_binding=source, session=session,
+    )
+    assert selected is source and via is None
