@@ -33,11 +33,14 @@ COSTA = (
 REGULAR_FAMILIES = ("299_n3", "399_n2")
 OTHER_COAST_FAMILY = "499_n1"
 LOMA_FAMILY = "449_lb"
-# The user-supplied message text does not visibly contain a name placeholder
-# in these two variants. Do not guess their provider variable contract.
-FIELD_REVIEW = frozenset({"2regresa_299_n3", "7regresa_399_n2"})
+# These two approved creatives have no name field in any branch.
+SIMPLE_TEMPLATES = frozenset({"2regresa_299_n3", "7regresa_399_n2"})
 MAPPING = {"1": "first_name"}
 PURPOSE = "REACTIVATION"
+
+
+def variables_for(name: str) -> dict[str, str]:
+    return {} if name in SIMPLE_TEMPLATES else MAPPING
 
 
 def expected_names(branch: str) -> tuple[str, ...]:
@@ -108,14 +111,12 @@ def build_plan(bindings: list[dict], inventories: dict[str, tuple], catalog: lis
             status, reasons = "CONFLICT", ("Hay registros duplicados de esta plantilla en Suite; revisión manual.",)
         elif missing:
             status, reasons = "PENDING_APPROVAL", missing
-        elif name in FIELD_REVIEW:
-            status, reasons = "VERIFY_FIELDS", ("Campo personalizado no visible en el texto fuente.",)
         elif existing is None:
             status, reasons = "READY", ()
         elif (existing["provider"] == "IVENTAS"
               and existing["is_active"]
               and "REACTIVATION" in existing["purposes"]
-              and existing["variables"] == MAPPING
+              and existing["variables"] == variables_for(name)
               and set(existing["compatible_channel_ids"]) == set(channels)):
             status, reasons = "ALREADY_LINKED", ()
         else:
@@ -183,7 +184,7 @@ def main() -> None:
             if args.apply and row.status == "READY":
                 save_template(
                     provider="IVENTAS", template_name=row.name, label=row.name,
-                    is_active=True, purposes=[PURPOSE], variables=MAPPING,
+                    is_active=True, purposes=[PURPOSE], variables=variables_for(row.name),
                     compatible_channel_ids=list(row.channels),
                     actor_user_id=args.actor_id,
                     metadata={"linked_from": "AUTHENTICATED_IVENTAS_APPROVAL",
