@@ -174,3 +174,24 @@ def test_pilot_reads_existing_scheduler_files_without_any_provider_call(tmp_path
     assert kwargs["business_date"] == date(2026, 11, 11)
     assert len(kwargs["artifacts"]) == 1
     assert kwargs["artifacts"][0]["sucursal_raw"] == "VILLAS_DEL_REY"
+
+
+def test_branch_template_override_keeps_insurgentes_on_legacy(monkeypatch):
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", "INSURGENTES:14")
+    assert preparation._template_id_for_branch(18, "INSURGENTES") == 14
+    assert preparation._template_id_for_branch(18, "VILLAS_DEL_REY") == 18
+    assert preparation._template_id_for_branch(18, "INDEPENDENCIA") == 18
+
+
+def test_branch_template_overrides_fail_closed_for_malformed_or_nonisolated(monkeypatch):
+    from app.warehouse.jobs import cobranza_iventas_preparation as preparation
+
+    monkeypatch.setenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", "INSURGENTES:14")
+    with pytest.raises(CobranzaCampaignPreparationError, match="campaña aislada"):
+        preparation._template_id_for_branch(18, None)
+    for invalid in ("INSURGENTES:0", "INSURGENTES:14,INSURGENTES:18", "insurgentes:14", "INSURGENTES:14,"):
+        monkeypatch.setenv("COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES", invalid)
+        with pytest.raises(CobranzaCampaignPreparationError, match="inválidas"):
+            preparation._template_id_for_branch(18, "INSURGENTES")
