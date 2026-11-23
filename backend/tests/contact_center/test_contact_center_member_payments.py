@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from datetime import date
 
 import pytest
 from flask import Flask
@@ -121,15 +122,27 @@ class _Query:
     def all(self):
         return self.rows
 
+    def one_or_none(self):
+        return self.rows[0] if self.rows else None
+
 
 class _Session:
-    def __init__(self, active, historical):
+    def __init__(self, active, historical, *, expired=None, reference=None, batch=None):
         self.active = active
         self.historical = historical
+        self.expired = expired or []
+        self.reference = reference or []
+        self.batch = batch
 
     def query(self, model):
         if model is payments.SociosActivosSnapshotRowORM:
             return _Query(self.active)
+        if model is payments.SociosVencidosCarteraORM:
+            return _Query(self.expired)
+        if model is payments.ContactCenterPaymentReferenceBatchORM:
+            return _Query([self.batch] if self.batch else [])
+        if model is payments.ContactCenterPaymentReferenceRowORM:
+            return _Query(self.reference)
         return _Query(self.historical)
 
 
@@ -227,6 +240,97 @@ def test_phone_search_does_not_guess_ids_for_unsupported_number(monkeypatch):
         ),
     )
     assert rows == []
+
+
+
+def test_expired_member_resolves_id_from_name_and_pin_not_branch(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    expired = [SimpleNamespace(
+        id=1, nombre="José María Gómez", pin="000987", sucursal_raw="VILLA_VERDE",
+        fecha_vencimiento_date=date(2026, 10, 30), telefono_raw="6861234567",
+    )]
+    batch = SimpleNamespace(id=11, cutoff_date=date(2026, 10, 31))
+    reference = [SimpleNamespace(
+        name_key="JOSE MARIA GOMEZ", pin_key="987", member_id="13579"
+    )]
+    rows = payments.search_contact_center_member_payments(
+        "+52 686 123 4567",
+        session=_Session([], [], expired=expired, reference=reference, batch=batch),
+    )
+    assert len(rows) == 1
+    assert rows[0]["member_id"] == "13579"
+    assert rows[0]["payment_url"] == "https://pago.ultragym.com.mx?sid=13579"
+    assert rows[0]["source"] == "VENCIDO_REFERENCIA"
+    assert rows[0]["branch"] == "VILLA_VERDE"
+    assert rows[0]["reference_cutoff_date"] == "2026-10-31"
+
+
+def test_expired_member_without_exact_name_pin_never_gets_link(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    expired = [SimpleNamespace(
+        id=1, nombre="María López", pin="54321", sucursal_raw="VILLAS_DEL_REY",
+        fecha_vencimiento_date=date(2026, 10, 25), telefono_raw="6861234567",
+    )]
+    reference = [SimpleNamespace(
+        name_key="MARIA PEREZ", pin_key="54321", member_id="123"
+    )]
+    rows = payments.search_contact_center_member_payments(
+        "54321",
+        session=_Session(
+            [], [], expired=expired, reference=reference,
+            batch=SimpleNamespace(id=11, cutoff_date=date(2026, 10, 31)),
+        ),
+    )
+    assert len(rows) == 1
+    assert rows[0]["source"] == "VENCIDO_SIN_ID"
+    assert rows[0]["member_id"] is None
+    assert rows[0]["payment_url"] is None
+
+
+def test_expired_lookup_without_import_returns_unverified_not_bogus_link(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    expired = [SimpleNamespace(
+        id=1, nombre="ANA GARCIA", pin="789", sucursal_raw="PASEO 2000",
+        fecha_vencimiento_date=date(2026, 10, 25), telefono_raw="6861234567",
+    )]
+    rows = payments.search_contact_center_member_payments(
+        "ANA",
+        session=_Session([], [], expired=expired),
+    )
+    assert rows[0]["member_id"] is None
+    assert rows[0]["payment_url"] is None
+
+
+def test_expired_history_deduplicates_repeated_episodes(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    expired = [
+        SimpleNamespace(
+            id=2, nombre="PEDRO LOPEZ", pin="111", sucursal_raw="PASEO 2000",
+            fecha_vencimiento_date=date(2026, 10, 30), telefono_raw=None,
+        ),
+        SimpleNamespace(
+            id=1, nombre="Pedro López", pin="111", sucursal_raw="SEND MXL",
+            fecha_vencimiento_date=date(2026, 8, 12), telefono_raw=None,
+        ),
+    ]
+    rows = payments.search_contact_center_member_payments(
+        "Pedro", session=_Session([], [], expired=expired)
+    )
+    assert len(rows) == 1
+    assert rows[0]["branch"] == "PASEO 2000"
+
 
 
 
