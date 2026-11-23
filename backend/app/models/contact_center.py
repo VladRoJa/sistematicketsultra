@@ -566,12 +566,13 @@ class ContactCenterPaymentReferenceBatchORM(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     cutoff_date = db.Column(db.Date, nullable=False)
     source_filename = db.Column(db.String(255), nullable=False)
-    source_sha256 = db.Column(db.String(64), nullable=False, unique=True)
+    source_sha256 = db.Column(db.String(64), nullable=False)
     row_count = db.Column(db.Integer, nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=False)
     imported_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_utc_now)
 
     __table_args__ = (
+        db.UniqueConstraint("source_sha256", name="uq_cc_payment_reference_source_sha256"),
         db.Index(
             "uq_cc_payment_reference_single_active",
             "is_active",
