@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from flask import Flask
+from sqlalchemy.dialects import postgresql
 
 from app.routes import contact_center_routes as routes
 from app.services import contact_center_member_payment_service as payments
@@ -50,8 +51,55 @@ def test_lookup_rejects_short_or_excessive_queries(raw):
 
 def test_lookup_escapes_like_wildcards():
     assert payments._escaped_like(r"ana%_") == r"%ana\%\_%"
-    assert payments._search_term("12345") == ("12345", True)
-    assert payments._search_term("María") == ("María", False)
+    assert payments._search_term("12345") == ("12345", "PIN")
+    assert payments._search_term("María") == ("María", "NAME")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("6861234567", ("6861234567", "PHONE")),
+        ("+52 (686) 123-4567", ("6861234567", "PHONE")),
+        ("5216861234567", ("6861234567", "PHONE")),
+        ("686 123 4567", ("6861234567", "PHONE")),
+        ("12345", ("12345", "PIN")),
+        ("Ana Pérez", ("Ana Pérez", "NAME")),
+    ],
+)
+def test_search_term_detects_complete_mx_phones_without_confusing_pins(raw, expected):
+    assert payments._search_term(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("phone_column", "lada_column", "already_digits"),
+    [
+        (payments.SociosActivosSnapshotRowORM.telefono_digits,
+         payments.SociosActivosSnapshotRowORM.lada_raw, True),
+        (payments.VentasNuevosSociosDetalleSnapshotRowORM.telefono,
+         payments.VentasNuevosSociosDetalleSnapshotRowORM.lada, False),
+    ],
+)
+def test_phone_filter_supports_direct_and_lada_local_numbers(
+    phone_column, lada_column, already_digits
+):
+    expression = payments._phone_filter(
+        phone_column, lada_column, "6861234567", digits_stored=already_digits
+    )
+    sql = str(expression.compile(
+        dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+    ))
+    assert "6861234567" in sql
+    assert "526861234567" in sql
+    assert "5216861234567" in sql
+    assert "concat(" in sql
+    if not already_digits:
+        assert "regexp_replace(" in sql
+
+
+def test_phone_search_requires_full_valid_number():
+    assert payments._search_term("68612345") == ("68612345", "PIN")
+    assert payments._search_term("+52 686 123") == ("+52 686 123", "NAME")
+
 
 
 class _Query:
@@ -115,6 +163,71 @@ def test_search_prefers_canonical_actives_and_deduplicates_history(monkeypatch):
     assert rows[0]["source"] == "ACTIVO"
     assert rows[1]["name"] == "Ana Ruiz López"
     assert rows[1]["payment_url"].endswith("sid=222")
+
+
+def test_phone_search_deduplicates_and_matches_only_exact_normalized_phone(monkeypatch):
+    monkeypatch.setattr(
+        payments,
+        "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: SimpleNamespace(id=9),
+    )
+    active = [
+        SimpleNamespace(
+            id=1, id_socio="111", nombre="Ana Pérez", pin="3456",
+            sucursal_raw="VILLAS_DEL_REY", lada_raw="686",
+            telefono_raw="1234567",
+        ),
+        SimpleNamespace(
+            id=2, id_socio="333", nombre="Otra persona", pin="9999",
+            sucursal_raw="SEND_MXL", lada_raw="686",
+            telefono_raw="1234568",
+        ),
+    ]
+    historical = [
+        SimpleNamespace(
+            id=4, id_socio="111", nombre="Ana", apellido_paterno="Pérez",
+            apellido_materno="", pin="3456", sucursal_raw="VILLA_VERDE",
+            lada="52", telefono="6861234567",
+        ),
+        SimpleNamespace(
+            id=3, id_socio="222", nombre="Luis", apellido_paterno="López",
+            apellido_materno="", pin="3211", sucursal_raw="VILLA_VERDE",
+            lada="", telefono="+52 (686) 123-4567",
+        ),
+    ]
+    rows = payments.search_contact_center_member_payments(
+        "+52 686 123 4567", session=_Session(active, historical)
+    )
+    assert [row["member_id"] for row in rows] == ["111", "222"]
+    assert rows[0]["source"] == "ACTIVO"
+    assert rows[1]["source"] == "HISTORICO_ALTAS"
+    assert all(
+        row["payment_url"].endswith(f"sid={row['member_id']}")
+        for row in rows
+    )
+
+
+def test_phone_search_does_not_guess_ids_for_unsupported_number(monkeypatch):
+    monkeypatch.setattr(
+        payments,
+        "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: SimpleNamespace(id=9),
+    )
+    rows = payments.search_contact_center_member_payments(
+        "6861234567",
+        session=_Session(
+            active=[
+                SimpleNamespace(
+                    id=1, id_socio="999", nombre="Alguien", pin="33",
+                    sucursal_raw="VILLA_VERDE", lada_raw="686",
+                    telefono_raw="7654321",
+                )
+            ],
+            historical=[],
+        ),
+    )
+    assert rows == []
+
 
 
 def test_manager_is_denied_before_member_query(monkeypatch):
