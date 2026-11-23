@@ -1,4 +1,4 @@
-from unittest.mock import Mock, call
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 
@@ -127,6 +127,33 @@ def test_inventory_ignores_unrelated_responses(url, method):
     assert not adapter._inventory_response(response)
 
 
+def test_bulk_inventory_readiness_uses_provider_response_not_ui_header():
+    page = MagicMock()
+    page.url = adapter.ORIGIN + "/config"
+
+    adapter._open_inventory_for_read(page)
+
+    page.expect_response.assert_called_once_with(
+        adapter._inventory_response, timeout=30_000,
+    )
+    page.goto.assert_called_once_with(
+        adapter.ORIGIN + "/config", wait_until="domcontentloaded",
+    )
+    page.get_by_text.assert_not_called()
+
+
+def test_bulk_inventory_readiness_fails_closed_on_provider_timeout():
+    page = MagicMock()
+    page.expect_response.return_value.__enter__.side_effect = (
+        adapter.PlaywrightTimeoutError("provider did not respond")
+    )
+
+    with pytest.raises(adapter.TemplateBrowserError, match="30 segundos"):
+        adapter._open_inventory_for_read(page)
+
+    page.get_by_text.assert_not_called()
+
+
 def test_read_full_inventory_uses_one_login_and_only_provider_get(monkeypatch):
     browser = Mock()
     context = browser.new_context.return_value
@@ -142,7 +169,7 @@ def test_read_full_inventory_uses_one_login_and_only_provider_get(monkeypatch):
     login = Mock()
     open_inventory = Mock()
     monkeypatch.setattr(adapter, "_login", login)
-    monkeypatch.setattr(adapter, "_open_inventory", open_inventory)
+    monkeypatch.setattr(adapter, "_open_inventory_for_read", open_inventory)
     page.on.side_effect = lambda _event, callback: callback(response)
 
     result = adapter.read_template_inventory(browser, None)
@@ -161,7 +188,7 @@ def test_read_full_inventory_fails_closed_if_not_observed_or_conflicting(monkeyp
     context = browser.new_context.return_value
     page = context.new_page.return_value
     monkeypatch.setattr(adapter, "_login", Mock())
-    monkeypatch.setattr(adapter, "_open_inventory", Mock())
+    monkeypatch.setattr(adapter, "_open_inventory_for_read", Mock())
 
     with pytest.raises(adapter.TemplateBrowserError, match="no devolvió"):
         adapter.read_template_inventory(browser, None)
