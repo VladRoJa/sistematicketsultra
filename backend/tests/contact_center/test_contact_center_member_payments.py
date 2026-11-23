@@ -334,6 +334,52 @@ def test_expired_history_deduplicates_repeated_episodes(monkeypatch):
 
 
 
+def test_historical_reference_name_search_finds_member_not_in_expired_roster(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    reference = [SimpleNamespace(
+        member_id="10982", name="María de los Ángeles",
+        name_key="MARIA DE LOS ANGELES", pin_key="123",
+        pin="00123", branch="LOMA BONITA", status_at_cutoff="VENCIDO",
+    )]
+    rows = payments.search_contact_center_member_payments(
+        "angeles",
+        session=_Session(
+            [], [], reference=reference,
+            batch=SimpleNamespace(id=2, cutoff_date=date(2026, 10, 31)),
+        ),
+    )
+    assert len(rows) == 1
+    assert rows[0]["member_id"] == "10982"
+    assert rows[0]["source"] == "REFERENCIA_HISTORICA"
+    assert rows[0]["reference_cutoff_date"] == "2026-10-31"
+    assert rows[0]["status_at_cutoff"] == "VENCIDO"
+
+
+def test_historical_reference_does_not_provide_phone_without_expired_match(monkeypatch):
+    monkeypatch.setattr(
+        payments, "resolve_latest_canonical_socios_activos_snapshot",
+        lambda **_kwargs: None,
+    )
+    reference = [SimpleNamespace(
+        member_id="10982", name="María de los Ángeles",
+        name_key="MARIA DE LOS ANGELES", pin_key="123",
+        pin="00123", branch="LOMA BONITA", status_at_cutoff="VENCIDO",
+    )]
+    rows = payments.search_contact_center_member_payments(
+        "6861234567",
+        session=_Session(
+            [], [], reference=reference,
+            batch=SimpleNamespace(id=2, cutoff_date=date(2026, 10, 31)),
+        ),
+    )
+    assert rows == []
+
+
+
+
 def test_manager_is_denied_before_member_query(monkeypatch):
     monkeypatch.setattr(
         routes, "_context",
