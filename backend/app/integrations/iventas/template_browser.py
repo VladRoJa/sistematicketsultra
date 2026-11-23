@@ -117,6 +117,46 @@ def _inventory_response(response):
     )
 
 
+
+def read_template_inventory(browser, login):
+    """Inspect existing templates in one authenticated session, without POSTs.
+
+    Return only validated name/channel/status records. Absent inventory and
+    conflicting provider observations fail closed instead of guessing approval.
+    """
+    context = browser.new_context()
+    try:
+        page = context.new_page()
+        _login(page, login)
+        responses = []
+        page.on("response", lambda response: responses.append(response)
+                if _inventory_response(response) else None)
+        _open_inventory(page)
+        if not responses:
+            raise TemplateBrowserError("iVentas no devolvió el inventario de plantillas.")
+        found = {}
+        for response in responses:
+            try:
+                inventory = parse_template_inventory(response.json())
+            except (ValueError, TypeError, PlaywrightError) as exc:
+                raise TemplateBrowserError("No fue posible validar el inventario de iVentas.") from exc
+            for record in inventory:
+                key = (record.template_name.casefold(), record.channel_id)
+                previous = found.get(key)
+                if previous is not None and previous != record:
+                    raise TemplateBrowserError("iVentas devolvió estados de plantilla contradictorios.")
+                found[key] = record
+        if not found:
+            raise TemplateBrowserError("El inventario de iVentas está vacío o no verificable.")
+        return tuple(sorted(found.values(), key=lambda r: (r.template_name, r.channel_id)))
+    finally:
+        try:
+            context.close()
+        except PlaywrightError:
+            pass
+
+
+
 def read_template_approval(browser, login, template: dict, channel_id: str) -> tuple[str, str]:
     """Read the authenticated portal inventory without creating or sending anything."""
     context = browser.new_context()
