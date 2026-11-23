@@ -2,19 +2,19 @@
   <div class="member-payment__heading">
     <div>
       <h2>Buscar liga de pago</h2>
-      <p>Localiza al socio por nombre o PIN. Verifica su identidad antes de compartir la liga.</p>
+      <p>Localiza al socio por nombre, PIN o teléfono completo. Verifica su identidad antes de compartir la liga.</p>
     </div>
   </div>
 
   <form class="member-payment__search" (ngSubmit)="search()">
-    <label for="member-payment-query">Nombre o PIN del socio</label>
+    <label for="member-payment-query">Nombre, PIN o teléfono del socio</label>
     <div class="member-payment__search-row">
       <input
         id="member-payment-query"
         name="memberPaymentQuery"
         type="text"
         [(ngModel)]="query"
-        placeholder="Ej. María López o 123456"
+        placeholder="Ej. María López, 123456 o 6861234567"
         autocomplete="off"
         maxlength="80"
         [disabled]="loading"
@@ -24,7 +24,7 @@
         {{ loading ? 'Buscando…' : 'Buscar' }}
       </button>
     </div>
-    <small>Se muestran hasta 20 coincidencias. Si hay varios socios, confirma el PIN y la sucursal.</small>
+    <small>Se muestran hasta 20 coincidencias. Para teléfono, ingresa los 10 dígitos (se acepta +52). Si hay varios socios, confirma el PIN y la sucursal.</small>
   </form>
 
   <p class="member-payment__feedback" role="status" *ngIf="feedbackMessage">
