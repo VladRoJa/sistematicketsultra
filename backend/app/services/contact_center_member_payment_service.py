@@ -188,6 +188,59 @@ def _expired_member_candidates(
     return verified, unverified
 
 
+def _search_reference_direct(term: str, kind: str, *, session) -> list[dict]:
+    """Fallback for name/PIN when the operational expired roster has no rows.
+
+    The CSV carries an ID but its status is historical, never real-time.
+    """
+    if kind == "PHONE":
+        return []
+    batch = session.query(ContactCenterPaymentReferenceBatchORM).filter(
+        ContactCenterPaymentReferenceBatchORM.is_active.is_(True)
+    ).one_or_none()
+    if batch is None:
+        return []
+    query = session.query(ContactCenterPaymentReferenceRowORM).filter(
+        ContactCenterPaymentReferenceRowORM.batch_id == batch.id
+    )
+    if kind == "PIN":
+        pin_key = normalize_pin_key(term)
+        if not pin_key:
+            return []
+        query = query.filter(ContactCenterPaymentReferenceRowORM.pin_key == pin_key)
+    else:
+        name_key = normalize_name_key(term)
+        if not name_key:
+            return []
+        query = query.filter(
+            ContactCenterPaymentReferenceRowORM.name_key.ilike(
+                _escaped_like(name_key), escape="\\"
+            )
+        )
+    records: list[dict] = []
+    for reference in query.order_by(
+        ContactCenterPaymentReferenceRowORM.name_key.asc(),
+        ContactCenterPaymentReferenceRowORM.id.asc(),
+    ).limit(MAX_SOURCE_ROWS).all():
+        # Recheck identity in Python; no fuzzy matches may produce payment IDs.
+        if kind == "PIN" and normalize_pin_key(reference.pin) != pin_key:
+            continue
+        if kind == "NAME" and name_key not in reference.name_key:
+            continue
+        payload = _member_payload(
+            member_id=reference.member_id,
+            name=reference.name,
+            pin=reference.pin,
+            branch=reference.branch,
+            source="REFERENCIA_HISTORICA",
+        )
+        if payload:
+            payload["reference_cutoff_date"] = batch.cutoff_date.isoformat()
+            payload["status_at_cutoff"] = reference.status_at_cutoff
+            records.append(payload)
+    return records
+
+
 def search_contact_center_member_payments(
     query: object, *, session=None
 ) -> list[dict]:
@@ -204,6 +257,15 @@ def search_contact_center_member_payments(
         _add_unique(results, seen, candidate)
         if len(results) >= MAX_RESULTS:
             return results
+
+    # Only use direct historical identity when no expired operational row exists.
+    # A name mismatch against an existing expired row must not be 'repaired'
+    # through a separate member sharing its PIN.
+    if not verified_expired and not unresolved_expired:
+        for candidate in _search_reference_direct(term, kind, session=active_session):
+            _add_unique(results, seen, candidate)
+            if len(results) >= MAX_RESULTS:
+                return results
 
     active_snapshot = resolve_latest_canonical_socios_activos_snapshot(
         minimum_cutoff_date=date.min,
