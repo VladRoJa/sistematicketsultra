@@ -19,9 +19,9 @@ existen en otras cuentas**: validar contenido y campos antes de campañas.
 - Categoría iVentas: `MARKETING`. Sin imagen ni botones añadidos por la Suite.
 - 22 mensajes contienen una aparición de `[Nombre]`, convertida en campo
   personalizado por posiciones UTF-16 mediante `validate_template`.
-- `2regresa_299_n3` y `7regresa_399_n2` **no** contienen el marcador
-  en el texto aportado. Se muestran `VERIFY_FIELDS`, no se cargan hasta
-  comparar si son simples o si el copy necesita corrección.
+- `2regresa_299_n3` y `7regresa_399_n2` **son plantillas simples**,
+  sin nombre ni campos personalizados, igual que en las otras sucursales.
+  Se encolan junto con las 22 variantes personalizadas.
 - Leer primero el inventario autenticado y el historial local de cargas.
   Un nombre presente en cualquier canal de esta cuenta, o con una carga
   previa en Papalote, se **omite** y requiere revisión, no duplicación.
@@ -53,8 +53,8 @@ docker compose --profile iventas-template-upload run --rm --no-deps iventas-temp
   python -m scripts.marketing.queue_papalote_regresa_templates
 ```
 
-Cotejar los 24 nombres y estados, así como que 22 figuren READY y dos
-VERIFY_FIELDS en condiciones normales. **Aplicación** solo con autorización
+Cotejar los 24 nombres y estados: en ausencia de duplicados deben aparecer
+24 READY (22 personalizadas y dos simples). **Aplicación** solo con autorización
 expresa y operador global autorizado:
 
 ```bash
@@ -71,7 +71,6 @@ Revisar historial de cargas y posteriormente aprobación real en iVentas.
 Solo entonces repetir la vista previa de `link_costa_iventas_templates`
 para comprobar canal, aprobación y conflictos antes de su `--apply`.
 
-Las dos simples pendientes deberán resolverse comparando con un registro
-aprobado de otra sucursal; no convertirlas a plantillas con una variable
-inventada. Cualquier error o estado VERIFY en iVentas requiere inspección
-antes de volver a intentar, para evitar duplicados.
+Las dos variantes simples se cargan sin ninguna variable. Cualquier error o
+estado VERIFY en iVentas requiere inspección antes de volver a intentar,
+para evitar duplicados.
