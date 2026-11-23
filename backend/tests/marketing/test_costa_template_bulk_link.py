@@ -91,3 +91,37 @@ def test_scope_missing_or_duplicate_bindings_fails_closed():
     bindings[1]["provider_channel_id"] = bindings[0]["provider_channel_id"]
     with pytest.raises(ValueError, match="mismo canal"):
         bulk.build_plan(bindings, inventories, [])
+
+
+def test_unrelated_catalog_duplicates_do_not_block_costa_preview():
+    bindings, inventories = _fixtures()
+    other = {
+        "provider": "IVENTAS", "template_name": "campana_historica",
+        "is_active": True, "purposes": ["REACTIVATION"],
+        "variables": {}, "compatible_channel_ids": ["some-channel"],
+    }
+    catalog = [other, {**other, "template_name": "CAMPANA_HISTORICA"}]
+
+    plan = bulk.build_plan(bindings, inventories, catalog)
+
+    assert len(plan) == 32
+    assert sum(row.status == "READY" for row in plan) == 30
+    assert {row.name for row in plan if row.status == "VERIFY_FIELDS"} == bulk.FIELD_REVIEW
+
+
+def test_duplicate_costa_name_is_a_local_conflict_without_blocking_other_templates():
+    bindings, inventories = _fixtures()
+    existing = {
+        "provider": "IVENTAS", "template_name": "1regresa_299_n3",
+        "is_active": True, "purposes": ["REACTIVATION"],
+        "variables": {"1": "first_name"},
+        "compatible_channel_ids": [f"channel-{n}" for n in range(1, 8)],
+    }
+    catalog = [existing, {**existing, "template_name": "1REGRESA_299_N3"}]
+
+    plan = bulk.build_plan(bindings, inventories, catalog)
+
+    duplicate = next(row for row in plan if row.name == "1regresa_299_n3")
+    assert duplicate.status == "CONFLICT"
+    assert "duplicados" in duplicate.reasons[0]
+    assert next(row for row in plan if row.name == "2regresa_399_n2").status == "READY"
