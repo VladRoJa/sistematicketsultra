@@ -32,14 +32,20 @@ No se altera el estado operativo de los socios ni otros módulos.
 3. Si el ID es único y numérico, entregar la liga
    `https://pago.ultragym.com.mx?sid=ID_SOCIO`.
 4. Si no coincide, **mostrar socio sin ID ni liga** y sin botones de copia.
-5. Mantener las consultas a snapshots canónicos de activos y altas para socios
-   ausentes de la cartera de vencidos. No deducir ID por teléfono o PIN aislado.
-6. Máximo 20 resultados; prevalecen vencidos con ID confirmado.
-7. El CSV completo nunca debe incorporarse a Git, publicarse en `/uploads`,
+5. Si no hay registros operativos de vencidos para el término buscado, permitir
+   una búsqueda **directa en el CSV por nombre o PIN**, con etiqueta explícita
+   de «padrón histórico» y estado al corte. No usarla para buscar por teléfono
+   porque el CSV no tiene números ni para subsanar una discrepancia en un
+   vencido ya localizado.
+6. Mantener las consultas a snapshots canónicos de activos y altas. No
+   deducir ID por teléfono ni por un PIN aislado cuando hay una identidad
+   operativa contradiciendo la referencia histórica.
+7. Máximo 20 resultados; prevalecen vencidos con ID confirmado.
+8. El CSV completo nunca debe incorporarse a Git, publicarse en `/uploads`,
    ni copiarse a volúmenes expuestos por Nginx. Se archiva el original con hash
    en un volumen privado exclusivo del backend. Las versiones anteriores
    permanecen inmutables y auditables.
-8. Se preservan los guards de Contact Center: únicamente operadores
+9. Se preservan los guards de Contact Center: únicamente operadores
    autorizados; no se amplía a gerentes ni a otros módulos.
 
 ## Operación segura (solo tras autorizar despliegue e importación)
