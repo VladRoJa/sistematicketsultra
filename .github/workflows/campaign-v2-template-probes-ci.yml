@@ -8,6 +8,9 @@ on:
       - "backend/tests/integrations/test_iventas_template_browser.py"
       - "backend/scripts/marketing/link_costa_iventas_templates.py"
       - "backend/tests/marketing/test_costa_template_bulk_link.py"
+      - "backend/scripts/marketing/queue_papalote_regresa_templates.py"
+      - "backend/data/marketing/papalote_regresa_20261123.json"
+      - "backend/tests/marketing/test_papalote_template_queue.py"
       - "backend/tests/marketing/test_campaign_v2_template_probes*"
       - "backend/tests/marketing/test_campaign_v2_commercial_template_certification.py"
       - "backend/tests/marketing/test_marketing_campaign_v2_template_upload_service.py"
@@ -65,7 +68,8 @@ jobs:
             tests/integrations/test_iventas_broadcast_provider.py \
             tests/integrations/test_iventas_template_browser.py \
             tests/marketing/test_marketing_campaign_v2_template_upload_service.py \
-            tests/marketing/test_costa_template_bulk_link.py
+            tests/marketing/test_costa_template_bulk_link.py \
+            tests/marketing/test_papalote_template_queue.py
   controlled-qa-angular:
     runs-on: ubuntu-latest
     timeout-minutes: 15
