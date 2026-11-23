@@ -87,14 +87,13 @@ def build_plan(bindings: list[dict], inventories: dict[str, tuple], catalog: lis
                 raise ValueError("iVentas devolvió estados de aprobación contradictorios.")
             provider_status[key] = item.status
 
-    current = {}
+    names = sorted(set(name for branch in COSTA for name in expected_names(branch)))
+    expected = set(names)
+    current: dict[str, list[dict]] = defaultdict(list)
     for item in catalog:
         key = item["template_name"].casefold()
-        if key in current:
-            raise ValueError("Hay nombres duplicados de plantilla en el catálogo Suite.")
-        current[key] = item
-
-    names = sorted(set(name for branch in COSTA for name in expected_names(branch)))
+        if key in expected:
+            current[key].append(item)
     rows = []
     for name in names:
         scope = tuple(branch for branch in COSTA if name in expected_names(branch))
@@ -103,8 +102,11 @@ def build_plan(bindings: list[dict], inventories: dict[str, tuple], catalog: lis
             f"{branch}:{provider_status.get((branch, name), 'not_observed')}"
             for branch in scope if provider_status.get((branch, name)) != "accepted"
         )
-        existing = current.get(name)
-        if missing:
+        matches = current.get(name, [])
+        existing = matches[0] if len(matches) == 1 else None
+        if len(matches) > 1:
+            status, reasons = "CONFLICT", ("Hay registros duplicados de esta plantilla en Suite; revisión manual.",)
+        elif missing:
             status, reasons = "PENDING_APPROVAL", missing
         elif name in FIELD_REVIEW:
             status, reasons = "VERIFY_FIELDS", ("Campo personalizado no visible en el texto fuente.",)
