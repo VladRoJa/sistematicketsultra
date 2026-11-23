@@ -29,6 +29,43 @@ Estos valores son **solo un ejemplo**. No copiarlos como configuración final si
 
 **Alcance técnico:** 1–30 sucursales explícitas sin repetidos. No existen topes artificiales de destinatarios por sucursal ni por día en este orquestador. Las variables heredadas `COBRANZA_IVENTAS_MULTI_BRANCH_MAX_RECIPIENTS_PER_BRANCH` y `COBRANZA_IVENTAS_MULTI_BRANCH_MAX_DAILY_RECIPIENTS` se ignoran si siguen presentes en `.env.docker`; se pueden retirar en una ventana de mantenimiento sin afectar el envío. Se conservan la exclusión de teléfonos ambiguos, los permisos globales, preflight, cotización, cuota, autorización gobernada, idempotencia y las restricciones efectivas de Campaign V2/proveedor. **Un volumen elevado puede aumentar los costos; vigilar las cuotas reales y los resultados del proveedor.**
 
+## Cambio gradual a plantilla con liga de pago (noviembre 2026)
+
+La nueva plantilla local **18** (`ug_cobranza_cargo_fallido_pago`) transporta
+`IDSocio` como `member_id` y se construye en iVentas como
+`https://pago.ultragym.com.mx?sid={{1}}`. La plantilla antigua es la **14**.
+Se selecciona **por sucursal aislada**, antes del freeze; las campañas ya
+congeladas nunca cambian de plantilla.
+
+Configuración propuesta **solo tras verificar aprobación real y autorizar
+despliegue/cambio operativo en el servidor**:
+
+```dotenv
+COBRANZA_IVENTAS_TEMPLATE_ID=18
+COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES=INSURGENTES:14
+```
+
+En una campaña no aislada el uso de overrides bloquea la preparación.
+Las excepciones solo admiten claves canónicas en mayúsculas sin duplicados y
+IDs positivos; una configuración inválida bloquea antes de encolar.
+No hay fallback silencioso hacia la plantilla vieja por errores del proveedor.
+
+**Independencia** conserva su origen comercial y solo puede utilizar
+`TEC_MXL` como canal emisor si el binding existente, la ruta autorizada y
+la plantilla aprobada para TEC se verifican. El importador, la preparación y
+el preflight examinan el canal emisor efectivo. No se crea una ruta nueva.
+
+**Insurgentes** permanece con la plantilla 14 mientras su canal no tenga
+aprobada la 18. Después de aprobación y prueba controlada se quita su
+entrada de `COBRANZA_IVENTAS_BRANCH_TEMPLATE_OVERRIDES`.
+
+Antes del cambio verificar en el catálogo: plantilla 18 activa, carga
+aprobada para cada canal real, variable `member_id`, excepción solo
+Insurgentes, y que no haya campañas del nuevo corte congeladas con la 14.
+Luego verificar en el primer corte: ID de plantilla congelada por sucursal,
+cuentas, preflight, jobs y aceptación real `SUBMITTED`; no confundir
+`QUEUED` con mensaje entregado.
+
 ## Seguimiento de faltantes (consulta sin enviar)
 
 Auditoría de todas las sucursales, incluidas las omitidas antes de crear campaña:
