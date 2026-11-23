@@ -50,6 +50,9 @@
         <small *ngIf="member.source === 'HISTORICO_ALTAS'">Histórico de altas</small>
         <small *ngIf="member.source === 'VENCIDO_REFERENCIA'">Vencido · ID verificado con padrón histórico {{ member.reference_cutoff_date || '' }}</small>
         <small *ngIf="member.source === 'VENCIDO_SIN_ID'">Vencido · ID pendiente de verificación</small>
+        <small *ngIf="member.source === 'REFERENCIA_HISTORICA'">
+          Padrón histórico {{ member.reference_cutoff_date || '' }} · estado en ese corte: {{ member.status_at_cutoff || 'Sin dato' }}
+        </small>
       </div>
       <div class="member-payment__fields">
         <div class="member-payment__field">
