@@ -11,9 +11,9 @@ MISION_ENS, PABELLON_RTO, LOMA_BONITA.
 - 499_n1 (ocho variantes): seis sucursales, nunca LOMA_BONITA.
 - 449_lb (ocho variantes): solo LOMA_BONITA.
 - Propósito Suite REACTIVATION, categoría de origen Marketing.
-- Variable prevista 1 → first_name.
-- Dos casos para verificar manualmente: 2regresa_299_n3 y 7regresa_399_n2,
-  cuyos textos fuente no muestran explícitamente [Nombre].
+- 30 variantes personalizadas: variable 1 → first_name.
+- 2 variantes simples **sin variable**: 2regresa_299_n3 y 7regresa_399_n2,
+  en todas las sucursales donde aplican.
 
 32 nombres y 168 combinaciones plantilla/canal esperadas (24 por club).
 
@@ -31,7 +31,6 @@ con configuración distinta. La operación es idempotente. Estados:
 - READY: plantilla nueva y aprobada en todos sus canales.
 - ALREADY_LINKED: coincidencia exacta con configuración del catálogo.
 - PENDING_APPROVAL: falta aprobación o el inventario no contiene algún canal.
-- VERIFY_FIELDS: pendiente confirmar número y contenido de variables.
 - CONFLICT: existe registro Suite distinto; revisión manual.
 
 La vista previa no escribe. --apply requiere operador con permisos globales
@@ -55,8 +54,8 @@ El ID 47 debe corresponder al operador autorizado y vigente. El script
 rechaza al actor que no tenga permisos globales de configuración.
 
 Verificar después en Campañas V2 → Plantillas, canales y tarifas. Las dos
-plantillas con variables pendientes se vincularán únicamente tras validar
-su contrato real contra iVentas. La vinculación no demuestra entrega.
+plantillas simples se vinculan sin variables cuando iVentas confirme la
+aprobación en todos sus canales. La vinculación no demuestra entrega.
 
 La prueba de envío posterior usará un solo número autorizado y una plantilla
 representativa. No garantiza el funcionamiento individual de las otras 31.

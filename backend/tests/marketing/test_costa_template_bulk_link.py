@@ -38,12 +38,12 @@ def test_coast_has_32_distinct_templates_and_strict_loma_pricing():
             assert len([n for n in names if n.endswith("_499_n1")]) == 8
 
 
-def test_approval_checked_plan_guards_missing_name_variable_contract():
+def test_approval_checked_plan_includes_two_simple_templates():
     bindings, inventories = _fixtures()
     plan = bulk.build_plan(bindings, inventories, [])
     assert len(plan) == 32
-    assert sum(row.status == "READY" for row in plan) == 30
-    assert {row.name for row in plan if row.status == "VERIFY_FIELDS"} == bulk.FIELD_REVIEW
+    assert sum(row.status == "READY" for row in plan) == 32
+    assert {row.name for row in plan if row.status != "READY"} == set()
     assert sum(len(row.channels) for row in plan) == 168
     assert len(next(row for row in plan if row.name == "1regresa_449_lb").channels) == 1
     assert len(next(row for row in plan if row.name == "1regresa_499_n1").channels) == 6
@@ -105,8 +105,8 @@ def test_unrelated_catalog_duplicates_do_not_block_costa_preview():
     plan = bulk.build_plan(bindings, inventories, catalog)
 
     assert len(plan) == 32
-    assert sum(row.status == "READY" for row in plan) == 30
-    assert {row.name for row in plan if row.status == "VERIFY_FIELDS"} == bulk.FIELD_REVIEW
+    assert sum(row.status == "READY" for row in plan) == 32
+    assert {row.name for row in plan if row.status != "READY"} == set()
 
 
 def test_duplicate_costa_name_is_a_local_conflict_without_blocking_other_templates():
@@ -151,3 +151,14 @@ def test_login_failure_identifies_branch_and_stops_without_catalog_writes(monkey
     assert "Consultando inventario de PASEO_2000" in capsys.readouterr().out
     read.assert_called_once()
     playwright.__enter__.return_value.chromium.launch.return_value.close.assert_called_once()
+
+
+def test_simple_templates_use_no_variables_across_all_coast_branches():
+    bindings, inventories = _fixtures()
+    plan = bulk.build_plan(bindings, inventories, [])
+    for name in bulk.SIMPLE_TEMPLATES:
+        assert bulk.variables_for(name) == {}
+        row = next(item for item in plan if item.name == name)
+        assert row.status == "READY"
+        assert len(row.channels) == 7
+    assert bulk.variables_for("1regresa_299_n3") == {"1": "first_name"}
