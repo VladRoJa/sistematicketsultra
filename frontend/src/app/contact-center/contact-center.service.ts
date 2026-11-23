@@ -18,6 +18,16 @@ import {
 } from './contact-center.models';
 
 
+export interface ContactCenterPaymentMember {
+  member_id: string;
+  name: string;
+  pin: string;
+  branch: string;
+  source: 'ACTIVO' | 'HISTORICO_ALTAS';
+  payment_url: string;
+}
+
+
 @Injectable({ providedIn: 'root' })
 export class ContactCenterService {
   private readonly apiUrl = `${environment.apiUrl}/contact-center`;
@@ -26,6 +36,18 @@ export class ContactCenterService {
 
   getAccess(): Observable<ContactCenterAccess> {
     return this.http.get<ContactCenterAccess>(`${this.apiUrl}/access`);
+  }
+
+  getMemberPayments(q: string): Observable<{
+    rows: ContactCenterPaymentMember[];
+    count: number;
+  }> {
+    return this.http.get<{
+      rows: ContactCenterPaymentMember[];
+      count: number;
+    }>(`${this.apiUrl}/member-payments`, {
+      params: new HttpParams().set('q', q),
+    });
   }
 
   getLookups(): Observable<ContactCenterLookups> {
