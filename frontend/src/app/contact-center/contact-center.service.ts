@@ -23,9 +23,10 @@ export interface ContactCenterPaymentMember {
   name: string;
   pin: string;
   branch: string;
-  source: 'ACTIVO' | 'HISTORICO_ALTAS' | 'VENCIDO_REFERENCIA' | 'VENCIDO_SIN_ID';
+  source: 'ACTIVO' | 'HISTORICO_ALTAS' | 'VENCIDO_REFERENCIA' | 'VENCIDO_SIN_ID' | 'REFERENCIA_HISTORICA';
   payment_url: string | null;
   reference_cutoff_date?: string | null;
+  status_at_cutoff?: 'VENCIDO' | 'ACTIVO' | null;
 }
 
 
