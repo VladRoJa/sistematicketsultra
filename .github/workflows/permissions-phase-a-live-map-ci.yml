@@ -13,6 +13,10 @@ on:
       - "backend/app/utils/contact_center_access.py"
       - "backend/app/utils/system_daily_check_access.py"
       - "backend/app/services/contact_center*.py"
+      - "backend/app/models/contact_center.py"
+      - "backend/migrations/versions/ccpay11232601_payment_reference.py"
+      - "backend/scripts/import_contact_center_payment_reference.py"
+      - "backend/tests/contact_center/test_payment_reference_import.py"
       - "backend/app/services/purchase_requisition*.py"
       - "backend/app/services/system_daily_check*.py"
       - "backend/tests/routes/test_permissions_phase_a_cross_family_p27.py"
@@ -140,6 +144,7 @@ jobs:
             tests/test_track_alert_routes.py \
             tests/contact_center/test_contact_center_access.py \
             tests/contact_center/test_contact_center_member_payments.py \
+            tests/contact_center/test_payment_reference_import.py \
             tests/contact_center/test_contact_center_manager_scope_contract.py \
             tests/purchase_requisitions/test_permissions_phase_a_finance_approval_p23.py \
             tests/purchase_requisitions/test_permissions_phase_a_finance_rejection_p24.py \
