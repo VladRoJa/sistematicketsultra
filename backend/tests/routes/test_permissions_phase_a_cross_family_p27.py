@@ -50,7 +50,7 @@ EXPECTED_WRITES = {
     "automation_control": set(),
 }
 EXPECTED_COUNTS = {
-    "contact_center": 18,
+    "contact_center": 19,
     "purchase_requisition": 24,
     "system_daily_check": 5,
     "system_daily_check_bi": 11,
@@ -123,7 +123,7 @@ def test_p27_registry_is_exactly_the_reviewed_five_families(registry):
         for blueprint in EXPECTED_WRITES
     }
     assert got == EXPECTED_WRITES
-    assert len(registry) == 73
+    assert len(registry) == 74
     assert sum(len(v) for v in got.values()) == 32
 
 

@@ -33,10 +33,11 @@ import {
 import {
   ContactCenterNewContactDialogComponent,
 } from './contact-center-new-contact-dialog.component';
+import { ContactCenterMemberPaymentsComponent } from './contact-center-member-payments.component';
 import { ContactCenterService } from './contact-center.service';
 
 
-type ContactCenterTab = 'PORTFOLIO' | 'CRM' | 'APPOINTMENTS';
+type ContactCenterTab = 'PORTFOLIO' | 'CRM' | 'APPOINTMENTS' | 'MEMBER_PAYMENTS';
 type AppointmentView = 'TABLE' | 'CALENDAR';
 
 
@@ -48,6 +49,7 @@ type AppointmentView = 'TABLE' | 'CALENDAR';
     FormsModule,
     MatDialogModule,
     MatIconModule,
+    ContactCenterMemberPaymentsComponent,
   ],
   templateUrl: './contact-center.component.html',
   styleUrls: ['./contact-center.component.css'],

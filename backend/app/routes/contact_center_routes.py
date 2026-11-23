@@ -39,6 +39,9 @@ from app.services.contact_center_service import (
     serialize_interaction,
     verify_appointment_purchase,
 )
+from app.services.contact_center_member_payment_service import (
+    search_contact_center_member_payments,
+)
 from app.utils.contact_center_access import (
     ContactCenterAuthorizationError,
     get_current_contact_center_user,
@@ -254,6 +257,15 @@ def get_access():
         "is_manager": access.is_manager,
         "allowed_branch_ids": list(access.allowed_branch_ids),
     }), 200
+
+
+@contact_center_bp.get("/member-payments")
+@jwt_required()
+def search_member_payments():
+    _, access = _context()
+    _assert_operator_access(access)
+    rows = search_contact_center_member_payments(request.args.get("q", ""))
+    return jsonify({"rows": rows, "count": len(rows)}), 200
 
 
 @contact_center_bp.get("/lookups")

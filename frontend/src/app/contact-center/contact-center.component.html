@@ -99,7 +99,20 @@
         {{ reportSummary.closure_pending }}
       </span>
     </button>
+    <button
+      type="button"
+      *ngIf="!isManager"
+      [class.cc-tabs__item--active]="activeTab === 'MEMBER_PAYMENTS'"
+      (click)="setTab('MEMBER_PAYMENTS')"
+    >
+      <mat-icon>link</mat-icon>
+      Ligas de pago
+    </button>
   </nav>
+
+  <app-contact-center-member-payments
+    *ngIf="activeTab === 'MEMBER_PAYMENTS' && !isManager"
+  ></app-contact-center-member-payments>
 
   <ng-container *ngIf="activeTab === 'PORTFOLIO'">
     <section class="toolbar-card">
