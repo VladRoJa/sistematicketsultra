@@ -13,9 +13,9 @@ def test_editorial_source_is_24_papalote_only_and_validates_utf16_fields():
     assert all("_449_lb" not in name for name in templates)
     assert all(t["category"] == "MARKETING" and not t["buttons"] for t in templates.values())
     assert all(len(t["message"].encode("utf-16-le")) <= 2048 for t in templates.values())
-    assert {name for name, t in templates.items() if not t["fields"]} == upload.FIELD_REVIEW
+    assert {name for name, t in templates.items() if not t["fields"]} == upload.SIMPLE_TEMPLATES
     for name, template in templates.items():
-        if name in upload.FIELD_REVIEW:
+        if name in upload.SIMPLE_TEMPLATES:
             continue
         assert len(template["fields"]) == 1
         field = template["fields"][0]
@@ -29,7 +29,7 @@ def test_offsets_count_emoji_as_two_utf16_units():
     assert fields == [{"start": 8, "end": 16}]
 
 
-def test_provider_missing_templates_ready_except_unconfirmed_simple_fields():
+def test_provider_missing_templates_ready_including_both_simple_variants():
     templates = upload.source_templates()
     rows = upload.plan_queue(
         templates=templates,
@@ -37,8 +37,8 @@ def test_provider_missing_templates_ready_except_unconfirmed_simple_fields():
         prior_names=set(),
     )
     assert len(rows) == 24
-    assert sum(row.status == "READY" for row in rows) == 22
-    assert {row.name for row in rows if row.status == "VERIFY_FIELDS"} == upload.FIELD_REVIEW
+    assert sum(row.status == "READY" for row in rows) == 24
+    assert {row.name for row in rows if row.status != "READY"} == set()
 
 
 def test_provider_presence_blocks_creation_even_if_not_approved():
@@ -70,7 +70,7 @@ def test_source_requires_exact_names_and_correct_custom_fields(tmp_path):
     broken = {
         "templates": [
             {"name": name, "body": row["message"], "placeholder_count": len(row["fields"]),
-             "needs_field_review": name in upload.FIELD_REVIEW}
+             "simple_template": name in upload.SIMPLE_TEMPLATES}
             for name, row in source.items()
         ],
     }
@@ -80,3 +80,12 @@ def test_source_requires_exact_names_and_correct_custom_fields(tmp_path):
 
     with pytest.raises(ValueError, match="24 plantillas"):
         upload.source_templates(path)
+
+
+def test_two_simple_variants_have_no_positional_variables_and_are_ready():
+    templates = upload.source_templates()
+    for name in upload.SIMPLE_TEMPLATES:
+        assert templates[name]["fields"] == []
+        assert "[Nombre]" not in templates[name]["message"]
+    plan = upload.plan_queue(templates=templates, provider_inventory=(), prior_names=set())
+    assert {row.name for row in plan if row.status == "READY"} == set(templates)
