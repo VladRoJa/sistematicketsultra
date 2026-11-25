@@ -342,6 +342,13 @@
           </p>
         </div>
 
+        <div class="year-overlay-live" *ngIf="currentOverlayStatus">
+          <span class="year-overlay-provisional-key" aria-hidden="true"></span>
+          {{ currentOverlayStatus }}
+          <small>Actualización automática cada hora</small>
+          <small *ngIf="refreshError">{{ refreshError }}</small>
+        </div>
+
         <div class="year-overlay-coverage">
           <span>Cobertura</span>
           <strong>
@@ -503,6 +510,13 @@
                 [style.stroke]="serie.color"
                 (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
               ></polyline>
+              <polyline
+                *ngIf="serie.detailProvisionalPolylinePoints"
+                [attr.class]="serie.className + ' provisional'"
+                [attr.points]="serie.detailProvisionalPolylinePoints"
+                [style.stroke]="serie.color"
+                (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+              ></polyline>
             </g>
           </g>
 
@@ -510,7 +524,7 @@
             <g *ngFor="let serie of selectedChart.series">
               <circle
                 *ngFor="let point of serie.detailPoints"
-                [attr.class]="serie.className + ' point'"
+                [attr.class]="serie.className + ' point' + (point.provisional ? ' provisional' : '')"
                 [attr.cx]="point.x"
                 [attr.cy]="point.y"
                 [style.stroke]="serie.color"
@@ -595,6 +609,13 @@
                   [style.stroke]="serie.color"
                   (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
                 ></polyline>
+              <polyline
+                *ngIf="serie.provisionalPolylinePoints"
+                [attr.class]="serie.className + ' provisional'"
+                [attr.points]="serie.provisionalPolylinePoints"
+                [style.stroke]="serie.color"
+                (click)="selectYearOverlayYear(serie.year); $event.stopPropagation()"
+              ></polyline>
               </g>
             </g>
 
@@ -602,7 +623,7 @@
               <g *ngFor="let serie of chart.series">
                 <circle
                   *ngFor="let point of serie.points"
-                  [attr.class]="serie.className + ' point'"
+                  [attr.class]="serie.className + ' point' + (point.provisional ? ' provisional' : '')"
                   [attr.cx]="point.x"
                   [attr.cy]="point.y"
                   [style.stroke]="serie.color"
