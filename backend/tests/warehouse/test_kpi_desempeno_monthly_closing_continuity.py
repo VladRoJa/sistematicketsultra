@@ -23,6 +23,9 @@ def _snapshot(snapshot_id, business_date, count):
         id=snapshot_id,
         business_date=business_date,
         captured_at=None,
+        report_type_key="kpi_desempeno",
+        snapshot_kind="daily",
+        is_canonical=True,
         row_count_valid=count,
         row_count_rejected=0,
     )
