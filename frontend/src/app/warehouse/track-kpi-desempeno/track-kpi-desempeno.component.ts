@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Subscription, interval } from 'rxjs';
 
 import {
   KpiDesempenoDisplayGranularity,
@@ -110,6 +111,7 @@ interface KpiYearOverlayPoint {
   month: number;
   label: string;
   tooltip: string;
+  provisional: boolean;
 }
 
 interface KpiYearOverlaySeriesModel {
@@ -118,6 +120,8 @@ interface KpiYearOverlaySeriesModel {
   color: string;
   polylinePoints: string;
   detailPolylinePoints: string;
+  provisionalPolylinePoints: string;
+  detailProvisionalPolylinePoints: string;
   points: KpiYearOverlayPoint[];
   detailPoints: KpiYearOverlayPoint[];
 }
@@ -179,13 +183,17 @@ type KpiBranchSeriesSection =
   templateUrl: './track-kpi-desempeno.component.html',
   styleUrls: ['./track-kpi-desempeno.component.css'],
 })
-export class TrackKpiDesempenoComponent implements OnInit {
+export class TrackKpiDesempenoComponent implements OnInit, OnDestroy {
   targetMonth = '';
   startMonth = '';
   historyGranularity: KpiDesempenoDisplayGranularity = 'weekly';
 
   loading = false;
   errorMessage = '';
+  refreshError = '';
+  private refreshSubscription?: Subscription;
+  private reportSubscription?: Subscription;
+  private defaultCutoffMonth = '';
   showCoverageWarnings = false;
 
   report: KpiDesempenoMonthlyReportResponse | null = null;
@@ -243,12 +251,30 @@ export class TrackKpiDesempenoComponent implements OnInit {
   ngOnInit(): void {
     this.initializeDefaultMonths();
     this.loadReport();
+    this.refreshSubscription = interval(60 * 60 * 1000).subscribe(() => {
+      if (this.loading) { return; }
+      const latestClosed = this.shiftMonth(this.getCurrentBusinessMonth(), -1);
+      if (this.targetMonth === this.defaultCutoffMonth && latestClosed !== this.defaultCutoffMonth) {
+        this.targetMonth = latestClosed;
+        this.startMonth = this.shiftMonth(latestClosed, -3);
+      }
+      this.defaultCutoffMonth = latestClosed;
+      if (this.targetMonth === latestClosed || this.targetMonth === this.getCurrentBusinessMonth()) {
+        this.loadReport(true);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.refreshSubscription?.unsubscribe();
+    this.reportSubscription?.unsubscribe();
   }
 
   private initializeDefaultMonths(): void {
     const currentMonth = this.getCurrentBusinessMonth();
 
     this.targetMonth = this.shiftMonth(currentMonth, -1);
+    this.defaultCutoffMonth = this.targetMonth;
     this.startMonth = this.shiftMonth(this.targetMonth, -3);
   }
 
@@ -457,14 +483,17 @@ export class TrackKpiDesempenoComponent implements OnInit {
     return this.activeBranchSeriesSection?.periods ?? [];
   }
 
-  loadReport(): void {
-    this.loading = true;
+  loadReport(background = false): void {
+    this.reportSubscription?.unsubscribe();
+    this.loading = !background;
     this.errorMessage = '';
+    this.refreshError = '';
 
-    this.kpiDesempenoService.getMonthlyReport({
+    this.reportSubscription = this.kpiDesempenoService.getMonthlyReport({
       targetMonth: this.targetMonth,
       startMonth: this.startMonth,
       historyGranularity: this.historyGranularity,
+      includeCurrentMonth: true,
     }).subscribe({
       next: (response) => {
         this.report = response;
@@ -483,6 +512,11 @@ export class TrackKpiDesempenoComponent implements OnInit {
         this.loading = false;
       },
       error: (error) => {
+        if (background) {
+          this.refreshError = 'No se pudo actualizar el corte. Se conserva la última consulta.';
+          this.loading = false;
+          return;
+        }
         this.errorMessage = this.resolveErrorMessage(error);
         this.report = null;
         this.weeklyChart = null;
@@ -695,6 +729,18 @@ export class TrackKpiDesempenoComponent implements OnInit {
     }
 
     this.ensureDistinctYearOverlayBase();
+  }
+
+  get currentOverlayStatus(): string {
+    const section = this.monthlyBranchYearOverlaySection;
+    if (!section?.current_month) { return ''; }
+    const snapshot = section.current_snapshot;
+    if (!snapshot?.captured_at) { return 'Mes en curso: sin corte disponible'; }
+    const cutoff = new Date(snapshot.captured_at);
+    const label = new Intl.DateTimeFormat('es-MX', {
+      timeZone: 'America/Tijuana', dateStyle: 'short', timeStyle: 'short',
+    }).format(cutoff);
+    return `Mes en curso · Corte ${snapshot.business_date} · Captura ${label} (Mexicali) · Dato provisional`;
   }
 
   get selectedYearOverlayComparison(): KpiYearOverlayComparisonModel | null {
@@ -975,8 +1021,12 @@ export class TrackKpiDesempenoComponent implements OnInit {
               value,
               month: month.month,
               label: month.label,
-              tooltip:
-                monthComparisonTooltipByMonth.get(month.month) ||
+              provisional: month.is_provisional === true,
+              tooltip: month.is_provisional
+                ? [`Sucursal: ${row.branch.track_label}`, `Año: ${yearSeries.year}`,
+                    `Mes en curso: ${month.label}`, `Socios activos: ${this.formatNumber(value)}`,
+                    this.currentOverlayStatus].join('\n')
+                : monthComparisonTooltipByMonth.get(month.month) ||
                 [
                   `Sucursal: ${row.branch.track_label}`,
                   `Año: ${yearSeries.year}`,
@@ -995,16 +1045,24 @@ export class TrackKpiDesempenoComponent implements OnInit {
           y: detailResolveY(point.value),
         }));
 
+        const closedPoints = points.filter((point) => !point.provisional);
+        const provisional = points.find((point) => point.provisional);
+        const previous = provisional
+          ? closedPoints.find((point) => point.month === provisional.month - 1)
+          : undefined;
+        const provisionalPoints = previous && provisional ? [previous, provisional] : [];
+        const toPolyline = (items: KpiYearOverlayPoint[]) =>
+          items.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ');
         return {
           year: yearSeries.year,
           className: this.resolveYearOverlaySeriesClassName(yearSeries.year),
           color: this.getYearOverlayColor(yearSeries.year),
-          polylinePoints: points
-            .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
-            .join(' '),
-          detailPolylinePoints: detailPoints
-            .map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`)
-            .join(' '),
+          polylinePoints: toPolyline(closedPoints),
+          detailPolylinePoints: toPolyline(detailPoints.filter((point) => !point.provisional)),
+          provisionalPolylinePoints: toPolyline(provisionalPoints),
+          detailProvisionalPolylinePoints: toPolyline(provisionalPoints.map((point) => ({
+            ...point, x: detailResolveX(point.month), y: detailResolveY(point.value),
+          }))),
           points,
           detailPoints,
         };
