@@ -1379,3 +1379,24 @@ circle.year-overlay-line.base.compare.point {
 .year-overlay-detail-card circle.year-overlay-line.base.compare.point {
   stroke-width: 4;
 }
+
+/* Current-month observations are not monthly closes. */
+.year-overlay-live {
+  font-size: 12px;
+  color: #64748b;
+}
+.year-overlay-live small { display: block; }
+.year-overlay-provisional-key {
+  display: inline-block;
+  width: 24px;
+  border-top: 2px dashed currentColor;
+  vertical-align: middle;
+}
+polyline.year-overlay-line.provisional,
+.year-overlay-detail-card polyline.year-overlay-line.provisional {
+  stroke-dasharray: 4 4;
+}
+circle.year-overlay-line.point.provisional,
+.year-overlay-detail-card circle.year-overlay-line.point.provisional {
+  stroke-dasharray: 2 2;
+}

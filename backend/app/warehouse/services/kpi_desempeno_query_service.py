@@ -1588,6 +1588,7 @@ def build_monthly_branch_year_overlay_section(
     *,
     start_year: Any = 2023,
     end_month: Any,
+    current_business_date: date | None = None,
 ) -> dict[str, Any]:
     end_year, end_month_number, normalized_end_month = _ensure_target_month(end_month)
 
@@ -1603,7 +1604,20 @@ def build_monthly_branch_year_overlay_section(
             "start_year no puede ser mayor al año del mes de corte."
         )
 
-    years = list(range(normalized_start_year, end_year + 1))
+    # Opt-in: only extend the latest closed month (or explicitly selected current month).
+    # Historical consumers keep the original range and canonical-only contract.
+    current_month = None
+    if current_business_date is not None:
+        first = current_business_date.replace(day=1)
+        selected = date(end_year, end_month_number, 1)
+        if selected in (first, (first - timedelta(days=1)).replace(day=1)):
+            current_month = first
+    overlay_end_year = current_month.year if current_month else end_year
+    overlay_end_month = current_month.month if current_month else end_month_number
+    current_snapshot = None
+    current_canons: set[str] = set()
+
+    years = list(range(normalized_start_year, overlay_end_year + 1))
     months = [
         {
             "month": month_number,
@@ -1624,17 +1638,25 @@ def build_monthly_branch_year_overlay_section(
         missing_months: list[int] = []
 
         for month_number in range(1, 13):
-            is_future_month = year == end_year and month_number > end_month_number
+            is_future_month = year == overlay_end_year and month_number > overlay_end_month
 
             if is_future_month:
                 continue
 
             expected_snapshots_count += 1
 
-            snapshot = _resolve_last_canonical_snapshot_for_month(
-                year=year,
-                month=month_number,
-            )
+            is_current = current_month == date(year, month_number, 1)
+            if is_current:
+                snapshot = _resolve_last_canonical_snapshot_for_date_range(
+                    start_date=current_month,
+                    end_date=current_business_date,
+                )
+                current_snapshot = snapshot
+            else:
+                snapshot = _resolve_last_canonical_snapshot_for_month(
+                    year=year,
+                    month=month_number,
+                )
 
             if snapshot is None:
                 missing_months.append(month_number)
@@ -1663,10 +1685,25 @@ def build_monthly_branch_year_overlay_section(
                 sucursales_canon=sucursales_canon,
             )
 
+            # An ambiguous current alias cannot become an arbitrary branch value.
+            duplicate_canons = set()
+            if is_current:
+                seen = set()
+                for canon in canon_by_row_id.values():
+                    if canon and canon in seen:
+                        duplicate_canons.add(canon)
+                    seen.add(canon)
+                if duplicate_canons:
+                    warnings.append({
+                        "code": "ambiguous_current_month_branch",
+                        "message": "Corte del mes en curso con alias de sucursal duplicados.",
+                        "branches": sorted(duplicate_canons),
+                    })
+
             for row in rows:
                 sucursal_canon = canon_by_row_id.get(row.id)
 
-                if not sucursal_canon:
+                if not sucursal_canon or sucursal_canon in duplicate_canons:
                     continue
 
                 branch_catalog = branch_catalog_by_canon.get(sucursal_canon)
@@ -1694,6 +1731,11 @@ def build_monthly_branch_year_overlay_section(
                     snapshot=snapshot,
                     row=row,
                 )
+                if is_current:
+                    current_canons.add(sucursal_canon)
+                    point = data_by_canon[sucursal_canon]["series"][year]["months"][month_number - 1]
+                    point["is_provisional"] = True
+                    point["source"]["captured_at"] = snapshot.captured_at.isoformat()
 
         if missing_months:
             warnings.append(
@@ -1716,6 +1758,34 @@ def build_monthly_branch_year_overlay_section(
         data_by_canon=data_by_canon,
         years=years,
     )
+
+    # Never publish a misleading current total from only a subset of active clubs.
+    # Historical cohort aggregation is intentionally unchanged.
+    if current_month is not None and current_snapshot is not None:
+        expected_lookup = build_track_branch_cohort_lookup(active_only=True)
+        for item in cohort_items:
+            key = item["branch"]["cohort_key"]
+            expected = {
+                canon for canon, cohort in expected_lookup.items()
+                if key == TRACK_BRANCH_COHORT_TOTAL_ULTRA or cohort == key
+            }
+            point = item["series"][current_month.year]["months"][current_month.month - 1]
+            if not expected or not expected.issubset(current_canons):
+                point["socios_activos_cierre_mes"] = None
+                point["source"] = None
+                warnings.append({
+                    "code": "incomplete_current_month_cohort",
+                    "message": f"Corte del mes en curso sin cobertura completa: {item['branch']['track_label']}.",
+                    "cohort_key": key,
+                    "missing_branches": sorted(expected - current_canons),
+                })
+            elif point["source"] is not None:
+                point["is_provisional"] = True
+                point["source"].update({
+                    "snapshot_id": current_snapshot.id,
+                    "business_date": current_snapshot.business_date.isoformat(),
+                    "captured_at": current_snapshot.captured_at.isoformat(),
+                })
 
     data = []
 
@@ -1748,8 +1818,17 @@ def build_monthly_branch_year_overlay_section(
         "chart_type": "small_multiple_line",
         "status": "ok" if data else "empty",
         "start_year": normalized_start_year,
-        "end_year": end_year,
+        "end_year": overlay_end_year,
         "end_month": normalized_end_month,
+        "current_month": current_month.strftime("%Y-%m") if current_month else None,
+        "current_snapshot": (
+            {
+                "snapshot_id": current_snapshot.id,
+                "business_date": current_snapshot.business_date.isoformat(),
+                "captured_at": current_snapshot.captured_at.isoformat(),
+            }
+            if current_snapshot is not None else None
+        ),
         "years": years,
         "months": months,
         "rule": {

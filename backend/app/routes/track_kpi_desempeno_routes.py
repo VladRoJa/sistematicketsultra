@@ -94,6 +94,11 @@ def get_kpi_desempeno_monthly_report_endpoint():
         monthly_branch_year_overlay_section = build_monthly_branch_year_overlay_section(
             start_year=2023,
             end_month=target_month,
+            current_business_date=(
+                datetime.now(ZoneInfo("America/Tijuana")).date()
+                if request.args.get("include_current_month") == "true"
+                else None
+            ),
         )
 
         weekly_closing_section = build_weekly_closing_section(

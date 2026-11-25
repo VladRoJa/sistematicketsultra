@@ -1,0 +1,56 @@
+name: KPI Desempeno Current Month CI
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/warehouse/services/kpi_desempeno_query_service.py'
+      - 'backend/app/routes/track_kpi_desempeno_routes.py'
+      - 'backend/tests/warehouse/test_kpi_desempeno_current_month.py'
+      - 'frontend/src/app/warehouse/track-kpi-desempeno/**'
+      - 'frontend/src/app/warehouse/services/track-kpi-desempeno.service.ts'
+      - '.github/workflows/kpi-desempeno-current-month.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      SECRET_KEY: synthetic-kpi-ci-only
+      JWT_SECRET_KEY: synthetic-kpi-jwt-only
+      SQLALCHEMY_DATABASE_URI: 'sqlite:///:memory:'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install -r requirements.txt pytest==8.3.5
+      - run: |
+          python -m py_compile app/warehouse/services/kpi_desempeno_query_service.py app/routes/track_kpi_desempeno_routes.py
+          python -m pytest -q --tb=short -o addopts= tests/warehouse/test_kpi_desempeno_current_month.py tests/warehouse/test_kpi_desempeno_monthly_closing_continuity.py
+  angular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - run: npx tsc --noEmit --project tsconfig.app.json
+      - run: npm run build -- --configuration production
