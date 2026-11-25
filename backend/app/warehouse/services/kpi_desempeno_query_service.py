@@ -1693,6 +1693,12 @@ def build_monthly_branch_year_overlay_section(
                     if canon and canon in seen:
                         duplicate_canons.add(canon)
                     seen.add(canon)
+                if duplicate_canons:
+                    warnings.append({
+                        "code": "ambiguous_current_month_branch",
+                        "message": "Corte del mes en curso con alias de sucursal duplicados.",
+                        "branches": sorted(duplicate_canons),
+                    })
 
             for row in rows:
                 sucursal_canon = canon_by_row_id.get(row.id)
@@ -1769,7 +1775,7 @@ def build_monthly_branch_year_overlay_section(
                 point["source"] = None
                 warnings.append({
                     "code": "incomplete_current_month_cohort",
-                    "message": "Corte del mes en curso sin cobertura completa del grupo.",
+                    "message": f"Corte del mes en curso sin cobertura completa: {item['branch']['track_label']}.",
                     "cohort_key": key,
                     "missing_branches": sorted(expected - current_canons),
                 })
