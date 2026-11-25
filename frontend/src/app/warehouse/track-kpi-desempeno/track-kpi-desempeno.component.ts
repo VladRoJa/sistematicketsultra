@@ -255,8 +255,10 @@ export class TrackKpiDesempenoComponent implements OnInit, OnDestroy {
       if (this.loading) { return; }
       const latestClosed = this.shiftMonth(this.getCurrentBusinessMonth(), -1);
       if (this.targetMonth === this.defaultCutoffMonth && latestClosed !== this.defaultCutoffMonth) {
+        if (this.startMonth === this.shiftMonth(this.defaultCutoffMonth, -3)) {
+          this.startMonth = this.shiftMonth(latestClosed, -3);
+        }
         this.targetMonth = latestClosed;
-        this.startMonth = this.shiftMonth(latestClosed, -3);
       }
       this.defaultCutoffMonth = latestClosed;
       if (this.targetMonth === latestClosed || this.targetMonth === this.getCurrentBusinessMonth()) {
@@ -399,7 +401,13 @@ export class TrackKpiDesempenoComponent implements OnInit, OnDestroy {
   }
 
   get coverageWarnings(): KpiDesempenoWarning[] {
-    return this.activeBranchSeriesSection?.warnings ?? [];
+    const overlayWarnings = this.monthlyBranchYearOverlaySection?.warnings ?? [];
+    return [
+      ...(this.activeBranchSeriesSection?.warnings ?? []),
+      ...overlayWarnings.filter((warning) =>
+        warning.code === 'incomplete_current_month_cohort' ||
+        warning.code === 'ambiguous_current_month_branch'),
+    ];
   }
 
   toggleCoverageWarnings(): void {
@@ -738,7 +746,8 @@ export class TrackKpiDesempenoComponent implements OnInit, OnDestroy {
     if (!snapshot?.captured_at) { return 'Mes en curso: sin corte disponible'; }
     const cutoff = new Date(snapshot.captured_at);
     const label = new Intl.DateTimeFormat('es-MX', {
-      timeZone: 'America/Tijuana', dateStyle: 'short', timeStyle: 'short',
+      timeZone: 'America/Tijuana', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
     }).format(cutoff);
     return `Mes en curso · Corte ${snapshot.business_date} · Captura ${label} (Mexicali) · Dato provisional`;
   }
@@ -965,7 +974,7 @@ export class TrackKpiDesempenoComponent implements OnInit, OnDestroy {
             );
             const value = monthData?.socios_activos_cierre_mes;
 
-            if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+            if (monthData?.is_provisional || value === null || value === undefined || !Number.isFinite(Number(value))) {
               return null;
             }
 
