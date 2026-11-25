@@ -19,6 +19,7 @@ export interface KpiDesempenoMonthlyReportParams {
   targetMonth: string;
   startMonth?: string;
   historyGranularity?: KpiDesempenoDisplayGranularity;
+  includeCurrentMonth?: boolean;
 }
 
 export interface KpiDesempenoMetadata {
@@ -53,6 +54,7 @@ export interface KpiDesempenoSource {
   report_type_key: string;
   snapshot_kind: string;
   is_canonical: boolean;
+  captured_at?: string | null;
 }
 
 export interface KpiDesempenoBranchCapacity {
@@ -185,6 +187,7 @@ export interface KpiDesempenoYearOverlayMonth {
   month: number;
   label: string;
   socios_activos_cierre_mes: number | null;
+  is_provisional?: boolean;
   source: KpiDesempenoSource | null;
 }
 
@@ -208,6 +211,8 @@ export interface KpiDesempenoMonthlyBranchYearOverlaySection extends KpiDesempen
   start_year: number;
   end_year: number;
   end_month: string;
+  current_month?: string | null;
+  current_snapshot?: KpiDesempenoResolvedSnapshot | null;
   years: number[];
   months: Array<{
     month: number;
@@ -264,6 +269,10 @@ export class TrackKpiDesempenoService {
     params: KpiDesempenoMonthlyReportParams,
   ): Observable<KpiDesempenoMonthlyReportResponse> {
     let httpParams = new HttpParams().set('target_month', params.targetMonth);
+
+    if (params.includeCurrentMonth) {
+      httpParams = httpParams.set('include_current_month', 'true');
+    }
 
     if (params.startMonth) {
       httpParams = httpParams.set('start_month', params.startMonth);
