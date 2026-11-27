@@ -1,4 +1,4 @@
-"""Freeze a *new* campaign only from definitively rejected provider batches.
+"""Freeze a *new* campaign from definitive rejections or audited non-creation.
 
 Uses the original frozen provider-request phones and recipient evidence, not a
 fresh audience query. All operations are non-sending and PostgreSQL-serialized.
@@ -21,6 +21,9 @@ from app.models.marketing import (
     MarketingCampaignV2RecipientORM as Recipient,
     MarketingCampaignV2RecipientEvidenceORM as Evidence,
     MarketingCampaignV2FailedRecoveryORM as FailedRecovery,
+    MarketingCampaignV2DispatchApprovalORM as Approval,
+    MarketingCampaignV2GovernedExecutionORM as Execution,
+    MarketingCampaignV2GovernedReconciliationEventORM as ReconciliationEvent,
 )
 from app.services.marketing_campaign_v2_confirmed_rejection import (
     confirmed_rejected_child,
@@ -87,6 +90,63 @@ def _request_phones(child: Any) -> tuple[str, ...]:
     return tuple(sorted(phones))
 
 
+def _reconciled_nonacceptance_event(child: Any, session: Any) -> Any | None:
+    """Recovery-only proof; never changes the worker's deterministic rejection gate."""
+    if not (
+        child.status == "PROVIDER_ERROR"
+        and child.error_code == "GOVERNED_NOT_CREATED_CONFIRMED"
+        and child.reconciliation_resolution == "NOT_CREATED_CONFIRMED"
+        and child.provider_campaign_id is None
+        and child.submitted_at is None
+        and child.submit_started_at is not None
+        and child.submitted_by_user_id is not None
+        and child.reconciled_by_user_id is not None
+        and child.reconciled_at is not None
+        and int(child.retry_attempt_count or 0) == 0
+        and not child.retry_history_json
+    ):
+        return None
+    row = (
+        session.query(ReconciliationEvent, Execution, Approval)
+        .join(Execution, Execution.id == ReconciliationEvent.execution_id)
+        .join(Approval, Approval.id == Execution.approval_id)
+        .filter(
+            ReconciliationEvent.child_id == child.id,
+            ReconciliationEvent.event_kind == "NOT_CREATED_CONFIRMED",
+            Approval.campaign_v2_id == child.campaign_v2_id,
+            Execution.last_child_id == child.id,
+            Execution.status == "REVIEW_REQUIRED",
+        )
+        .one_or_none()
+    )
+    if row is None:
+        return None
+    event, execution, approval = row
+    snapshot = child.reconciliation_snapshot_json or {}
+    if not (
+        execution.manifest_digest == _hash(approval.manifest_json)
+        and event.previous_child_status == "RECONCILIATION_REQUIRED"
+        and event.next_child_status == "PROVIDER_ERROR"
+        and event.previous_execution_status == "REVIEW_REQUIRED"
+        and event.next_execution_status == "REVIEW_REQUIRED"
+        and event.provider_campaign_id is None
+        and event.actor_user_id == child.reconciled_by_user_id
+        and event.recorded_at == child.reconciled_at
+        and event.recorded_at >= child.submit_started_at
+        and event.source_reference and event.source_reference.strip()
+        and event.evidence_note and event.evidence_note.strip()
+        and event.evidence_note == child.reconciliation_note
+        and isinstance(snapshot, dict)
+        and snapshot.get("source") == "MANUAL_OPERATOR"
+        and snapshot.get("resolution") == "NOT_CREATED_CONFIRMED"
+        and snapshot.get("source_reference") == event.source_reference
+        and snapshot.get("auto_retry") is False
+        and event.evidence_json == snapshot
+    ):
+        return None
+    return event
+
+
 def _evaluate(*, source_campaign_id: int, session: Any, lock: bool) -> dict:
     campaign_q = session.query(Campaign).filter(Campaign.id == source_campaign_id)
     original = (campaign_q.with_for_update() if lock else campaign_q).one_or_none()
@@ -102,9 +162,16 @@ def _evaluate(*, source_campaign_id: int, session: Any, lock: bool) -> dict:
         raise FailedCohortConflict("La campaña aún no tiene intentos de iVentas.")
     if any(child.status in {"READY", "SUBMITTING", "PREPARED"} for child in children):
         raise FailedCohortConflict("Primero finaliza o concilia los lotes sin resolver.")
-    failed = [child for child in children if confirmed_rejected_child(child)]
+    failed = []
+    reconciliation_events = {}
+    for child in children:
+        if confirmed_rejected_child(child):
+            failed.append(child)
+        elif (event := _reconciled_nonacceptance_event(child, session)) is not None:
+            failed.append(child)
+            reconciliation_events[int(child.id)] = int(event.id)
     if not failed:
-        raise FailedCohortConflict("No hay rechazos definitivos verificables.")
+        raise FailedCohortConflict("No hay rechazos definitivos o conciliaciones de no creación verificables.")
     if any(child.status == "PROVIDER_ERROR" and child not in failed
            for child in children):
         raise FailedCohortConflict("Hay rechazos sin evidencia definitiva; revisar.")
@@ -165,6 +232,8 @@ def _evaluate(*, source_campaign_id: int, session: Any, lock: bool) -> dict:
             "error": str(child.error_code),
             "support_ref": str(child.support_ref),
             "phones": selected_by_child[int(child.id)],
+            **({"reconciliation_event_id": reconciliation_events[int(child.id)]}
+               if int(child.id) in reconciliation_events else {}),
         } for child in failed
     ]
     fingerprint = _hash({
@@ -249,6 +318,18 @@ def freeze_failed_cohort(*, source_campaign_id: int,
                 "status": "FROZEN", "created": False,
                 "provider_requests": 0, "send_authorized": False,
             }
+        # A different fingerprint must not freeze an already claimed source lot
+        # again (e.g. another lot becomes reconciled after the first recovery).
+        previous_links = active.query(FailedRecovery).filter(
+            FailedRecovery.source_campaign_id == source_campaign_id,
+        ).all()
+        selected_ids = set(review["source_child_ids"])
+        for previous in previous_links:
+            previous_ids = previous.source_child_ids_json
+            if not isinstance(previous_ids, list) or selected_ids.intersection(previous_ids):
+                raise FailedCohortConflict(
+                    "Un lote de origen ya pertenece a otra recuperación."
+                )
         original = review["original"]
         definition = original.audience_definition_json or {}
         filters = deepcopy(definition.get("filters") or {})
