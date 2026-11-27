@@ -80,6 +80,13 @@ export class AutomationErrorDetailDialogComponent implements OnInit, OnDestroy {
       MarketingIventasBranchSyncError: 'Error durante la sincronización de sucursal',
       IventasClientError: 'Error del cliente/API iVentas',
       UNEXPECTED_BRANCH_ABORT: 'Sincronización abortada inesperadamente',
+      TRANSPORT_READTIMEOUT: 'Tiempo de espera agotado; resultado de iVentas incierto',
+      PROVIDER_RESULT_REVIEW_REQUIRED: 'Resultado del proveedor requiere conciliación',
+      RECONCILIATION_REQUIRED: 'Conciliación pendiente',
+      PROVIDER_OR_JOB_REVIEW: 'Resultado del proveedor o job requiere revisión',
+      REVIEW_REQUIRED: 'Revisión requerida',
+      SKIPPED: 'Sucursal omitida',
+      RECIPIENT_LIMIT: 'Límite de destinatarios',
     };
     return labels[errorType] || 'Tipo no reconocido';
   }
