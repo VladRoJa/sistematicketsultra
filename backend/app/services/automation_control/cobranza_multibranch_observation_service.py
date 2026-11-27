@@ -88,6 +88,11 @@ def _branch_state(audit: Audit, jobs: dict[int, Any],
         state = "SUBMITTED"
     else:
         state = "REVIEW_REQUIRED"
+        if (len(provider_rows) == 1
+                and statuses[0] == "RECONCILIATION_REQUIRED"
+                and getattr(provider_rows[0], "error_code", None) == "TRANSPORT_READTIMEOUT"):
+            # Explicit allowlist: never expose arbitrary provider payloads.
+            reason = "TRANSPORT_READTIMEOUT"
         if reason is None:
             reason = "PROVIDER_OR_JOB_REVIEW"
 
