@@ -163,3 +163,17 @@ def test_list_runs_contract_uses_only_attributed_days(monkeypatch):
     assert result["coverage"] == "DOMAIN_RUNS"
     assert result["rows"] == [{"run_id": 9, "status_raw": "PARTIAL"}]
     assert result["has_more"] is False
+
+
+def test_read_timeout_is_attributed_to_exact_uncertain_batch():
+    audit = _audit(9, "ALFA", "QUEUED", 101)
+    jobs = {101: NS(status="REVIEW_REQUIRED", stop_reason_code="PROVIDER_RESULT_REVIEW_REQUIRED")}
+    batch = NS(status="RECONCILIATION_REQUIRED", recipient_count=49,
+               error_code="TRANSPORT_READTIMEOUT")
+    result = svc._branch_state(audit, jobs, {101: [batch]})
+    assert result["status"] == "REVIEW_REQUIRED"
+    assert result["reason_code"] == "TRANSPORT_READTIMEOUT"
+    batch.error_code = "PRIVATE_PAYLOAD"
+    assert svc._branch_state(audit, jobs, {101: [batch]})["reason_code"] == "PROVIDER_RESULT_REVIEW_REQUIRED"
+    batch.error_code = "TRANSPORT_READTIMEOUT"
+    assert svc._branch_state(audit, jobs, {101: [batch, batch]})["reason_code"] == "PROVIDER_RESULT_REVIEW_REQUIRED"

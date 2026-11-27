@@ -172,6 +172,7 @@ def test_failed_frozen_cohort_is_audited_idempotent_and_never_sends(monkeypatch)
         def __init__(self):
             self.objects = []
             self.existing = None
+            self.previous_links = []
             self.derived = None
             self.commits = 0
 
@@ -189,6 +190,9 @@ def test_failed_frozen_cohort_is_audited_idempotent_and_never_sends(monkeypatch)
 
         def one_or_none(self):
             return self.existing
+
+        def all(self):
+            return self.previous_links
 
         def get(self, _model, _id):
             return self.derived
@@ -228,6 +232,15 @@ def test_failed_frozen_cohort_is_audited_idempotent_and_never_sends(monkeypatch)
     )
     assert again["derived_campaign_id"] == 900
     assert again["created"] is False
+    assert session.commits == first_commits
+
+    session.existing = None
+    session.previous_links = [NS(source_child_ids_json=[2])]
+    with pytest.raises(recovery.FailedCohortConflict, match="otra recuperación"):
+        recovery.freeze_failed_cohort(
+            source_campaign_id=41, expected_candidate_fingerprint="a"*64,
+            expected_recipient_count=1, actor_user_id=47, session=session, now=NOW,
+        )
     assert session.commits == first_commits
 
 
@@ -310,3 +323,109 @@ def test_worker_stops_on_ambiguous_result_before_next_provider_call(monkeypatch)
     )
     assert provider_calls == [11, 12]
     assert quarantined == ["PROVIDER_RESULT_REVIEW_REQUIRED"]
+
+
+def _reconciled_proof():
+    child = _child(932, "PROVIDER_ERROR", error="GOVERNED_NOT_CREATED_CONFIRMED")
+    child.campaign_v2_id = 555
+    child.reconciliation_resolution = "NOT_CREATED_CONFIRMED"
+    child.reconciled_by_user_id = 47
+    child.reconciled_at = NOW
+    child.reconciliation_note = "Provider support confirmed no creation."
+    child.reconciliation_snapshot_json = {
+        "source": "MANUAL_OPERATOR", "resolution": "NOT_CREATED_CONFIRMED",
+        "source_reference": "support-case-123", "auto_retry": False,
+    }
+    approval = NS(manifest_json={"children": [932]})
+    execution = NS(manifest_digest=recovery._hash(approval.manifest_json))
+    event = NS(
+        id=30, previous_child_status="RECONCILIATION_REQUIRED",
+        next_child_status="PROVIDER_ERROR", previous_execution_status="REVIEW_REQUIRED",
+        next_execution_status="REVIEW_REQUIRED", provider_campaign_id=None,
+        actor_user_id=47, recorded_at=NOW, source_reference="support-case-123",
+        evidence_note=child.reconciliation_note,
+        evidence_json=dict(child.reconciliation_snapshot_json),
+    )
+    session = MagicMock()
+    query = session.query.return_value.join.return_value.join.return_value.filter.return_value
+    query.one_or_none.return_value = (event, execution, approval)
+    return child, event, execution, session, query
+
+
+def test_audited_noncreation_is_recovery_only_not_worker_continuation():
+    child, event, _, session, _ = _reconciled_proof()
+    assert recovery._reconciled_nonacceptance_event(child, session) is event
+    assert not safe.confirmed_rejected_child(child)
+
+
+@pytest.mark.parametrize("target,field,value", [
+    ("child", "status", "RECONCILIATION_REQUIRED"),
+    ("child", "provider_campaign_id", "possibly-created"),
+    ("child", "submitted_at", NOW),
+    ("child", "retry_attempt_count", 1),
+    ("child", "reconciliation_resolution", None),
+    ("event", "provider_campaign_id", "possibly-created"),
+    ("event", "source_reference", ""),
+    ("event", "actor_user_id", 999),
+    ("event", "next_execution_status", "AUTHORIZED"),
+    ("event", "evidence_json", {}),
+    ("execution", "manifest_digest", "b"*64),
+])
+def test_noncreation_recovery_fails_closed_when_proof_changes(target, field, value):
+    child, event, execution, session, _ = _reconciled_proof()
+    setattr({"child": child, "event": event, "execution": execution}[target], field, value)
+    assert recovery._reconciled_nonacceptance_event(child, session) is None
+
+
+def test_noncreation_recovery_needs_persisted_event():
+    child, _, _, session, query = _reconciled_proof()
+    query.one_or_none.return_value = None
+    assert recovery._reconciled_nonacceptance_event(child, session) is None
+
+
+def test_reconciled_lot_is_the_only_frozen_candidate(monkeypatch):
+    child, event, execution, session, proof_query = _reconciled_proof()
+    approval = proof_query.one_or_none.return_value[2]
+    child.sucursal_canon = "SANTA_FE"
+    child.sucursal_id = 20
+    child.provider_channel_id = "channel-santa-fe"
+    child.template_name = "collection"
+    child.recipient_count = 49
+    phones = [f"686123{i:04d}" for i in range(49)]
+    child.request_snapshot_json = {"leads": [{"phone": p} for p in phones]}
+    accepted = _child(933, "SUBMITTED", provider="accepted-id")
+    accepted.recipient_count = 1
+    accepted.request_snapshot_json = {"leads": [{"phone": "6869999999"}]}
+    rows = [NS(phone_mx10=p) for p in phones]
+    campaign = NS(source="EXCEL_IMPORT")
+    campaign_query = MagicMock()
+    campaign_query.filter.return_value.one_or_none.return_value = campaign
+    children_query = MagicMock()
+    children_query.filter.return_value.order_by.return_value.all.return_value = [child, accepted]
+    recipients_query = MagicMock()
+    recipients_query.options.return_value.filter.return_value.all.return_value = rows
+    event_query = MagicMock()
+    event_query.join.return_value.join.return_value.filter.return_value.one_or_none.return_value = (
+        event, execution, approval,
+    )
+    def query(*models):
+        if models == (recovery.Campaign,):
+            return campaign_query
+        if models == (recovery.Child,):
+            return children_query
+        if models == (recovery.Recipient,):
+            return recipients_query
+        assert models == (recovery.ReconciliationEvent, recovery.Execution, recovery.Approval)
+        return event_query
+    session.query.side_effect = query
+    monkeypatch.setattr(recovery, "CampaignV2DispatchBranchResolver", lambda **kw: NS())
+    monkeypatch.setattr(recovery, "resolve_frozen_recipient_branch",
+                        lambda *args, **kw: NS(sucursal_canon="SANTA_FE", sucursal_id=20))
+    result = recovery.preview_failed_cohort(source_campaign_id=555, session=session)
+    assert result["recipient_count"] == 49
+    assert result["source_child_ids"] == [932]
+    assert result["provider_requests"] == 0
+    assert result["send_authorized"] is False
+    accepted.request_snapshot_json = {"leads": [{"phone": phones[0]}]}
+    with pytest.raises(recovery.FailedCohortConflict, match="otro envío posible"):
+        recovery.preview_failed_cohort(source_campaign_id=555, session=session)
